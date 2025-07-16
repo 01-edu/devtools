@@ -2,7 +2,7 @@
   "tasks": {
     "api:dev": "deno serve -A --port=3021 api/server.ts --env=dev",
     "dev": { "dependencies": ["api:dev"] },
-    "api:prod": "deno compile -A --output dist/api api/server.ts --env=prod",
+    "api:prod": "deno compile -A --env=prod --output dist/api api/server.ts",
     "prod": { "dependencies": ["api:prod"] },
     "start:prod": "dist/api --env=prod",
     "fmt": "deno fmt",
