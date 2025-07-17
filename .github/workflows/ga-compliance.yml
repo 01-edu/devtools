@@ -1,0 +1,48 @@
+# Workflow for DevTools Compliance
+
+name: DevTools Compliance
+
+on:
+  pull_request:
+    types:
+      [
+        opened,
+        edited,
+        synchronize,
+        reopened,
+        labeled,
+        unlabeled,
+        assigned,
+        unassigned,
+      ]
+
+jobs:
+  check-compliance:
+    name: Check DevTools Compliance
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Show PR Labels and Assignees
+        run: |
+          echo "PR Labels: ${{ toJson(github.event.pull_request.labels) }}"
+          echo "PR Assignees: ${{ toJson(github.event.pull_request.assignees) }}"
+
+      - name: Verify PR Assignee
+        run: |
+          if [ "${{ toJson(github.event.pull_request.assignees) }}" == "[]" ]; then
+            echo "👮 This PR does not have any assignees. Please assign at least one assignee."
+            exit 1
+          fi
+
+      - name: Verify PR Label
+        run: |
+          if [ "${{ toJson(github.event.pull_request.labels) }}" == "[]" ]; then
+            echo "👮 This PR does not have any labels. Please assign at least one label."
+            exit 1
+          fi
+        continue-on-error: true
