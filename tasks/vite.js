@@ -2,6 +2,8 @@
 import { join } from 'node:path'
 import { build, createServer } from 'vite'
 import preact from '@preact/preset-vite'
+import tailwindcss from '@tailwindcss/vite'
+import Sonda from 'sonda/vite'
 
 // import { PORT } from '../api/lib/env.ts';
 const PORT = 3000
@@ -9,12 +11,13 @@ const PORT = 3000
 const isBuild = Deno.args.includes('--build')
 
 if (isBuild) {
-    // Production build
+  // Production build
   await build({
     configFile: false,
     root: join(import.meta.dirname, '../web'),
     plugins: [
       preact({ jsxImportSource: 'preact' }),
+      tailwindcss(),
     ],
     build: {
       outDir: '../dist/web',
@@ -28,6 +31,11 @@ if (isBuild) {
     root: join(import.meta.dirname, '../web'),
     plugins: [
       preact({ jsxImportSource: 'preact' }),
+      tailwindcss(),
+      Sonda({
+        enabled: true,
+        format: 'html',
+      }),
     ],
     server: {
       host: true,
