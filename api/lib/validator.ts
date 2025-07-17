@@ -20,6 +20,15 @@ type DefArray<T extends Def> = {
   assert: (value: unknown) => ReturnType<T['assert']>[]
 }
 
+type DefList<T extends readonly (string | number)[]> = {
+  type: 'list'
+  of: T
+  report: Validator<DefList<T>>
+  optional?: boolean
+  description?: string
+  assert: (value: unknown) => T[number]
+}
+
 type DefObject<T extends Record<string, Def>> = {
   type: 'object'
   properties: { [K in keyof T]: T[K] }
@@ -59,6 +68,7 @@ export type DefBase =
   | DefBoolean
   | DefArray<any>
   | DefObject<Record<string, any>>
+  | DefList<any>
 
 type OptionalAssert<T extends Def['assert']> = (
   value: unknown,
@@ -83,9 +93,9 @@ const reportObject = <T extends Record<string, Def>>(properties: T) => {
       const path = `[...p, ${k}]`
       if (def.type === 'object' || def.type === 'array') {
         const check = `
-          const _${i} = v[${k}].report(o[${k}], ${path});
-          _${i}.length && failures.push(..._${i})
-        `
+            const _${i} = v[${k}].report(o[${k}], ${path});
+            _${i}.length && failures.push(..._${i})
+          `
         return def.optional ? `if (o[${k}] !== undefined) {${check}}` : check
       }
       const opt = def.optional ? `o[${k}] === undefined || ` : ''
@@ -99,9 +109,7 @@ const reportObject = <T extends Record<string, Def>>(properties: T) => {
   return new Function('v, o, p = []', body).bind(
     globalThis,
     properties,
-  ) as DefObject<
-    T
-  >['report']
+  ) as DefObject<T>['report']
 }
 
 const assertObject = <T extends Record<string, Def>>(properties: T) => {
@@ -221,6 +229,32 @@ export const ARR = <T extends Def>(
   of: def,
   report: reportArray(def).bind(globalThis, def),
   assert: assertArray(def.assert) as DefArray<T>['assert'],
+  description,
+})
+
+export const LIST = <const T extends readonly (string | number)[]>(
+  possibleValues: T,
+  description?: string,
+): DefList<T> => ({
+  type: 'list',
+  of: possibleValues,
+  report: (value: unknown, path: (string | number)[] = []) => {
+    if (possibleValues.includes(value as T[number])) return []
+    return [{
+      path,
+      type: 'list',
+      value,
+      expected: possibleValues,
+    }]
+  },
+  assert: (value: unknown): T[number] => {
+    if (possibleValues.includes(value as T[number])) {
+      return value as T[number]
+    }
+    throw new Error(
+      `Invalid value. Expected one of: ${possibleValues.join(', ')}`,
+    )
+  },
   description,
 })
 
