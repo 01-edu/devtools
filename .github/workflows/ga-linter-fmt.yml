@@ -1,0 +1,56 @@
+# Workflow for DevTools CI/CD
+# This workflow runs linting and formatting checks on pull requests.
+# It ensures that the code adheres to style guidelines and is free of linting errors.
+
+name: DevTools CI/CD
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+jobs:
+  lint-and-format:
+    name: Lint and Format Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Cache Deno dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.deno
+            ~/node_modules
+            ~/.cache/deno
+
+          key: ${{ runner.os }}-deno-v2-${{ hashFiles('deno.json') }}
+
+      - name: 🔍 Get all changed files
+        id: changed-file-list
+        run: |
+          echo "changed_files=$(git diff --name-only --diff-filter=ACMRT --merge-base origin/master | xargs)" >> $GITHUB_OUTPUT
+
+      - name: Run linter
+        if: steps.changed-file-list.outputs.changed_files != ''
+        run: deno task lint --permit-no-files --compact  ${{ steps.changed-file-list.outputs.changed_files }}
+
+      - name: Run formatter
+        if: steps.changed-file-list.outputs.changed_files != ''
+        run: deno task fmt --permit-no-files --check  ${{ steps.changed-file-list.outputs.changed_files }}
+
+      - name: Run check
+        if: steps.changed-file-list.outputs.changed_files != ''
+        run: deno check --allow-import
+
+      - name: Run tests
+        if: steps.changed-file-list.outputs.changed_files != ''
+        run: deno test -A --no-check --env-file=.env-dev
