@@ -45,54 +45,53 @@ const handleRequest = async (ctx: RequestContext) => {
   }
 }
 
-export const fetch = async(req: Request)=> {
-    const url = new URL(req.url)
-    const method = req.method
-    if (method === 'OPTIONS') return respond.NoContent()
+export const fetch = async (req: Request) => {
+  const url = new URL(req.url)
+  const method = req.method
+  if (method === 'OPTIONS') return respond.NoContent()
 
-    if (url.pathname.startsWith('/api')) {
-      // Build the request context
-      const cookies = getCookies(req.headers)
-      const ctx = {
-        req,
-        url,
-        cookies,
-        trace: cookies.trace ? Number(cookies.trace) : now(),
-        session: decodeSession(cookies.session),
-        span: now(),
-      }
-
-      const res = await requestContext.run(ctx, handleRequest, ctx)
-      if (!cookies.trace) {
-        // if the cookies do not yet have a trace, we set it for the future
-        setCookie(res.headers, {
-          name: 'trace',
-          value: String(ctx.trace),
-          path: '/',
-          secure: true,
-          httpOnly: true,
-          sameSite: 'Lax',
-        })
-      }
-      return res
+  if (url.pathname.startsWith('/api')) {
+    // Build the request context
+    const cookies = getCookies(req.headers)
+    const ctx = {
+      req,
+      url,
+      cookies,
+      trace: cookies.trace ? Number(cookies.trace) : now(),
+      session: decodeSession(cookies.session),
+      span: now(),
     }
 
-    // Serve static files in production
-    if (isProd) {
-      if (url.pathname.includes('.')) {
-        return serveDir(req, serveDirOpts)
-      }
-    
-      return new Response(indexHtml, htmlContent)
+    const res = await requestContext.run(ctx, handleRequest, ctx)
+    if (!cookies.trace) {
+      // if the cookies do not yet have a trace, we set it for the future
+      setCookie(res.headers, {
+        name: 'trace',
+        value: String(ctx.trace),
+        path: '/',
+        secure: true,
+        httpOnly: true,
+        sameSite: 'Lax',
+      })
     }
-
-    // In development, redirect to Vite dev server
-    return new Response('Use Vite dev server for frontend', { status: 404 })
+    return res
   }
+
+  // Serve static files in production
+  if (isProd) {
+    if (url.pathname.includes('.')) {
+      return serveDir(req, serveDirOpts)
+    }
+
+    return new Response(indexHtml, htmlContent)
+  }
+
+  // In development, redirect to Vite dev server
+  return new Response('Use Vite dev server for frontend', { status: 404 })
+}
 
 log.info('server-start')
 
-
 Deno.serve({
   port: PORT,
-},fetch)
+}, fetch)
