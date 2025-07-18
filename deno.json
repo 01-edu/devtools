@@ -3,12 +3,21 @@
     "api:dev": "deno serve -A --env-file=.env.dev --port=3021 api/server.ts --env=dev",
     "vite:dev": "deno run -A --env-file=.env.dev tasks/vite.js --env=dev",
     "dev": { "dependencies": ["api:dev", "vite:dev"] },
-    "api:prod": "deno compile -A --env-file=.env.prod --output dist/api api/server.ts --env=prod",
-    "vite:prod": "deno run -A --env-file=.env.prod tasks/vite.js --build --env=prod",
-    "prod": { "dependencies": ["api:prod", "vite:prod"] },
+    "api:prod": "deno compile -A --env-file=.env.prod --no-check --output dist/api --target x86_64-unknown-linux-gnu --include dist/web api/server.ts --env=prod",
+    "vite:prod": "deno run -A tasks/vite.js --build --env=prod",
+    "prod": "deno task vite:prod && deno task api:prod",
     "start:prod": "dist/api --env=prod",
     "fmt": "deno fmt",
-    "lint": "deno lint"
+    "lint": "deno lint",
+    "docker:build": "docker build -t devtools .",
+    "docker:prod": "docker run --name devtools-app -p 8877:3021 --env-file .env.prod devtools",
+    "docker:stop": "docker stop devtools-app",
+    "docker:start": "docker start devtools-app",
+    "docker:restart": "docker restart devtools-app",
+    "docker:rm": "docker rm -f devtools-app",
+    "docker:logs": "docker logs -f devtools-app",
+    "docker:exec": "docker exec -it devtools-app /bin/sh",
+    "docker:clean": "docker rm -f devtools-app && docker rmi devtools"
   },
   "imports": {
     "./": "./",
@@ -20,8 +29,7 @@
     "@tailwindcss/vite": "npm:@tailwindcss/vite@^4.1.11",
     "tailwindcss": "npm:tailwindcss@^4.1.11",
     "daisyui": "npm:daisyui@^5.0.46",
-    "lucide-preact": "npm:lucide-preact@^0.525.0",
-    "sonda": "npm:sonda@^0.7.1"
+    "lucide-preact": "npm:lucide-preact@^0.525.0"
   },
   "fmt": {
     "useTabs": false,
