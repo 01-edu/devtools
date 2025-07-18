@@ -1,9 +1,34 @@
 import { render } from 'preact'
+import { LoginPage } from './pages/LoginPage.tsx'
+import { BackgroundPattern } from './components/BackgroundPattern.tsx'
+import { Header } from './layout.tsx'
+import { url } from './lib/router.tsx'
 
+const renderPage = () => {
+  const path = url.path
+  if (path === '/login') {
+    return <LoginPage />
+  }
+  return (
+    <div className='flex items-center justify-center h-full'>
+      <h1 className='text-3xl font-bold text-base-content'>
+        Welcome to the Dev Tools App!
+      </h1>
+    </div>
+  )
+}
 const App = () => {
   return (
-    <div class='bg-base-100'>
-      <h1>Hello DevTools</h1>
+    <div className='h-screen flex flex-col bg-base-100 overflow-hidden'>
+      <div className='fixed inset-0 '>
+        <BackgroundPattern />
+      </div>
+      <header className='w-full shrink-0'>
+        <Header />
+      </header>
+      <main className='w-full flex-1 relative'>
+        {renderPage()}
+      </main>
     </div>
   )
 }

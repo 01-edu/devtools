@@ -10,7 +10,7 @@
 //   WHERE id = ? AND archivedAt IS NULL
 // `.get
 
-export function decodeSession(sessionCode?: string) {
+export function decodeSession(_sessionCode?: string) {
   //   return sessionCode == null ? undefined : getSession(decodeId(sessionCode))
   return undefined
 }

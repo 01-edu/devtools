@@ -13,7 +13,7 @@ import { PORT } from './lib/env.ts'
 const isProd = Deno.args.includes('--env=prod')
 const staticDir = isProd
   ? join((import.meta.dirname || Deno.cwd()).split('/api')[0], 'dist/web')
-  : Deno.cwd()
+  : join(Deno.cwd(), 'dist/web')
 const indexHtml = await Deno.readFile(join(staticDir, 'index.html'))
 const htmlContent = { headers: { 'Content-Type': 'text/html' } }
 const serveDirOpts = { fsRoot: staticDir }
