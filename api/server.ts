@@ -10,13 +10,15 @@ import { join } from 'jsr:@std/path/join'
 import { serveDir } from 'jsr:@std/http/file-server'
 import { PORT } from './lib/env.ts'
 
-const staticDir = join(Deno.cwd(), 'dist/web')
+const isProd = Deno.args.includes('--env=prod')
+const staticDir = isProd
+  ? join((import.meta.dirname || Deno.cwd()).split('/api')[0], 'dist/web')
+  : Deno.cwd()
 const indexHtml = await Deno.readFile(join(staticDir, 'index.html'))
 const htmlContent = { headers: { 'Content-Type': 'text/html' } }
 const serveDirOpts = { fsRoot: staticDir }
 
 const { ResponseError } = respond
-const isProd = Deno.args.includes('--env=prod')
 
 const handleRequest = async (ctx: RequestContext) => {
   const logProps: Record<string, unknown> = {}

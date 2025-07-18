@@ -21,7 +21,6 @@
     "npm:daisyui@^5.0.46": "5.0.46",
     "npm:lucide-preact@0.525": "0.525.0_preact@10.26.9",
     "npm:preact@^10.26.9": "10.26.9",
-    "npm:sonda@~0.7.1": "0.7.1",
     "npm:tailwindcss@^4.1.11": "4.1.11",
     "npm:vite@*": "7.0.4_picomatch@4.0.2_@types+node@22.15.15",
     "npm:vite@^7.0.4": "7.0.4_picomatch@4.0.2_@types+node@22.15.15"
@@ -709,12 +708,6 @@
       ],
       "bin": true
     },
-    "bundle-name@4.1.0": {
-      "integrity": "sha512-tjwM5exMg6BGRI+kNmTntNsvdZS1X8BFYS6tnJ2hdH0kVxM6/eVZ2xy+FqStSWvYmtfFMDLIxurorHwDKfDz5Q==",
-      "dependencies": [
-        "run-applescript"
-      ]
-    },
     "caniuse-lite@1.0.30001727": {
       "integrity": "sha512-pB68nIHmbN6L/4C6MH1DokyR3bYqFwjaSs/sWDHGj4CTcFtQUQMuJftVwWkXq7mNWOybD3KhUv3oWHoGxgP14Q=="
     },
@@ -754,19 +747,6 @@
       "dependencies": [
         "ms"
       ]
-    },
-    "default-browser-id@5.0.0": {
-      "integrity": "sha512-A6p/pu/6fyBcA1TRz/GqWYPViplrftcW2gZC9q79ngNCKAeR/X3gcEdXQHl4KNXV+3wgIJ1CPkJQ3IHM6lcsyA=="
-    },
-    "default-browser@5.2.1": {
-      "integrity": "sha512-WY/3TUME0x3KPYdRRxEJJvXRHV4PyPoUsxtZa78lwItwRQRHhd2U9xOscaT/YTf8uCXIAjeJOFBVEh/7FtD8Xg==",
-      "dependencies": [
-        "bundle-name",
-        "default-browser-id"
-      ]
-    },
-    "define-lazy-prop@3.0.0": {
-      "integrity": "sha512-N+MeXYoqr3pOgn8xfyRPREN7gHakLYjhsHhWGT3fWAiL4IkAt0iDw14QiiEm2bE30c5XX5q0FtAA3CK5f9/BUg=="
     },
     "detect-libc@2.0.4": {
       "integrity": "sha512-3UDv+G9CsCKO1WKMGw9fwq/SWJYbI0c5Y7LU1AXYoDdbhE2AHQ6N6Nb34sG8Fj7T5APy8qXDCKuuIHd1BR0tVA=="
@@ -871,23 +851,6 @@
     "he@1.2.0": {
       "integrity": "sha512-F/1DnUGPopORZi0ni+CvrCgHQ5FyEAHRLSApuYWMmrbSwoN2Mn/7k+Gl38gJnR7yyDZk6WLXwiGod1JOWNDKGw==",
       "bin": true
-    },
-    "is-docker@3.0.0": {
-      "integrity": "sha512-eljcgEDlEns/7AXFosB5K/2nCM4P7FQPkGc/DWLy5rmFEWvZayGrik1d9/QIY5nJ4f9YsVvBkA6kJpHn9rISdQ==",
-      "bin": true
-    },
-    "is-inside-container@1.0.0": {
-      "integrity": "sha512-KIYLCCJghfHZxqjYBE7rEy0OBuTd5xCHS7tHVgvCLkx7StIoaxwNW3hCALgEUjFfeRk+MG/Qxmp/vtETEF3tRA==",
-      "dependencies": [
-        "is-docker"
-      ],
-      "bin": true
-    },
-    "is-wsl@3.1.0": {
-      "integrity": "sha512-UcVfVfaK4Sc4m7X3dUSoHoozQGBEFeDC+zVo06t98xe8CzHSZZBekNXH+tu0NalHolcJ/QAGqS46Hef7QXBIMw==",
-      "dependencies": [
-        "is-inside-container"
-      ]
     },
     "jiti@2.4.2": {
       "integrity": "sha512-rg9zJN+G4n2nfJl5MW3BMygZX56zKPNVEYYqq7adpmMh4Jn2QNEwhvQlFy6jPVdcod7txZtKHWnyZiA3a0zP7A==",
@@ -1035,15 +998,6 @@
         "boolbase"
       ]
     },
-    "open@10.1.2": {
-      "integrity": "sha512-cxN6aIDPz6rm8hbebcP7vrQNhvRcveZoJU72Y7vskh4oIm+BZwBECnx5nTmrlres1Qapvx27Qo1Auukpf8PKXw==",
-      "dependencies": [
-        "default-browser",
-        "define-lazy-prop",
-        "is-inside-container",
-        "is-wsl"
-      ]
-    },
     "picocolors@1.1.1": {
       "integrity": "sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA=="
     },
@@ -1101,9 +1055,6 @@
       ],
       "bin": true
     },
-    "run-applescript@7.0.0": {
-      "integrity": "sha512-9by4Ij99JUr/MCFBUkDKLWK3G9HVXmabKz9U5MlIAIuvuzkiOicRYs8XJLxX+xahD+mLiiCYDqF9dKAgtzKP1A=="
-    },
     "semver@6.3.1": {
       "integrity": "sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA==",
       "bin": true
@@ -1116,15 +1067,6 @@
     },
     "sisteransi@1.0.5": {
       "integrity": "sha512-bLGGlR1QxBcynn2d5YmDX4MGjlZvy2MRBDRNHLJ8VI6l6+9FUiyTFNJ0IveOSP0bcXgVDPRcfGqA0pjaqUpfVg=="
-    },
-    "sonda@0.7.1": {
-      "integrity": "sha512-PCdSdBvspoJXA0uY5GFeRzAolTHDP7gVnnMnr/O74IYIB8CiOFaEbTGNkEmShG6HBtmmFdQfPxdXbI+2vAgjYw==",
-      "dependencies": [
-        "@ampproject/remapping",
-        "@jridgewell/sourcemap-codec",
-        "open"
-      ],
-      "bin": true
     },
     "source-map-js@1.2.1": {
       "integrity": "sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA=="
@@ -1235,7 +1177,6 @@
       "npm:daisyui@^5.0.46",
       "npm:lucide-preact@0.525",
       "npm:preact@^10.26.9",
-      "npm:sonda@~0.7.1",
       "npm:tailwindcss@^4.1.11",
       "npm:vite@^7.0.4"
     ]
