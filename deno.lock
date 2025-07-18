@@ -15,6 +15,7 @@
     "jsr:@std/path@^1.0.8": "1.0.8",
     "jsr:@std/streams@^1.0.8": "1.0.8",
     "npm:@preact/preset-vite@^2.10.2": "2.10.2_@babel+core@7.28.0_vite@7.0.4__picomatch@4.0.2__@types+node@22.15.15_preact@10.26.9_@types+node@22.15.15",
+    "npm:@preact/signals@*": "2.2.1_preact@10.26.9",
     "npm:@tailwindcss/vite@^4.1.11": "4.1.11_vite@7.0.4__picomatch@4.0.2__@types+node@22.15.15_@types+node@22.15.15",
     "npm:@types/node@*": "22.15.15",
     "npm:create-vite-extra@latest": "4.0.0",
@@ -431,6 +432,16 @@
         "picocolors",
         "vite@7.0.4_picomatch@4.0.2_@types+node@22.15.15",
         "vite-prerender-plugin"
+      ]
+    },
+    "@preact/signals-core@1.11.0": {
+      "integrity": "sha512-jglbibeWHuFRzEWVFY/TT7wB1PppJxmcSfUHcK+2J9vBRtiooMfw6tAPttojNYrrpdGViqAYCbPpmWYlMm+eMQ=="
+    },
+    "@preact/signals@2.2.1_preact@10.26.9": {
+      "integrity": "sha512-cX3mijdjHbbz3dBoJ6z687CGYEOp9ifj3uFnm4UKW+DxXKPMvE2y/VSdm0PXhXmHnr6F0iSnDJ+dLwmV7CYT5A==",
+      "dependencies": [
+        "@preact/signals-core",
+        "preact"
       ]
     },
     "@prefresh/babel-plugin@0.5.2": {
@@ -1173,6 +1184,7 @@
     "dependencies": [
       "jsr:@std/assert@1",
       "npm:@preact/preset-vite@^2.10.2",
+      "npm:@preact/signals@*",
       "npm:@tailwindcss/vite@^4.1.11",
       "npm:daisyui@^5.0.46",
       "npm:lucide-preact@0.525",
