@@ -3,7 +3,6 @@ import { join } from 'node:path'
 import { build, createServer } from 'vite'
 import preact from '@preact/preset-vite'
 import tailwindcss from '@tailwindcss/vite'
-import Sonda from 'sonda/vite'
 
 // import { PORT } from '../api/lib/env.ts';
 const PORT = 3000
@@ -32,10 +31,6 @@ if (isBuild) {
     plugins: [
       preact({ jsxImportSource: 'preact' }),
       tailwindcss(),
-      Sonda({
-        enabled: true,
-        format: 'html',
-      }),
     ],
     server: {
       host: true,
