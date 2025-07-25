@@ -1,16 +1,18 @@
 {
   "tasks": {
-    "api:dev": "deno serve -A --port=3021 api/server.ts --env=dev",
-    "vite:dev": "deno run -A tasks/vite.js --env=dev",
+    "api:dev": "deno serve -A --env-file=.env.dev --port=3021 api/server.ts --env=dev",
+    "vite:dev": "deno run -A --env-file=.env.dev tasks/vite.js --env=dev",
     "dev": { "dependencies": ["api:dev", "vite:dev"] },
-    "api:prod": "deno compile -A --output dist/api api/server.ts --env=prod",
-    "vite:prod": "deno run -A tasks/vite.js --build --env=prod",
+    "api:prod": "deno compile -A --env-file=.env.prod --output dist/api api/server.ts --env=prod",
+    "vite:prod": "deno run -A --env-file=.env.prod tasks/vite.js --build --env=prod",
     "prod": { "dependencies": ["api:prod", "vite:prod"] },
     "start:prod": "dist/api --env=prod",
     "fmt": "deno fmt",
     "lint": "deno lint"
   },
   "imports": {
+    "./": "./",
+    "/": "./",
     "@std/assert": "jsr:@std/assert@1",
     "vite": "npm:vite@^7.0.4",
     "preact": "npm:preact@^10.26.9",
