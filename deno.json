@@ -10,6 +10,7 @@
     "fmt": "deno fmt",
     "lint": "deno lint",
     "check": "deno check",
+    "review": "deno run -A https://gistcdn.githack.com/kigiri/7658b4af30bb5eaca3e4cad1fcac7b0c/raw/review.js",
     "test": "deno test --env-file=.env.test -A --unstable-worker-options --no-check",
     "all": "deno task check && deno task lint && deno task test --parallel && deno task prod",
     "docker:build": "docker build -t devtools .",
