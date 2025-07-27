@@ -3,7 +3,6 @@ import { encodeBase64Url } from 'jsr:@std/encoding/base64url'
 import { ensureDirSync, exists } from 'jsr:@std/fs'
 import { Picture_Dir } from './lib/env.ts'
 
-
 ensureDirSync(Picture_Dir)
 
 const encoder = new TextEncoder()

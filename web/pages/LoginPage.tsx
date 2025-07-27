@@ -10,7 +10,11 @@ export const LoginPage = () => {
               <span className='text-primary'>Dev</span> Tools
             </h1>
           </div>
-          <form action='/api/login' method='get' className='space-y-4 sm:space-y-6'>
+          <form
+            action='/api/login'
+            method='get'
+            className='space-y-4 sm:space-y-6'
+          >
             <button
               type='submit'
               className='btn btn-primary w-full group'

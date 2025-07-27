@@ -6,7 +6,7 @@ import {
   assertExists,
   assertRejects,
 } from 'jsr:@std/assert'
-import { createCollection } from './db.ts'
+import { createCollection } from './json_store.ts'
 import { ensureDir } from 'jsr:@std/fs'
 
 type User = {
