@@ -53,4 +53,4 @@ jobs:
 
       - name: Run tests
         if: steps.changed-file-list.outputs.changed_files != ''
-        run: deno test -A --no-check --env-file=.env-dev
+        run: deno test -A --no-check --env-file=.env.test

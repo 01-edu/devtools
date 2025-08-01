@@ -14,7 +14,9 @@ const isProd = Deno.args.includes('--env=prod')
 const staticDir = isProd
   ? join((import.meta.dirname || Deno.cwd()).split('/api')[0], 'dist/web')
   : join(Deno.cwd(), 'dist/web')
-const indexHtml = await Deno.readFile(join(staticDir, 'index.html'))
+const indexHtml = isProd
+  ? await Deno.readFile(join(staticDir, 'index.html'))
+  : ''
 const htmlContent = { headers: { 'Content-Type': 'text/html' } }
 const serveDirOpts = { fsRoot: staticDir }
 
@@ -60,7 +62,7 @@ export const fetch = async (req: Request) => {
       url,
       cookies,
       trace: cookies.trace ? Number(cookies.trace) : now(),
-      session: decodeSession(cookies.session),
+      user: await decodeSession(cookies.session),
       span: now(),
     }
 
