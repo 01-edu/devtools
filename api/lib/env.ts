@@ -8,3 +8,21 @@ if (APP_ENV !== 'dev' && APP_ENV !== 'test' && APP_ENV !== 'prod') {
 }
 
 export const PORT = Number(env.PORT) || 2119
+export const Picture_Dir = env.PICTURE_DIR || './.picture'
+
+export const GOOGLE_CLIENT_ID = env.GOOGLE_CLIENT_ID
+if (!GOOGLE_CLIENT_ID) {
+  throw Error('GOOGLE_CLIENT_ID: field required in the env')
+}
+export const CLIENT_SECRET = env.CLIENT_SECRET
+if (!CLIENT_SECRET) {
+  throw Error('CLIENT_SECRET: field required in the env')
+}
+export const REDIRECT_URI = env.REDIRECT_URI
+if (!REDIRECT_URI) {
+  throw Error('REDIRECT_URI: field required in the env')
+}
+export const ORIGIN = new URL(REDIRECT_URI).origin
+
+export const SECRET = env.SECRET ||
+  'iUokBru8WPSMAuMspijlt7F-Cnpqyg84F36b1G681h0'
