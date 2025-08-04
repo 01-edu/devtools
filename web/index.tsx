@@ -2,11 +2,11 @@ import { render } from 'preact'
 import { LoginPage } from './pages/LoginPage.tsx'
 import { BackgroundPattern } from './components/BackgroundPattern.tsx'
 import { Header } from './layout.tsx'
-import { url } from './lib/router.tsx'
+import { user } from './lib/session.ts'
 
 const renderPage = () => {
-  const path = url.path
-  if (path === '/login') {
+  if (user.pending) return
+  if (!user.data) {
     return <LoginPage />
   }
   return (
@@ -20,10 +20,10 @@ const renderPage = () => {
 const App = () => {
   return (
     <div className='h-screen flex flex-col bg-base-100 overflow-hidden'>
-      <div className='fixed inset-0 '>
+      <div className='fixed inset-0'>
         <BackgroundPattern />
       </div>
-      <header className='w-full shrink-0'>
+      <header className='w-full shrink-0 z-0'>
         <Header />
       </header>
       <main className='w-full flex-1 relative'>

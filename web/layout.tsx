@@ -1,5 +1,7 @@
 import { effect, signal } from '@preact/signals'
-import { Code, Github, Moon, Sun } from 'lucide-preact'
+import { Code, Github, LogOut, Moon, Sun } from 'lucide-preact'
+import { user } from './lib/session.ts'
+import { A, url } from './lib/router.tsx'
 
 const $theme = signal(localStorage.theme || 'dark')
 
@@ -12,34 +14,29 @@ const toggleTheme = () => {
   $theme.value = $theme.peek() === 'dark' ? 'light' : 'dark'
 }
 
-const _UserInfo = () => {
-  //   if (!user.data) return null
+const UserInfo = () => {
+  if (!user.data) return null
 
   return (
     <div class='flex items-center gap-2'>
       <div class='flex flex-col items-end'>
         <span class='text-sm font-medium text-base-content select-none'>
-          {/* {user.data.userFullName} */}
+          {user.data.userFullName}
         </span>
 
-        {
-          /* {user.data && (
-          <A href='/api/logout' class='text-xs whitespace-nowrap'>
-            <span class='underline'>Logout</span>{' '}
-            <LogOut size='12' class='inline-block' />
-          </A>
-        )} */
-        }
+        <A href='/api/logout' class='text-xs whitespace-nowrap'>
+          <span class='underline'>Logout</span>{' '}
+          <LogOut size={12} class='inline-block' />
+        </A>
       </div>
-      {
-        /* {user.data.userPicture && (
+
+      {user.data.userPicture && (
         <img
           src={`/api/picture?hash=${user.data.userPicture}`}
-          alt='profile picture'
-          class='w-12 h-12 rounded-full pointer-events-none'
+          alt='profile'
+          class='w-10 h-10 rounded-full pointer-events-none'
         />
-      )} */
-      }
+      )}
     </div>
   )
 }
@@ -58,29 +55,29 @@ export const SwitchTheme = () => (
 )
 
 export const Header = () => (
-  <header class='navbar bg-base-300 text-base-content pr-6'>
+  <header class='navbar bg-base-300 text-base-content px-6'>
     <div class='flex-1'>
-      <a class='btn btn-ghost text-xl gap-2'>
+      <a
+        href='/'
+        class='btn btn-ghost text-xl gap-2 cursor-pointer'
+      >
         <Code className='w-8 h-8 text-primary' />
         <span class='font-bold'>DevTools</span>
       </a>
     </div>
-    <div class='flex-none gap-6'>
+
+    <div class='flex items-center gap-4'>
       <a
         href='https://github.com/01-edu'
         target='_blank'
         rel='noopener noreferrer'
-        class='btn btn-ghost btn-square text-base-content hover:text-primary mr-5'
+        class='btn btn-ghost btn-square'
         aria-label='GitHub repository'
       >
         <Github className='w-5 h-5' />
       </a>
       <SwitchTheme />
-      {
-        /* {!['/login'].includes(url.path) && (
-          <UserInfo />
-        )}  */
-      }
+      {'/login' !== url.path && <UserInfo />}
     </div>
   </header>
 )

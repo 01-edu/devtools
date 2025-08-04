@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "api:dev": "deno serve -A --env-file=.env.dev --port=3021 api/server.ts --env=dev",
+    "api:dev": "deno run -A --env-file=.env.dev api/server.ts --env=dev --port=3021",
     "vite:dev": "deno run -A --env-file=.env.dev tasks/vite.js --env=dev",
     "dev": { "dependencies": ["api:dev", "vite:dev"] },
     "api:prod": "deno compile -A --env-file=.env.prod --no-check --output dist/api --target x86_64-unknown-linux-gnu --include dist/web api/server.ts --env=prod",
@@ -12,7 +12,7 @@
     "check": "deno check",
     "review": "deno run -A https://gistcdn.githack.com/kigiri/7658b4af30bb5eaca3e4cad1fcac7b0c/raw/review.js",
     "test": "deno test --env-file=.env.test -A --unstable-worker-options --no-check",
-    "all": "deno task check && deno task lint && deno task test --parallel && deno task prod",
+    "all": "deno task check && deno task lint && deno task test --parallel",
     "docker:build": "docker build -t devtools .",
     "docker:prod": "docker run --name devtools-app -p 8877:3021 --env-file .env.prod devtools",
     "docker:stop": "docker stop devtools-app",
