@@ -60,7 +60,7 @@ export async function authenticateOauthUser(
 
   let userEmail: string
   if (!existingUser) {
-    const newUser = await User.insert(oauthInfo)
+    const newUser = await User.insert({ ...oauthInfo, isAdmin: false })
     userEmail = newUser.userEmail
   } else {
     userEmail = existingUser.userEmail
