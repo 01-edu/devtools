@@ -119,7 +119,7 @@ function toast(message: string, type: 'info' | 'error' = 'info') {
   setTimeout(() => (toastSignal.value = null), 3000)
 }
 
-function deleteTeam(id: number) {
+function _deleteTeam(id: number) {
   if (projects.value.some((p) => p.teamId === id)) {
     toast('Cannot delete a team that still has projects.', 'error')
     return
@@ -220,7 +220,7 @@ const ProjectCard = ({ project }: { project: Project }) => (
             <div class='flex items-center gap-1 flex-shrink-0'>
               <Calendar class='w-3.5 h-3.5' />
               <span>
-                {new Date(project.createdAt).toLocaleDateString('fr-CA')}
+                {new Date(project.createdAt).toLocaleDateString()}
               </span>
             </div>
           </div>
@@ -270,7 +270,7 @@ const TeamProjectsRow = ({ project }: { project: Project }) => (
     <td class='py-3 font-medium truncate'>{project.name}</td>
     <td class='py-3 text-text2 truncate'>{project.slug}</td>
     <td class='py-3 text-text2 whitespace-nowrap'>
-      {new Date(project.createdAt).toLocaleDateString('fr-CA')}
+      {new Date(project.createdAt).toLocaleDateString()}
     </td>
     <td class='py-3 text-right flex gap-2 justify-end'>
       <A
@@ -280,7 +280,7 @@ const TeamProjectsRow = ({ project }: { project: Project }) => (
         Edit
       </A>
       <A
-        params={{ dialog: 'delete-project', slug: project.slug }}
+        params={{ dialog: 'delete', id: project.slug, key: 'project' }}
         class='btn btn-ghost btn-xs text-danger'
       >
         Delete
@@ -289,45 +289,64 @@ const TeamProjectsRow = ({ project }: { project: Project }) => (
   </tr>
 )
 
+const DialogSectionTitle = (props: JSX.HTMLAttributes<HTMLHeadingElement>) => (
+  <h3 class='text-sm font-medium text-text2 mb-3' {...props} />
+)
+
+const DialogTitle = (props: JSX.HTMLAttributes<HTMLHeadingElement>) => (
+  <>
+    <form method='dialog'>
+      <button
+        type='submit'
+        class='btn btn-sm btn-circle btn-ghost absolute right-2 top-2'
+      >
+        ✕
+      </button>
+    </form>
+    <h3 class='text-lg font-semibold mb-4' {...props} />
+  </>
+)
+
+const onSubmit = (e: Event) => {
+  e.preventDefault()
+  const { dialog, slug } = url.params
+  const isEdit = dialog === 'edit-project'
+  const project = isEdit
+    ? projects.value.find((p) => p.slug === slug)
+    : undefined
+  const form = e.currentTarget as HTMLFormElement
+  const name = (form.elements.namedItem('name') as HTMLInputElement).value
+  const teamId = (form.elements.namedItem('teamId') as HTMLSelectElement).value
+  if (!teamId || !name) return
+  saveProject({
+    name,
+    teamId: Number(teamId),
+    slug: isEdit ? project?.slug : undefined,
+  })
+}
+
 function ProjectDialog() {
-  const isEdit = url.params.dialog === 'edit-project'
-  const slug = url.params.slug
+  const { dialog, slug } = url.params
+  const isEdit = dialog === 'edit-project'
   const project = isEdit
     ? projects.value.find((p) => p.slug === slug)
     : undefined
 
-  const name = useSignal(project?.name ?? '')
-  const teamId = useSignal<number | null>(null)
-
-  const onSubmit = (e: Event) => {
-    e.preventDefault()
-    if (!teamId.value) return
-    saveProject({
-      name: name.value,
-      teamId: teamId.value,
-      slug: isEdit ? project?.slug : undefined,
-    })
-  }
-
   return (
     <DialogModal id={isEdit ? 'edit-project' : 'add-project'}>
-      <h3 class='text-lg font-semibold mb-4'>
-        {isEdit ? 'Edit Project' : 'Add Project'}
-      </h3>
+      <DialogTitle>{isEdit ? 'Edit Project' : 'Add Project'}</DialogTitle>
       <form onSubmit={onSubmit} class='space-y-4'>
         <FormField label='Name'>
           <input
             type='text'
-            value={name.value}
-            onInput={(e) => (name.value = (e.target as HTMLInputElement).value)}
+            defaultValue={project?.name || ''}
             required
             class='input input-bordered w-full'
           />
         </FormField>
         <FormField label='Team'>
           <select
-            value={teamId.value ?? ''}
-            onChange={(e) => (teamId.value = Number(e.currentTarget.value))}
+            defaultValue={project?.teamId || ''}
             required
             class='select select-bordered w-full'
           >
@@ -347,22 +366,20 @@ function ProjectDialog() {
 }
 
 function TeamSettingsSection({ team }: { team: Team }) {
-  const name = useSignal(team.name)
   return (
     <div class='space-y-6 max-w-md'>
       <div>
         <FormField label='Team Name'>
           <input
             type='text'
-            value={name.value}
-            onInput={(e) => (name.value = e.currentTarget.value)}
+            defaultValue={team.name}
             class='input input-bordered w-full'
           />
         </FormField>
         <button
           type='button'
           class='btn btn-primary btn-sm mt-2'
-          onClick={() => saveTeam({ id: team.id, name: name.value })}
+          onClick={() => saveTeam({ id: team.id, name: team.name })}
         >
           Save
         </button>
@@ -370,13 +387,12 @@ function TeamSettingsSection({ team }: { team: Team }) {
       <div class='divider' />
       <div>
         <h4 class='font-medium mb-2 text-error'>Danger Zone</h4>
-        <button
-          type='button'
+        <A
+          params={{ dialog: 'delete', id: team.id, key: 'team' }}
           class='btn btn-error btn-sm'
-          onClick={() => deleteTeam(team.id)}
         >
           Delete Team
-        </button>
+        </A>
       </div>
     </div>
   )
@@ -440,68 +456,83 @@ function TeamProjectsSection({ team }: { team: Team }) {
   )
 }
 
-function TeamsManagementDialog() {
-  const selectedTeamId = useSignal<number>(teams.value[0]?.id ?? 0)
-  const newTeamName = useSignal('')
-  const tab = useSignal<'members' | 'projects' | 'settings'>('members')
+const submitTeam = (e: Event) => {
+  e.preventDefault()
+  const form = e.currentTarget as HTMLFormElement
+  const name = (form.elements.namedItem('name') as HTMLInputElement).value
+  if (!name.trim()) return
+  saveTeam({ name })
+  form.reset()
+}
 
-  if (url.params.dialog !== 'manage-teams') return null
-  const selectedTeam = teams.value.find((t) => t.id === selectedTeamId.value)
+const TabNav = ({ tab, sections }: { tab: string; sections: string[] }) => (
+  <div class='flex border-b border-divider mb-4'>
+    {sections.map((t) => (
+      <A
+        key={t}
+        params={{ tab: t }}
+        class={`px-4 py-2 text-sm font-medium capitalize transition ${
+          tab === t
+            ? 'text-primary border-b-2 border-primary'
+            : 'text-text2 hover:text-text'
+        }`}
+      >
+        {t}
+      </A>
+    ))}
+  </div>
+)
+
+function TeamsManagementDialog() {
+  const { dialog, steamid, tab } = url.params
+  if (dialog !== 'manage-teams' || !steamid) return null
+  if (tab !== 'members' && tab !== 'projects' && tab !== 'settings') {
+    navigate({ params: { tab: 'members' }, replace: true })
+    return null
+  }
+
+  const selectedTeamId = Number(steamid) || teams.value[0]?.id
+  const selectedTeam = teams.value
+    .find((t) => t.id === selectedTeamId)
 
   return (
     <Dialog id='manage-teams' class='modal'>
       <div class='modal-box w-full max-w-5xl h-[90vh] flex flex-col'>
-        <form method='dialog'>
-          <button
-            type='submit'
-            class='btn btn-sm btn-circle btn-ghost absolute right-2 top-2'
-          >
-            ✕
-          </button>
-        </form>
-        <h2 class='text-lg font-semibold mb-4'>Team Management</h2>
+        <DialogTitle>Team Management</DialogTitle>
         <div class='flex-1 flex gap-4 overflow-hidden'>
           <aside class='w-72 shrink-0 border-r border-divider flex flex-col'>
             <div class='p-4 flex-1 flex flex-col'>
-              <h3 class='text-sm font-medium text-text2 mb-3'>Teams</h3>
+              <DialogSectionTitle>My Teams</DialogSectionTitle>
               <ul class='space-y-1 flex-1 overflow-y-auto'>
                 {teams.value.map((t) => (
                   <li key={t.id}>
-                    <button
-                      type='button'
-                      onClick={() => (selectedTeamId.value = t.id)}
+                    <A
+                      params={{ steamid: t.id, tab: 'members' }}
                       class={`w-full text-left px-3 py-2 rounded-md text-sm transition ${
-                        t.id === selectedTeamId.value
+                        t.id === selectedTeamId
                           ? 'bg-primary/10 text-primary font-medium'
                           : 'hover:bg-surface2'
                       }`}
                     >
                       {t.name}
-                    </button>
+                    </A>
                   </li>
                 ))}
               </ul>
-              <div class='mt-4'>
+              <form onSubmit={submitTeam} class='mt-4'>
                 <FormField label='New team name'>
                   <input
                     type='text'
-                    value={newTeamName.value}
-                    onInput={(e) => (newTeamName.value = e.currentTarget.value)}
                     class='input input-bordered input-sm w-full'
                   />
                 </FormField>
                 <button
-                  type='button'
+                  type='submit'
                   class='btn btn-sm btn-primary w-full mt-2'
-                  onClick={() => {
-                    if (!newTeamName.value.trim()) return
-                    saveTeam({ name: newTeamName.value })
-                    newTeamName.value = ''
-                  }}
                 >
                   + Add Team
                 </button>
-              </div>
+              </form>
             </div>
           </aside>
           <main class='flex-1 p-4 overflow-y-auto'>
@@ -511,29 +542,17 @@ function TeamsManagementDialog() {
                   <h3 class='text-lg font-semibold mb-4'>
                     {selectedTeam.name}
                   </h3>
-                  <div class='flex border-b border-divider mb-4'>
-                    {(['members', 'projects', 'settings'] as const).map((t) => (
-                      <button
-                        key={t}
-                        type='button'
-                        onClick={() => (tab.value = t)}
-                        class={`px-4 py-2 text-sm font-medium capitalize transition ${
-                          tab.value === t
-                            ? 'text-primary border-b-2 border-primary'
-                            : 'text-text2 hover:text-text'
-                        }`}
-                      >
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-                  {tab.value === 'members' && (
+                  <TabNav
+                    tab={tab}
+                    sections={['members', 'projects', 'settings']}
+                  />
+                  {tab === 'members' && (
                     <TeamMembersSection team={selectedTeam} />
                   )}
-                  {tab.value === 'projects' && (
+                  {tab === 'projects' && (
                     <TeamProjectsSection team={selectedTeam} />
                   )}
-                  {tab.value === 'settings' && (
+                  {tab === 'settings' && (
                     <TeamSettingsSection team={selectedTeam} />
                   )}
                 </>
@@ -546,52 +565,51 @@ function TeamsManagementDialog() {
   )
 }
 
+const onDelete = (e: Event) => {
+  e.preventDefault()
+}
 function DeleteDialog() {
-  const slug = url.params.slug
-  const project = projects.value.find((p) => p.slug === slug)
+  const { dialog, id, key } = url.params
+  if (dialog !== 'delete' || (key !== 'project' && key !== 'team')) return null
+
+  const name = key === 'project'
+    ? projects.value.find((p) => p.slug === id)?.name
+    : teams.value.find((t) => t.id === Number(id))?.name
+
+  if (!name) return null
   const confirmSlug = useSignal('')
-
-  if (url.params.dialog !== 'delete-project') return null
-  const canDelete = confirmSlug.value === slug
-
-  const onDelete = () => {
-    if (!canDelete) return
-    projects.value = projects.value.filter((p) => p.slug !== slug)
-    navigate({ params: { dialog: null } })
-    toast('Project deleted.')
-    confirmSlug.value = ''
-  }
+  const canDelete = confirmSlug.value === id
 
   return (
-    <DialogModal id='delete-project'>
-      <h3 class='text-lg font-semibold mb-2'>Confirm deletion</h3>
+    <DialogModal id='delete'>
+      <DialogTitle>Confirm deletion</DialogTitle>
       <p class='text-sm text-text2 mb-4'>
         Are you sure you want to delete{' '}
-        <span class='font-medium'>"{project?.name}"</span>? This action cannot
-        be undone.
+        <span class='font-medium'>"{name}"</span>? This action cannot be undone.
       </p>
-      <FormField label={`Type ${slug} to confirm`}>
-        <input
-          type='text'
-          value={confirmSlug.value}
-          onInput={(
-            e,
-          ) => (confirmSlug.value = (e.target as HTMLInputElement).value)}
-          class='input input-bordered input-sm w-full'
-          placeholder={slug || undefined}
-        />
-      </FormField>
-      <div class='modal-action'>
-        <A class='btn btn-ghost' params={{ dialog: null }}>Cancel</A>
-        <button
-          type='button'
-          class='btn btn-error'
-          disabled={!canDelete}
-          onClick={onDelete}
-        >
-          Delete
-        </button>
-      </div>
+      <form onSubmit={onDelete}>
+        <FormField label={`Type ${id} to confirm`}>
+          <input
+            type='text'
+            class='input input-bordered input-sm w-full'
+            onChange={(e: Event) =>
+              confirmSlug.value = (e.target as HTMLInputElement).value.trim()}
+            placeholder={id || undefined}
+          />
+        </FormField>
+        <div class='modal-action'>
+          <A class='btn btn-ghost' params={{ dialog: null, slug: null }}>
+            Cancel
+          </A>
+          <button
+            type='submit'
+            class='btn btn-error'
+            disabled={!canDelete}
+          >
+            Delete
+          </button>
+        </div>
+      </form>
     </DialogModal>
   )
 }

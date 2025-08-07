@@ -21,7 +21,8 @@
     "docker:rm": "docker rm -f devtools-app",
     "docker:logs": "docker logs -f devtools-app",
     "docker:exec": "docker exec -it devtools-app /bin/sh",
-    "docker:clean": "docker rm -f devtools-app && docker rmi devtools"
+    "docker:clean": "docker rm -f devtools-app && docker rmi devtools",
+    "env:dev": "deno run -A tasks/env.ts"
   },
   "imports": {
     "./": "./",
