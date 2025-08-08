@@ -1,5 +1,6 @@
 import { render } from 'preact'
 import { LoginPage } from './pages/LoginPage.tsx'
+import { ProjectsPage } from './pages/ProjectsPage.tsx'
 import { BackgroundPattern } from './components/BackgroundPattern.tsx'
 import { Header } from './layout.tsx'
 import { user } from './lib/session.ts'
@@ -9,13 +10,7 @@ const renderPage = () => {
   if (!user.data) {
     return <LoginPage />
   }
-  return (
-    <div className='flex items-center justify-center h-full'>
-      <h1 className='text-3xl font-bold text-base-content'>
-        Welcome to the Dev Tools App!
-      </h1>
-    </div>
-  )
+  return <ProjectsPage />
 }
 const App = () => {
   return (
