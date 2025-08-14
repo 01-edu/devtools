@@ -1,4 +1,4 @@
-import { ARR, BOOL, LIST, NUM, OBJ, optional, STR } from './lib/validator.ts'
+import { ARR, BOOL, OBJ, optional, STR } from './lib/validator.ts'
 import { Asserted } from './lib/router.ts'
 import { createCollection } from './lib/json_store.ts'
 
@@ -7,51 +7,36 @@ export const UserDef = OBJ({
   userFullName: STR('The user login name'),
   userPicture: optional(STR('The user profile picture URL')),
   isAdmin: BOOL('Is the user an admin?'),
-  authorizedProjects: ARR(
-    STR('The IDs of the projects the user is authorized to access'),
-    'The list of project IDs the user is authorized to access',
-  ),
 }, 'The user schema definition')
 export type User = Asserted<typeof UserDef>
 
-export const BetterStackConfigDef = OBJ({
-  apiToken: STR('The API token for BetterStack'),
-  sourceId: STR('The source ID for BetterStack'),
-}, 'The BetterStack configuration schema')
-export type BetterStackConfig = Asserted<typeof BetterStackConfigDef>
-
-export const PlatformEndpointsDef = OBJ({
-  sqlExecution: STR('The SQL execution endpoint'),
-  healthCheck: STR('The health check endpoint'),
-}, 'The platform endpoints configuration')
-export type PlatformEndpoints = Asserted<typeof PlatformEndpointsDef>
-
-export const SecurityConfigDef = OBJ({
-  sharedSecret: STR('The shared secret for security'),
-}, 'The security configuration schema')
-export type SecurityConfig = Asserted<typeof SecurityConfigDef>
+export const TeamDef = OBJ({
+  teamId: STR('The unique identifier for the team'),
+  teamName: STR('The name of the team'),
+  teamMembers: ARR(
+    STR('The user emails of team members'),
+    'The list of user emails who are members of the team',
+  ),
+}, 'The team schema definition')
+export type Team = Asserted<typeof TeamDef>
 
 export const ProjectDef = OBJ({
-  slug: STR('The project ID'),
-  name: STR('The project name'),
-  deployementUrl: STR('The project platform URL'),
-  logging: optional(OBJ({
-    provider: STR('The logging provider'),
-    config: BetterStackConfigDef,
-  })),
-  endpoints: optional(PlatformEndpointsDef),
-  security: optional(SecurityConfigDef),
-  env: LIST(['dev', 'prod'], 'The environment of the project'),
-  createdAt: NUM('The creation date of the project'),
+  projectId: STR('The unique identifier for the project'),
+  projectName: STR('The name of the project'),
+  teamId: STR('The ID of the team that owns the project'),
+  isPublic: BOOL('Is the project public?'),
+  repositoryUrl: optional(STR('The URL of the project repository')),
 }, 'The project schema definition')
-
 export type Project = Asserted<typeof ProjectDef>
 
-export const UsersStore = await createCollection<User, 'userEmail'>(
+export const UsersCollection = await createCollection<User, 'userEmail'>(
   { name: 'users', primaryKey: 'userEmail' },
 )
 
-export const ProjectsStore = await createCollection<Project, 'slug'>(
-  { name: 'projects', primaryKey: 'slug' },
+export const TeamsCollection = await createCollection<Team, 'teamId'>(
+  { name: 'teams', primaryKey: 'teamId' },
 )
 
+export const ProjectsCollection = await createCollection<Project, 'projectId'>(
+  { name: 'projects', primaryKey: 'projectId' },
+)

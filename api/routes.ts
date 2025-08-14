@@ -1,8 +1,15 @@
 import { Asserted, makeRouter, route } from '/api/lib/router.ts'
 import type { RequestContext } from '/api/lib/context.ts'
 import { handleGoogleCallback, initiateGoogleAuth } from './auth.ts'
-import { ProjectDef, ProjectsStore, User, UserDef } from './schema.ts'
-import { ARR, LIST, NUM, OBJ, optional, STR } from './lib/validator.ts'
+import {
+  ProjectDef,
+  ProjectsCollection,
+  TeamDef,
+  TeamsCollection,
+  User,
+  UserDef,
+} from './schema.ts'
+import { ARR, BOOL, OBJ, optional, STR } from './lib/validator.ts'
 import { respond } from './lib/response.ts'
 import { deleteCookie } from 'jsr:@std/http/cookie'
 import { getPicture } from '/api/picture.ts'
@@ -14,7 +21,6 @@ const withUserSession = ({ user }: RequestContext) => {
 const withAdminSession = ({ user }: RequestContext) => {
   if (!user || !user.isAdmin) throw Error('Admin access required')
 }
-
 
 const defs = {
   'GET/api/health': route({
@@ -55,141 +61,130 @@ const defs = {
     output: OBJ({}),
     description: 'Logout the user',
   }),
+  'GET/api/teams': route({
+    authorize: withUserSession,
+    fn: () => TeamsCollection.values().toArray(),
+    output: ARR(TeamDef, 'List of teams'),
+    description: 'Get all teams',
+  }),
+  'POST/api/teams': route({
+    authorize: withAdminSession,
+    fn: (_ctx, team) =>
+      TeamsCollection.insert({
+        teamId: team.teamId,
+        teamName: team.teamName,
+        teamMembers: [],
+      }),
+    input: OBJ({
+      teamId: STR('The ID of the team'),
+      teamName: STR('The name of the team'),
+    }),
+    output: TeamDef,
+    description: 'Create a new team',
+  }),
+  'GET/api/teams/:teamId': route({
+    authorize: withUserSession,
+    fn: (_ctx, { teamId }) => {
+      const team = TeamsCollection.get(teamId)
+      if (!team) throw respond.NotFound({ message: 'Team not found' })
+      return team
+    },
+    input: OBJ({ teamId: STR('The ID of the team') }),
+    output: TeamDef,
+    description: 'Get a team by ID',
+  }),
+  'PUT/api/teams/:teamId': route({
+    authorize: withAdminSession,
+    fn: (_ctx, input) => TeamsCollection.update(input.teamId, input),
+    input: OBJ({
+      teamId: STR('The ID of the team'),
+      teamName: STR('The name of the team'),
+      teamMembers: optional(
+        ARR(
+          STR('The user emails of team members'),
+          'The list of user emails who are members of the team',
+        ),
+      ),
+    }),
+    output: TeamDef,
+    description: 'Update a team by ID',
+  }),
+  'DELETE/api/teams/:teamId': route({
+    authorize: withAdminSession,
+    fn: (_ctx, { teamId }) => {
+      const team = TeamsCollection.get(teamId)
+      if (!team) throw respond.NotFound({ message: 'Team not found' })
+      TeamsCollection.delete(teamId)
+      return true
+    },
+    input: OBJ({ teamId: STR('The ID of the team') }),
+    output: BOOL('Indicates if the team was deleted'),
+    description: 'Delete a team by ID',
+  }),
   'GET/api/projects': route({
     authorize: withUserSession,
-    fn: (_ctx: RequestContext) => {
-      const projects = ProjectsStore.values().map((project) => ({
-        slug: project.slug,
-        name: project.name,
-        logging: project.logging
-          ? {
-            provider: project.logging.provider,
-            config: {
-              sourceId: project.logging.config.sourceId,
-            },
-          }
-          : undefined,
-        env: project.env,
-        createdAt: project.createdAt,
-      })).toArray()
-      return projects
-    },
+    fn: () => ProjectsCollection.values().toArray(),
     output: ARR(
       OBJ({
-        slug: STR('The unique slug of the project'),
-        name: STR('The name of the project'),
-        logging: optional(OBJ({
-          provider: STR('The logging provider'),
-          config: OBJ({
-            sourceId: STR('The BetterStack project ID'),
-          }),
-        })),
-        env: LIST(['dev', 'prod'], 'The environment of the project'),
-        createdAt: NUM('The creation date of the project'),
+        projectId: STR('The unique identifier for the project'),
+        projectName: STR('The name of the project'),
+        teamId: STR('The ID of the team that owns the project'),
+        isPublic: BOOL('Is the project public?'),
+        repositoryUrl: optional(STR('The URL of the project repository')),
       }),
       'List of projects',
     ),
-    description: 'Get the list of projects',
+    description: 'Get all projects',
   }),
-  // 'POST/api/projects': route({
-  //   authorize: withAdminSession,
-  //   fn: async (_ctx: RequestContext, project) => {
-  //       const newProject = {
-  //         ...project,
-  //         createdAt: Date.now(),
-  //         logging: undefined,
-  //         endpoints: undefined,
-  //         security: undefined,
-  //       }
-  //       await ProjectsStore.insert(newProject)
-  //       return newProject
-  //   },
-  //   input: OBJ({
-  //     slug: STR('The unique slug of the project'),
-  //     name: STR('The name of the project'),
-  //     platformUrl: STR('The project platform URL'),
-  //     env: LIST(['dev', 'prod'], 'The environment of the project'),
-  //   }),
-  //   output: OBJ({
-  //     slug: STR('The unique slug of the project'),
-  //     name: STR('The name of the project'),
-  //     logging: optional(OBJ({
-  //       provider: STR('The logging provider'),
-  //       config: OBJ({
-  //         sourceId: STR('The BetterStack project ID'),
-  //       }),
-  //     })),
-  //     env: LIST(['dev', 'prod'], 'The environment of the project'),
-  //     createdAt: NUM('The creation date of the project'),
-  //   }),
-  //   description: 'Create a new project',
-  // }),
-  'GET/api/projects/:id': route({
-    authorize: withUserSession,
-    fn: (_ctx: RequestContext, { id }) => {
-      const project = ProjectsStore.get(id)
-      if (!project) {
-        throw respond.NotFound({
-          message: `Project with ID ${id} not found`,
-        })
-      }
-      const isAdmin = _ctx.user?.isAdmin || false
-      return {
-        slug: project.slug,
-        name: project.name,
-        deployementUrl: project.deployementUrl,
-        logging: project.logging
-          ? {
-            provider: project.logging.provider,
-            config: {
-              apiToken: isAdmin ? project.logging.config.apiToken : '',
-              sourceId: project.logging.config.sourceId,
-            },
-          }
-          : undefined,
-        endpoints: isAdmin ? project.endpoints : undefined,
-        security: isAdmin ? project.security : undefined,
-        env: project.env,
-        createdAt: project.createdAt,
-      }
-    },
-    input: OBJ({ id: STR('The ID of the project') }),
+  'POST/api/projects': route({
+    authorize: withAdminSession,
+    fn: (_ctx, project) => ProjectsCollection.insert(project),
+    input: OBJ({
+      projectId: STR('The unique identifier for the project'),
+      projectName: STR('The name of the project'),
+      teamId: STR('The ID of the team that owns the project'),
+      isPublic: BOOL('Is the project public?'),
+      repositoryUrl: optional(STR('The URL of the project repository')),
+    }, 'Create a new project'),
     output: ProjectDef,
-    description: 'Get a specific project by ID',
+    description: 'Create a new project',
   }),
-  // 'PUT/api/projects/:id': route({
-  //   authorize: withAdminSession,
-  //   fn: async (_ctx: RequestContext, { id }, project) => {
-  //     const existingProject = ProjectsStore.get(id)
-  //     if (!existingProject) throw respond.NotFound({
-  //       message: `Project with ID ${id} not found`,
-  //     })
-  //     const updatedProject = {
-  //       ...existingProject,
-  //       ...project,
-  //       createdAt: existingProject.createdAt, // Preserve creation date
-  //     }
-  //     await ProjectsStore.update(id, updatedProject)
-  //     return updatedProject
-  //   },
-  //   input: OBJ({
-  //     slug: STR('The slug of the project'),
-  //     name: optional(STR('The name of the project')),
-  //     deployementUrl: optional(STR('The project platform URL')),
-  //     logging: optional(OBJ({
-  //       provider: optional(STR('The logging provider')),
-  //       config: OBJ({
-  //         apiToken: optional(STR('The API token for BetterStack')),
-  //         sourceId: optional(STR('The source ID for BetterStack')),
-  //       }),
-  //     })),
-  //     // endpoints: optional(PlatformEndpointsDef),
-  //     // security: optional(SecurityConfigDef),
-  //     env: optional(LIST(['dev', 'prod'], 'The environment of the project')),
-  //   }),
-  //   output: ProjectDef,
-  //   description: 'Update a specific project by ID',
-  // }),
+  'GET/api/projects/:projectId': route({
+    authorize: withUserSession,
+    fn: (_ctx, { projectId }) => {
+      const project = ProjectsCollection.get(projectId)
+      if (!project) throw respond.NotFound({ message: 'Project not found' })
+      return project
+    },
+    input: OBJ({ projectId: STR('The ID of the project') }),
+    output: ProjectDef,
+    description: 'Get a project by ID',
+  }),
+  'PUT/api/projects/:projectId': route({
+    authorize: withAdminSession,
+    fn: (_ctx, input) => ProjectsCollection.update(input.projectId, input),
+    input: OBJ({
+      projectId: STR('The unique identifier for the project'),
+      projectName: STR('The name of the project'),
+      teamId: STR('The ID of the team that owns the project'),
+      isPublic: BOOL('Is the project public?'),
+      repositoryUrl: optional(STR('The URL of the project repository')),
+    }),
+    output: ProjectDef,
+    description: 'Update a project by ID',
+  }),
+  'DELETE/api/projects/:projectId': route({
+    authorize: withAdminSession,
+    fn: (_ctx, { projectId }) => {
+      const project = ProjectsCollection.get(projectId)
+      if (!project) throw respond.NotFound({ message: 'Project not found' })
+      ProjectsCollection.delete(projectId)
+      return true
+    },
+    input: OBJ({ projectId: STR('The ID of the project') }),
+    output: BOOL('Indicates if the project was deleted'),
+    description: 'Delete a project by ID',
+  }),
 } as const
 
 export type RouteDefinitions = typeof defs
