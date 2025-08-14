@@ -21,7 +21,7 @@ export const TeamDef = OBJ({
 export type Team = Asserted<typeof TeamDef>
 
 export const ProjectDef = OBJ({
-  projectId: STR('The unique identifier for the project'),
+  projectSlug: STR('The unique identifier for the project'),
   projectName: STR('The name of the project'),
   teamId: STR('The ID of the team that owns the project'),
   isPublic: BOOL('Is the project public?'),
@@ -37,6 +37,9 @@ export const TeamsCollection = await createCollection<Team, 'teamId'>(
   { name: 'teams', primaryKey: 'teamId' },
 )
 
-export const ProjectsCollection = await createCollection<Project, 'projectId'>(
-  { name: 'projects', primaryKey: 'projectId' },
+export const ProjectsCollection = await createCollection<
+  Project,
+  'projectSlug'
+>(
+  { name: 'projects', primaryKey: 'projectSlug' },
 )

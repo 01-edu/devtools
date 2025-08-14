@@ -8,6 +8,7 @@ import {
   TeamsCollection,
   User,
   UserDef,
+  UsersCollection,
 } from './schema.ts'
 import { ARR, BOOL, OBJ, optional, STR } from './lib/validator.ts'
 import { respond } from './lib/response.ts'
@@ -60,6 +61,12 @@ const defs = {
     input: OBJ({}),
     output: OBJ({}),
     description: 'Logout the user',
+  }),
+  'GET/api/users': route({
+    authorize: withAdminSession,
+    fn: () => UsersCollection.values().toArray(),
+    output: ARR(UserDef, 'List of users'),
+    description: 'Get all users',
   }),
   'GET/api/teams': route({
     authorize: withUserSession,
@@ -124,23 +131,14 @@ const defs = {
   'GET/api/projects': route({
     authorize: withUserSession,
     fn: () => ProjectsCollection.values().toArray(),
-    output: ARR(
-      OBJ({
-        projectId: STR('The unique identifier for the project'),
-        projectName: STR('The name of the project'),
-        teamId: STR('The ID of the team that owns the project'),
-        isPublic: BOOL('Is the project public?'),
-        repositoryUrl: optional(STR('The URL of the project repository')),
-      }),
-      'List of projects',
-    ),
+    output: ARR(ProjectDef, 'List of projects'),
     description: 'Get all projects',
   }),
   'POST/api/projects': route({
     authorize: withAdminSession,
     fn: (_ctx, project) => ProjectsCollection.insert(project),
     input: OBJ({
-      projectId: STR('The unique identifier for the project'),
+      projectSlug: STR('The unique identifier for the project'),
       projectName: STR('The name of the project'),
       teamId: STR('The ID of the team that owns the project'),
       isPublic: BOOL('Is the project public?'),
@@ -149,22 +147,22 @@ const defs = {
     output: ProjectDef,
     description: 'Create a new project',
   }),
-  'GET/api/projects/:projectId': route({
+  'GET/api/projects/:projectSlug': route({
     authorize: withUserSession,
-    fn: (_ctx, { projectId }) => {
-      const project = ProjectsCollection.get(projectId)
+    fn: (_ctx, { projectSlug }) => {
+      const project = ProjectsCollection.get(projectSlug)
       if (!project) throw respond.NotFound({ message: 'Project not found' })
       return project
     },
-    input: OBJ({ projectId: STR('The ID of the project') }),
+    input: OBJ({ projectSlug: STR('The slug of the project') }),
     output: ProjectDef,
     description: 'Get a project by ID',
   }),
-  'PUT/api/projects/:projectId': route({
+  'PUT/api/projects/:projectSlug': route({
     authorize: withAdminSession,
-    fn: (_ctx, input) => ProjectsCollection.update(input.projectId, input),
+    fn: (_ctx, input) => ProjectsCollection.update(input.projectSlug, input),
     input: OBJ({
-      projectId: STR('The unique identifier for the project'),
+      projectSlug: STR('The unique identifier for the project'),
       projectName: STR('The name of the project'),
       teamId: STR('The ID of the team that owns the project'),
       isPublic: BOOL('Is the project public?'),
@@ -173,15 +171,15 @@ const defs = {
     output: ProjectDef,
     description: 'Update a project by ID',
   }),
-  'DELETE/api/projects/:projectId': route({
+  'DELETE/api/projects/:projectSlug': route({
     authorize: withAdminSession,
-    fn: (_ctx, { projectId }) => {
-      const project = ProjectsCollection.get(projectId)
+    fn: (_ctx, { projectSlug }) => {
+      const project = ProjectsCollection.get(projectSlug)
       if (!project) throw respond.NotFound({ message: 'Project not found' })
-      ProjectsCollection.delete(projectId)
+      ProjectsCollection.delete(projectSlug)
       return true
     },
-    input: OBJ({ projectId: STR('The ID of the project') }),
+    input: OBJ({ projectSlug: STR('The slug of the project') }),
     output: BOOL('Indicates if the project was deleted'),
     description: 'Delete a project by ID',
   }),
