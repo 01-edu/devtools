@@ -1,5 +1,5 @@
 import { SECRET } from './lib/env.ts'
-import { User } from './schema.ts'
+import { UsersCollection } from './schema.ts'
 
 import { decodeBase64Url, encodeBase64Url } from 'jsr:@std/encoding/base64url'
 
@@ -44,7 +44,7 @@ const key = await crypto.subtle.importKey(
 
 export async function decodeSession(sessionCode?: string) {
   const id = sessionCode == null ? '' : await decryptMessage(sessionCode)
-  return User.find(({ userEmail }) => userEmail === id)
+  return UsersCollection.find(({ userEmail }) => userEmail === id)
 }
 
 export async function authenticateOauthUser(
@@ -54,19 +54,22 @@ export async function authenticateOauthUser(
     userPicture: string | undefined
   },
 ) {
-  const existingUser = User.find(({ userEmail }) =>
+  const existingUser = UsersCollection.find(({ userEmail }) =>
     userEmail === oauthInfo.userEmail.trim()
   )
 
   let userEmail: string
   if (!existingUser) {
-    const newUser = await User.insert({ ...oauthInfo, isAdmin: false })
+    const newUser = await UsersCollection.insert({
+      ...oauthInfo,
+      isAdmin: false,
+    })
     userEmail = newUser.userEmail
   } else {
     userEmail = existingUser.userEmail
     const needsUpdate = existingUser.userFullName !== oauthInfo.userFullName ||
       existingUser.userPicture !== oauthInfo.userPicture
-    needsUpdate && User.update(existingUser.userEmail, {
+    needsUpdate && UsersCollection.update(existingUser.userEmail, {
       userFullName: oauthInfo.userFullName,
       userPicture: oauthInfo.userPicture,
     })
