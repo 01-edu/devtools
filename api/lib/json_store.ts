@@ -32,8 +32,10 @@ const batch = async <T>(
   await Promise.all(pool)
 }
 
+export type BaseRecord = { createdAt?: number; updatedAt?: number }
+
 export async function createCollection<
-  T extends Record<PropertyKey, unknown>,
+  T extends Record<PropertyKey, unknown> & BaseRecord,
   K extends keyof T,
 >({ name, primaryKey }: CollectionOptions<T, K>) {
   const dir = join(DB_DIR, name)

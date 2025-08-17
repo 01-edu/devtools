@@ -1,7 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { startTime } from '/api/lib/time.ts'
-import { Asserted } from './router.ts'
-import { userDef } from '../schema.ts'
+import { User } from '../schema.ts'
 
 type Readonly<T> = {
   readonly [P in keyof T]:
@@ -17,7 +16,7 @@ export type RequestContext = {
   readonly req: Readonly<Request>
   readonly url: Readonly<URL>
   readonly cookies: Readonly<Record<string, string>>
-  readonly user: Readonly<Asserted<typeof userDef>> | undefined
+  readonly user: User | undefined
   readonly trace: number
   readonly span: number | undefined
 }

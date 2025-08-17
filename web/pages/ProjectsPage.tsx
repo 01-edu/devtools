@@ -5,6 +5,7 @@ import {
   ArrowRight,
   Calendar,
   Folder,
+  Lock,
   LucideIcon,
   Plus,
   Search,
@@ -17,21 +18,16 @@ import { user } from '../lib/session.ts'
 import { api } from '../lib/api.ts'
 import { Project as ApiProject, Team, User } from '../../api/schema.ts'
 
-type Project = ApiProject & {
-  createdAt: string
-}
+type Project = ApiProject
 
 const users = api['GET/api/users'].signal()
 users.fetch()
-console.log('Users:', users.data);
 
 const teams = api['GET/api/teams'].signal()
 teams.fetch()
-console.log('Teams:', teams.data);
 
 const projects = api['GET/api/projects'].signal()
 projects.fetch()
-console.log('Projects:', projects.data);
 
 const toastSignal = signal<{ message: string; type: 'info' | 'error' } | null>(
   null,
@@ -40,38 +36,75 @@ const toastSignal = signal<{ message: string; type: 'info' | 'error' } | null>(
 const slugify = (str: string) =>
   str.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '')
 
-function _saveProject(data: { name: string; teamId: string; slug?: string }) {
-  const { slug, name, teamId } = data
-  const projectsValues = projects.data || []
+async function saveProject(
+  data: {
+    name: string
+    teamId: string
+    slug?: string
+    repositoryUrl?: string
+    isPublic?: boolean
+  },
+) {
+  let { slug, name, teamId, repositoryUrl, isPublic } = data
+  const fetcher = slug ? api['PUT/api/project'] : api['POST/api/project']
+
+  let finalSlug = slug || slugify(name)
   if (!slug) {
-    const base = slugify(name)
+    const base = finalSlug
     let suffix = ''
-    let finalSlug = base
     do {
       finalSlug = base + suffix
       suffix = suffix ? String(Number(suffix) + 1) : '0'
-    } while (projectsValues.some((p) => p.projectSlug === finalSlug))
-    const now = new Date().toISOString()
-    const project: Project = {
+    } while (projects.data?.some((p) => p.projectSlug === finalSlug))
+    slug = finalSlug
+  }
+  try {
+    await fetcher.fetch({
       projectSlug: finalSlug,
       projectName: name,
       teamId,
-      createdAt: now,
-      repositoryUrl: '',
-      isPublic: false,
-    }
-    projects.data = [...projectsValues, project]
-  } else {
-    const idx = projectsValues.findIndex((p) => p.projectSlug === slug)
-    const copy = [...projectsValues]
-    copy[idx] = { ...projectsValues[idx], projectName: name, teamId }
-    projects.data = copy
+      repositoryUrl,
+      isPublic: isPublic ?? false,
+    })
+    projects.fetch()
+    navigate({ params: { dialog: null, slug: null }, replace: true })
+  } catch (err) {
+    toast(err instanceof Error ? err.message : String(err), 'error')
   }
-
-  navigate({ params: { dialog: null }, replace: true })
 }
 
-function saveTeam(_e: Event) {
+async function saveTeam(e: Event, teamId?: string) {
+  e.preventDefault()
+  const form = e.currentTarget as HTMLFormElement
+  const formData = new FormData(form)
+  const name = formData.get('name') as string
+
+  try {
+    if (teamId) {
+      const team = teams.data?.find((t) => t.teamId === teamId)
+      if (!team) throw new Error('Team not found')
+      await api['PUT/api/team'].fetch({ ...team, teamName: name })
+      toast(`Team "${name}" updated.`, 'info')
+    } else {
+      const newTeamId = formData.get('teamId') as string
+      if (!newTeamId || !name) {
+        toast('Team ID and name are required.', 'error')
+        return
+      }
+
+      if (teams.data?.some((t) => t.teamId === newTeamId)) {
+        toast(`Team ID "${newTeamId}" already exists.`, 'error')
+        return
+      }
+
+      await api['POST/api/teams'].fetch({ teamId: newTeamId, teamName: name })
+      toast(`Team "${name}" created.`, 'info')
+      form.reset()
+    }
+    teams.fetch()
+  } catch (err) {
+    toast(err instanceof Error ? err.message : String(err), 'error')
+  }
 }
 
 function toast(message: string, type: 'info' | 'error' = 'info') {
@@ -79,22 +112,58 @@ function toast(message: string, type: 'info' | 'error' = 'info') {
   setTimeout(() => (toastSignal.value = null), 3000)
 }
 
-function _deleteTeam(_id: number) {
+async function deleteProject(slug: string) {
+  try {
+    await api['DELETE/api/project'].fetch({ projectSlug: slug })
+    toast('Project deleted.', 'info')
+    projects.fetch()
+    navigate({ params: { dialog: null, id: null, key: null }, replace: true })
+  } catch (err) {
+    toast(err instanceof Error ? err.message : String(err), 'error')
+  }
 }
 
-function addUserToTeam(user: User, team: Team) {
+async function deleteTeam(id: string) {
+  try {
+    await api['DELETE/api/team'].fetch({ teamId: id })
+    toast('Team deleted.', 'info')
+    teams.fetch()
+    navigate({ params: { dialog: null, id: null, key: null }, replace: true })
+  } catch (err) {
+    toast(err instanceof Error ? err.message : String(err), 'error')
+  }
+}
+
+async function addUserToTeam(user: User, team: Team) {
   if (team.teamMembers.includes(user.userEmail)) return
-  team.teamMembers.push(user.userEmail)
-  teams.data = [...teams.data || []]
-  toast(`${user.userFullName} added to ${team.teamName}.`)
+  const updatedMembers = [...team.teamMembers, user.userEmail]
+  try {
+    await api['PUT/api/team'].fetch({
+      ...team,
+      teamMembers: updatedMembers,
+    })
+    toast(`${user.userFullName} added to ${team.teamName}.`)
+    teams.fetch()
+  } catch (err) {
+    toast(err instanceof Error ? err.message : String(err), 'error')
+  }
 }
 
-function removeUserFromTeam(user: User, team: Team) {
-  const idx = team.teamMembers.indexOf(user.userEmail)
-  if (idx === -1) return
-  team.teamMembers.splice(idx, 1)
-  teams.data = [...teams.data || []]
-  toast(`${user.userFullName} removed from ${team.teamName}.`)
+async function removeUserFromTeam(user: User, team: Team) {
+  const updatedMembers = team.teamMembers.filter((email) =>
+    email !== user.userEmail
+  )
+  if (updatedMembers.length === team.teamMembers.length) return
+  try {
+    await api['PUT/api/team'].fetch({
+      ...team,
+      teamMembers: updatedMembers,
+    })
+    toast(`${user.userFullName} removed from ${team.teamName}.`)
+    teams.fetch()
+  } catch (err) {
+    toast(err instanceof Error ? err.message : String(err), 'error')
+  }
 }
 
 const PageLayout = (
@@ -151,38 +220,49 @@ const EmptyState = (
   </div>
 )
 
-const ProjectCard = ({ project }: { project: Project }) => (
-  <A
-    key={project.projectSlug}
-    href={`/projects/${project.projectSlug}`}
-    class='block hover:no-underline w-full h-18'
-  >
-    <article class='card bg-base-200 border border-base-300 hover:bg-base-300 transition-colors h-full'>
-      <div class='card-body p-4 h-full flex-row items-center gap-4'>
-        <div class='flex-1 min-w-0 flex flex-col justify-center'>
-          <h3
-            class='font-semibold text-base-content text-base leading-tight truncate'
-            title={project.projectName}
-          >
-            {project.projectName.length > 25
-              ? project.projectName.slice(0, 22) + '…'
-              : project.projectName}
-          </h3>
-          <div class='flex items-center gap-3 mt-1 text-xs text-base-content/70'>
-            <span class='font-mono truncate'>{project.projectSlug}</span>
-            <div class='flex items-center gap-1 flex-shrink-0'>
-              <Calendar class='w-3.5 h-3.5' />
-              <span>
-                {new Date(project['createdAt'] as string).toLocaleDateString()}
-              </span>
+const ProjectCard = (
+  { project, team }: { project: ApiProject; team: Team },
+) => {
+  const isMember = team.teamMembers.includes(user.data?.userEmail || '')
+  return (
+    <A
+      key={project.projectSlug}
+      href={isMember ? `/projects/${project.projectSlug}` : undefined}
+      class={'block hover:no-underline w-full h-18 ' +
+        (isMember ? '' : 'pointer-events-none')}
+    >
+      <article class='card bg-base-200 border border-base-300 hover:bg-base-300 transition-colors h-full'>
+        <div class='card-body p-4 h-full flex-row items-center gap-4'>
+          <div class='flex-1 min-w-0 flex flex-col justify-center'>
+            <h3
+              class='font-semibold text-base-content text-base leading-tight truncate'
+              title={project.projectName}
+            >
+              {project.projectName.length > 25
+                ? project.projectName.slice(0, 22) + '…'
+                : project.projectName}
+            </h3>
+            <div class='flex items-center gap-3 mt-1 text-xs text-base-content/70'>
+              <span class='font-mono truncate'>{project.projectSlug}</span>
+              <div class='flex items-center gap-1 flex-shrink-0'>
+                <Calendar class='w-3.5 h-3.5' />
+                <span>
+                  {project.createdAt &&
+                    new Date(project.createdAt).toLocaleDateString()}
+                </span>
+              </div>
             </div>
           </div>
+          {isMember
+            ? (
+              <ArrowRight class='w-5 h-5 text-primary flex-shrink-0 group-hover:translate-x-1 transition-transform duration-200' />
+            )
+            : <Lock class='w-5 h-5 text-base-content/70 flex-shrink-0' />}
         </div>
-        <ArrowRight class='w-5 h-5 text-primary flex-shrink-0 group-hover:translate-x-1 transition-transform duration-200' />
-      </div>
-    </article>
-  </A>
-)
+      </article>
+    </A>
+  )
+}
 
 const Toast = () => {
   if (!toastSignal.value) return null
@@ -218,12 +298,12 @@ const TeamMembersRow = ({ user, team }: { user: User; team: Team }) => (
   </tr>
 )
 
-const TeamProjectsRow = ({ project }: { project: Project }) => (
+const TeamProjectsRow = ({ project }: { project: ApiProject }) => (
   <tr class='border-b border-divider'>
     <td class='py-3 font-medium truncate'>{project.projectName}</td>
     <td class='py-3 text-text2 truncate'>{project.projectSlug}</td>
     <td class='py-3 text-text2 whitespace-nowrap'>
-      {new Date(project.createdAt).toLocaleDateString()}
+      {project.createdAt && new Date(project.createdAt).toLocaleDateString()}
     </td>
     <td class='py-3 text-right flex gap-2 justify-end'>
       <A
@@ -260,10 +340,6 @@ const DialogTitle = (props: JSX.HTMLAttributes<HTMLHeadingElement>) => (
   </>
 )
 
-const onSubmit = (e: Event) => {
-  e.preventDefault()
-}
-
 function ProjectDialog() {
   const { dialog, slug } = url.params
   const isEdit = dialog === 'edit-project'
@@ -271,13 +347,34 @@ function ProjectDialog() {
     ? projects.data?.find((p) => p.projectSlug === slug)
     : undefined
 
+  const handleSubmit = (e: Event) => {
+    e.preventDefault()
+    const form = e.target as HTMLFormElement
+    const formData = new FormData(form)
+    const name = formData.get('name') as string
+    const teamId = formData.get('teamId') as string
+    const repositoryUrl = formData.get('repositoryUrl') as string
+    const isPublic = formData.get('isPublic') === 'on'
+
+    if (name && teamId) {
+      saveProject({
+        name,
+        teamId,
+        slug: slug || undefined,
+        repositoryUrl,
+        isPublic,
+      })
+    }
+  }
+
   return (
     <DialogModal id={isEdit ? 'edit-project' : 'add-project'}>
       <DialogTitle>{isEdit ? 'Edit Project' : 'Add Project'}</DialogTitle>
-      <form onSubmit={onSubmit} class='space-y-4'>
+      <form onSubmit={handleSubmit} class='space-y-4'>
         <FormField label='Name'>
           <input
             type='text'
+            name='name'
             defaultValue={project?.projectName || ''}
             required
             class='input input-bordered w-full'
@@ -285,6 +382,7 @@ function ProjectDialog() {
         </FormField>
         <FormField label='Team'>
           <select
+            name='teamId'
             defaultValue={project?.teamId || ''}
             required
             class='select select-bordered w-full'
@@ -295,8 +393,29 @@ function ProjectDialog() {
             ))}
           </select>
         </FormField>
+        <FormField label='Repository URL'>
+          <input
+            type='url'
+            name='repositoryUrl'
+            defaultValue={project?.repositoryUrl || ''}
+            class='input input-bordered w-full'
+          />
+        </FormField>
+        <div class='form-control'>
+          <label class='label cursor-pointer'>
+            <span class='label-text'>Public</span>
+            <input
+              type='checkbox'
+              name='isPublic'
+              defaultChecked={project?.isPublic}
+              class='toggle'
+            />
+          </label>
+        </div>
         <div class='modal-action'>
-          <A class='btn btn-ghost' params={{ dialog: null }}>Cancel</A>
+          <A class='btn btn-ghost' params={{ dialog: null, slug: null }}>
+            Cancel
+          </A>
           <button type='submit' class='btn btn-primary'>Save</button>
         </div>
       </form>
@@ -307,16 +426,20 @@ function ProjectDialog() {
 function TeamSettingsSection({ team }: { team: Team }) {
   return (
     <div class='space-y-6 max-w-md'>
-      <form onSubmit={saveTeam} class='space-y-4'>
+      <form
+        onSubmit={(e) => saveTeam(e, team.teamId)}
+        class='space-y-4'
+      >
         <FormField label='Team Name'>
           <input
             type='text'
+            name='name'
             defaultValue={team.teamName}
             class='input input-bordered w-full'
           />
         </FormField>
         <button
-          type='button'
+          type='submit'
           class='btn btn-primary btn-sm mt-2'
         >
           Save
@@ -385,7 +508,7 @@ function TeamProjectsSection({ team }: { team: Team }) {
               </thead>
               <tbody>
                 {teamProjects.map((p) => (
-                  <TeamProjectsRow key={p.projectSlug} project={p as Project} />
+                  <TeamProjectsRow key={p.projectSlug} project={p} />
                 ))}
               </tbody>
             </table>
@@ -415,7 +538,7 @@ const TabNav = ({ tab, sections }: { tab: string; sections: string[] }) => (
 
 function TeamsManagementDialog() {
   const { dialog, steamid, tab } = url.params
-  if (dialog !== 'manage-teams' || !steamid) return null
+  if (dialog !== 'manage-teams') return null
   if (tab !== 'members' && tab !== 'projects' && tab !== 'settings') {
     navigate({ params: { tab: 'members' }, replace: true })
     return null
@@ -448,10 +571,20 @@ function TeamsManagementDialog() {
                   </li>
                 ))}
               </ul>
-              <form onSubmit={saveTeam} class='mt-4'>
+              <form onSubmit={(e) => saveTeam(e)} class='mt-4 space-y-2'>
+                <FormField label='New team ID'>
+                  <input
+                    type='text'
+                    name='teamId'
+                    required
+                    class='input input-bordered input-sm w-full'
+                  />
+                </FormField>
                 <FormField label='New team name'>
                   <input
                     type='text'
+                    name='name'
+                    required
                     class='input input-bordered input-sm w-full'
                   />
                 </FormField>
@@ -494,12 +627,11 @@ function TeamsManagementDialog() {
   )
 }
 
-const onDelete = (e: Event) => {
-  e.preventDefault()
-}
 function DeleteDialog() {
   const { dialog, id, key } = url.params
-  if (dialog !== 'delete' || (key !== 'project' && key !== 'team')) return null
+  if (dialog !== 'delete' || !id || (key !== 'project' && key !== 'team')) {
+    return null
+  }
 
   const name = key === 'project'
     ? projects.data?.find((p) => p.projectSlug === id)?.projectName
@@ -508,6 +640,15 @@ function DeleteDialog() {
   if (!name) return null
   const canDelete = useSignal(false)
 
+  const handleDelete = (e: Event) => {
+    e.preventDefault()
+    if (key === 'project') {
+      deleteProject(id)
+    } else if (key === 'team') {
+      deleteTeam(id)
+    }
+  }
+
   return (
     <DialogModal id='delete'>
       <DialogTitle>Confirm deletion</DialogTitle>
@@ -515,12 +656,12 @@ function DeleteDialog() {
         Are you sure you want to delete{' '}
         <span class='font-medium'>"{name}"</span>? This action cannot be undone.
       </p>
-      <form onSubmit={onDelete}>
+      <form onSubmit={handleDelete}>
         <FormField label={`Type ${id} to confirm`}>
           <input
             type='text'
             class='input input-bordered input-sm w-full'
-            onChange={(
+            onInput={(
               e,
             ) => (canDelete.value =
               (e.target as HTMLInputElement).value.trim() === id)}
@@ -528,7 +669,10 @@ function DeleteDialog() {
           />
         </FormField>
         <div class='modal-action'>
-          <A class='btn btn-ghost' params={{ dialog: null, slug: null }}>
+          <A
+            class='btn btn-ghost'
+            params={{ dialog: null, slug: null, id: null, key: null }}
+          >
             Cancel
           </A>
           <button
@@ -546,8 +690,7 @@ function DeleteDialog() {
 
 export function ProjectsPage() {
   const q = url.params.q?.toLowerCase() ?? ''
-  console.log(teams.data, projects.data, users.data);
-  
+
   const onSearchInput = (e: Event) =>
     navigate({
       params: { q: (e.target as HTMLInputElement).value || null },
@@ -608,12 +751,14 @@ export function ProjectsPage() {
       </PageHeader>
 
       <PageContent>
-        {hasTeams
+        {!hasTeams
           ? (
             <EmptyState
               icon={Search}
               title={teams.pending ? 'Loading teams...' : 'No teams found'}
-              subtitle={teams.pending ? 'Please wait while we load the teams.' : 'Contact an administrator'}
+              subtitle={teams.pending
+                ? 'Please wait while we load the teams.'
+                : 'Contact an administrator'}
             />
           )
           : teams.data?.map((team) => {
@@ -628,7 +773,11 @@ export function ProjectsPage() {
                   ? (
                     <div class='grid gap-4 sm:gap-6 grid-cols-[repeat(auto-fill,minmax(320px,1fr))]'>
                       {teamProjects.map((p) => (
-                        <ProjectCard key={p.projectSlug} project={p} />
+                        <ProjectCard
+                          key={p.projectSlug}
+                          project={p}
+                          team={team}
+                        />
                       ))}
                     </div>
                   )

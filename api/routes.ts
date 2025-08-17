@@ -1,4 +1,4 @@
-import { Asserted, makeRouter, route } from '/api/lib/router.ts'
+import { makeRouter, route } from '/api/lib/router.ts'
 import type { RequestContext } from '/api/lib/context.ts'
 import { handleGoogleCallback, initiateGoogleAuth } from './auth.ts'
 import {
@@ -89,7 +89,7 @@ const defs = {
     output: TeamDef,
     description: 'Create a new team',
   }),
-  'GET/api/teams/:teamId': route({
+  'GET/api/team': route({
     authorize: withUserSession,
     fn: (_ctx, { teamId }) => {
       const team = TeamsCollection.get(teamId)
@@ -100,7 +100,7 @@ const defs = {
     output: TeamDef,
     description: 'Get a team by ID',
   }),
-  'PUT/api/teams/:teamId': route({
+  'PUT/api/team': route({
     authorize: withAdminSession,
     fn: (_ctx, input) => TeamsCollection.update(input.teamId, input),
     input: OBJ({
@@ -116,7 +116,7 @@ const defs = {
     output: TeamDef,
     description: 'Update a team by ID',
   }),
-  'DELETE/api/teams/:teamId': route({
+  'DELETE/api/team': route({
     authorize: withAdminSession,
     fn: (_ctx, { teamId }) => {
       const team = TeamsCollection.get(teamId)
@@ -134,7 +134,7 @@ const defs = {
     output: ARR(ProjectDef, 'List of projects'),
     description: 'Get all projects',
   }),
-  'POST/api/projects': route({
+  'POST/api/project': route({
     authorize: withAdminSession,
     fn: (_ctx, project) => ProjectsCollection.insert(project),
     input: OBJ({
@@ -147,7 +147,7 @@ const defs = {
     output: ProjectDef,
     description: 'Create a new project',
   }),
-  'GET/api/projects/:projectSlug': route({
+  'GET/api/project': route({
     authorize: withUserSession,
     fn: (_ctx, { projectSlug }) => {
       const project = ProjectsCollection.get(projectSlug)
@@ -158,7 +158,7 @@ const defs = {
     output: ProjectDef,
     description: 'Get a project by ID',
   }),
-  'PUT/api/projects/:projectSlug': route({
+  'PUT/api/project': route({
     authorize: withAdminSession,
     fn: (_ctx, input) => ProjectsCollection.update(input.projectSlug, input),
     input: OBJ({
@@ -171,7 +171,7 @@ const defs = {
     output: ProjectDef,
     description: 'Update a project by ID',
   }),
-  'DELETE/api/projects/:projectSlug': route({
+  'DELETE/api/project': route({
     authorize: withAdminSession,
     fn: (_ctx, { projectSlug }) => {
       const project = ProjectsCollection.get(projectSlug)

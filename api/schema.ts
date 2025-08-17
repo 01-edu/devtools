@@ -1,6 +1,6 @@
 import { ARR, BOOL, OBJ, optional, STR } from './lib/validator.ts'
 import { Asserted } from './lib/router.ts'
-import { createCollection } from './lib/json_store.ts'
+import { BaseRecord, createCollection } from './lib/json_store.ts'
 
 export const UserDef = OBJ({
   userEmail: STR('The user email address'),
@@ -8,7 +8,7 @@ export const UserDef = OBJ({
   userPicture: optional(STR('The user profile picture URL')),
   isAdmin: BOOL('Is the user an admin?'),
 }, 'The user schema definition')
-export type User = Asserted<typeof UserDef>
+export type User = Asserted<typeof UserDef> & BaseRecord
 
 export const TeamDef = OBJ({
   teamId: STR('The unique identifier for the team'),
@@ -18,7 +18,7 @@ export const TeamDef = OBJ({
     'The list of user emails who are members of the team',
   ),
 }, 'The team schema definition')
-export type Team = Asserted<typeof TeamDef>
+export type Team = Asserted<typeof TeamDef> & BaseRecord
 
 export const ProjectDef = OBJ({
   projectSlug: STR('The unique identifier for the project'),
@@ -27,7 +27,7 @@ export const ProjectDef = OBJ({
   isPublic: BOOL('Is the project public?'),
   repositoryUrl: optional(STR('The URL of the project repository')),
 }, 'The project schema definition')
-export type Project = Asserted<typeof ProjectDef>
+export type Project = Asserted<typeof ProjectDef> & BaseRecord
 
 export const UsersCollection = await createCollection<User, 'userEmail'>(
   { name: 'users', primaryKey: 'userEmail' },
