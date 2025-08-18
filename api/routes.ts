@@ -1,13 +1,26 @@
-import { Asserted, makeRouter, route } from '/api/lib/router.ts'
+import { makeRouter, route } from '/api/lib/router.ts'
 import type { RequestContext } from '/api/lib/context.ts'
 import { handleGoogleCallback, initiateGoogleAuth } from './auth.ts'
-import { userDef } from './schema.ts'
-import { OBJ, STR } from './lib/validator.ts'
+import {
+  ProjectDef,
+  ProjectsCollection,
+  TeamDef,
+  TeamsCollection,
+  User,
+  UserDef,
+  UsersCollection,
+} from './schema.ts'
+import { ARR, BOOL, OBJ, optional, STR } from './lib/validator.ts'
 import { respond } from './lib/response.ts'
 import { deleteCookie } from 'jsr:@std/http/cookie'
 import { getPicture } from '/api/picture.ts'
+
 const withUserSession = ({ user }: RequestContext) => {
   if (!user) throw Error('Missing user session')
+}
+
+const withAdminSession = ({ user }: RequestContext) => {
+  if (!user || !user.isAdmin) throw Error('Admin access required')
 }
 
 const defs = {
@@ -25,8 +38,8 @@ const defs = {
   }),
   'GET/api/user/me': route({
     authorize: withUserSession,
-    fn: ({ user }) => (user as Asserted<typeof userDef>),
-    output: userDef,
+    fn: ({ user }) => user as User,
+    output: UserDef,
     description: 'Handle Google OAuth callback',
   }),
   'GET/api/picture': route({
@@ -48,6 +61,127 @@ const defs = {
     input: OBJ({}),
     output: OBJ({}),
     description: 'Logout the user',
+  }),
+  'GET/api/users': route({
+    authorize: withAdminSession,
+    fn: () => UsersCollection.values().toArray(),
+    output: ARR(UserDef, 'List of users'),
+    description: 'Get all users',
+  }),
+  'GET/api/teams': route({
+    authorize: withUserSession,
+    fn: () => TeamsCollection.values().toArray(),
+    output: ARR(TeamDef, 'List of teams'),
+    description: 'Get all teams',
+  }),
+  'POST/api/teams': route({
+    authorize: withAdminSession,
+    fn: (_ctx, team) =>
+      TeamsCollection.insert({
+        teamId: team.teamId,
+        teamName: team.teamName,
+        teamMembers: [],
+      }),
+    input: OBJ({
+      teamId: STR('The ID of the team'),
+      teamName: STR('The name of the team'),
+    }),
+    output: TeamDef,
+    description: 'Create a new team',
+  }),
+  'GET/api/team': route({
+    authorize: withUserSession,
+    fn: (_ctx, { teamId }) => {
+      const team = TeamsCollection.get(teamId)
+      if (!team) throw respond.NotFound({ message: 'Team not found' })
+      return team
+    },
+    input: OBJ({ teamId: STR('The ID of the team') }),
+    output: TeamDef,
+    description: 'Get a team by ID',
+  }),
+  'PUT/api/team': route({
+    authorize: withAdminSession,
+    fn: (_ctx, input) => TeamsCollection.update(input.teamId, input),
+    input: OBJ({
+      teamId: STR('The ID of the team'),
+      teamName: STR('The name of the team'),
+      teamMembers: optional(
+        ARR(
+          STR('The user emails of team members'),
+          'The list of user emails who are members of the team',
+        ),
+      ),
+    }),
+    output: TeamDef,
+    description: 'Update a team by ID',
+  }),
+  'DELETE/api/team': route({
+    authorize: withAdminSession,
+    fn: (_ctx, { teamId }) => {
+      const team = TeamsCollection.get(teamId)
+      if (!team) throw respond.NotFound({ message: 'Team not found' })
+      TeamsCollection.delete(teamId)
+      return true
+    },
+    input: OBJ({ teamId: STR('The ID of the team') }),
+    output: BOOL('Indicates if the team was deleted'),
+    description: 'Delete a team by ID',
+  }),
+  'GET/api/projects': route({
+    authorize: withUserSession,
+    fn: () => ProjectsCollection.values().toArray(),
+    output: ARR(ProjectDef, 'List of projects'),
+    description: 'Get all projects',
+  }),
+  'POST/api/project': route({
+    authorize: withAdminSession,
+    fn: (_ctx, project) => ProjectsCollection.insert(project),
+    input: OBJ({
+      projectSlug: STR('The unique identifier for the project'),
+      projectName: STR('The name of the project'),
+      teamId: STR('The ID of the team that owns the project'),
+      isPublic: BOOL('Is the project public?'),
+      repositoryUrl: optional(STR('The URL of the project repository')),
+    }, 'Create a new project'),
+    output: ProjectDef,
+    description: 'Create a new project',
+  }),
+  'GET/api/project': route({
+    authorize: withUserSession,
+    fn: (_ctx, { projectSlug }) => {
+      const project = ProjectsCollection.get(projectSlug)
+      if (!project) throw respond.NotFound({ message: 'Project not found' })
+      return project
+    },
+    input: OBJ({ projectSlug: STR('The slug of the project') }),
+    output: ProjectDef,
+    description: 'Get a project by ID',
+  }),
+  'PUT/api/project': route({
+    authorize: withAdminSession,
+    fn: (_ctx, input) => ProjectsCollection.update(input.projectSlug, input),
+    input: OBJ({
+      projectSlug: STR('The unique identifier for the project'),
+      projectName: STR('The name of the project'),
+      teamId: STR('The ID of the team that owns the project'),
+      isPublic: BOOL('Is the project public?'),
+      repositoryUrl: optional(STR('The URL of the project repository')),
+    }),
+    output: ProjectDef,
+    description: 'Update a project by ID',
+  }),
+  'DELETE/api/project': route({
+    authorize: withAdminSession,
+    fn: (_ctx, { projectSlug }) => {
+      const project = ProjectsCollection.get(projectSlug)
+      if (!project) throw respond.NotFound({ message: 'Project not found' })
+      ProjectsCollection.delete(projectSlug)
+      return true
+    },
+    input: OBJ({ projectSlug: STR('The slug of the project') }),
+    output: BOOL('Indicates if the project was deleted'),
+    description: 'Delete a project by ID',
   }),
 } as const
 

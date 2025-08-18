@@ -5,6 +5,7 @@ import {
   ArrowRight,
   Calendar,
   Folder,
+  Lock,
   LucideIcon,
   Plus,
   Search,
@@ -14,64 +15,20 @@ import { Dialog, DialogModal } from '../components/Dialog.tsx'
 import { url } from '../lib/router.tsx'
 import { JSX } from 'preact'
 import { user } from '../lib/session.ts'
+import { api } from '../lib/api.ts'
+import { Project as ApiProject, Team, User } from '../../api/schema.ts'
 
-type User = {
-  id: number
-  name: string
-  email: string
-  isAdmin: boolean
-  teamIds: number[]
-}
-type Team = { id: number; name: string }
-type Project = {
-  slug: string
-  name: string
-  teamId: number
-  createdAt: string
-}
+type Project = ApiProject
 
-const users = signal<User[]>([
-  {
-    id: 1,
-    name: 'Alice',
-    email: 'alice@example.com',
-    isAdmin: true,
-    teamIds: [1333, 1334],
-  },
-  {
-    id: 2,
-    name: 'Bob',
-    email: 'bob@example.com',
-    isAdmin: false,
-    teamIds: [1333],
-  },
-  {
-    id: 3,
-    name: 'Cara',
-    email: 'cara@example.com',
-    isAdmin: false,
-    teamIds: [1334],
-  },
-])
-const teams = signal<Team[]>([
-  { id: 1333, name: 'Platform' },
-  { id: 1334, name: 'Tournament' },
-  { id: 1335, name: 'Gamma' },
-])
-const projects = signal<Project[]>([
-  {
-    slug: 'tomorrow-school',
-    name: 'Tomorrow School',
-    teamId: 1333,
-    createdAt: '2023-10-15T00:00:00.000Z',
-  },
-  {
-    slug: 'tournament-beta',
-    name: 'Tournament Beta',
-    teamId: 1334,
-    createdAt: '2023-11-05T00:00:00.000Z',
-  },
-])
+const users = api['GET/api/users'].signal()
+users.fetch()
+
+const teams = api['GET/api/teams'].signal()
+teams.fetch()
+
+const projects = api['GET/api/projects'].signal()
+projects.fetch()
+
 const toastSignal = signal<{ message: string; type: 'info' | 'error' } | null>(
   null,
 )
@@ -79,38 +36,74 @@ const toastSignal = signal<{ message: string; type: 'info' | 'error' } | null>(
 const slugify = (str: string) =>
   str.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '')
 
-function saveProject(data: { name: string; teamId: number; slug?: string }) {
-  const { slug, name, teamId } = data
-  const projectsValues = projects.peek()
+async function saveProject(
+  data: {
+    name: string
+    teamId: string
+    slug?: string
+    repositoryUrl?: string
+    isPublic?: boolean
+  },
+) {
+  let { slug, name, teamId, repositoryUrl, isPublic } = data
+  const fetcher = slug ? api['PUT/api/project'] : api['POST/api/project']
+
+  let finalSlug = slug || slugify(name)
   if (!slug) {
-    const base = slugify(name)
+    const base = finalSlug
     let suffix = ''
-    let finalSlug = base
     do {
       finalSlug = base + suffix
       suffix = suffix ? String(Number(suffix) + 1) : '0'
-    } while (projectsValues.some((p) => p.slug === finalSlug))
-    const now = new Date().toISOString()
-    const project: Project = { slug: finalSlug, name, teamId, createdAt: now }
-    projects.value = [...projectsValues, project]
-  } else {
-    const idx = projectsValues.findIndex((p) => p.slug === slug)
-    const copy = [...projectsValues]
-    copy[idx] = { ...projectsValues[idx], name, teamId }
-    projects.value = copy
+    } while (projects.data?.some((p) => p.projectSlug === finalSlug))
+    slug = finalSlug
   }
-
-  navigate({ params: { dialog: null }, replace: true })
+  try {
+    await fetcher.fetch({
+      projectSlug: finalSlug,
+      projectName: name,
+      teamId,
+      repositoryUrl,
+      isPublic: isPublic ?? false,
+    })
+    projects.fetch()
+    navigate({ params: { dialog: null, slug: null }, replace: true })
+  } catch (err) {
+    toast(err instanceof Error ? err.message : String(err), 'error')
+  }
 }
 
-function saveTeam(data: { id?: number; name: string }) {
-  const { id, name } = data
-  if (id) {
-    const idx = teams.value.findIndex((t) => t.id === id)
-    if (idx !== -1) teams.value[idx] = { ...teams.value[idx], name }
-  } else {
-    const newId = Math.max(...teams.value.map((t) => t.id), 0) + 1
-    teams.value = [...teams.value, { id: newId, name }]
+async function saveTeam(e: Event, teamId?: string) {
+  e.preventDefault()
+  const form = e.currentTarget as HTMLFormElement
+  const formData = new FormData(form)
+  const name = formData.get('name') as string
+
+  try {
+    if (teamId) {
+      const team = teams.data?.find((t) => t.teamId === teamId)
+      if (!team) throw new Error('Team not found')
+      await api['PUT/api/team'].fetch({ ...team, teamName: name })
+      toast(`Team "${name}" updated.`, 'info')
+    } else {
+      const newTeamId = formData.get('teamId') as string
+      if (!newTeamId || !name) {
+        toast('Team ID and name are required.', 'error')
+        return
+      }
+
+      if (teams.data?.some((t) => t.teamId === newTeamId)) {
+        toast(`Team ID "${newTeamId}" already exists.`, 'error')
+        return
+      }
+
+      await api['POST/api/teams'].fetch({ teamId: newTeamId, teamName: name })
+      toast(`Team "${name}" created.`, 'info')
+      form.reset()
+    }
+    teams.fetch()
+  } catch (err) {
+    toast(err instanceof Error ? err.message : String(err), 'error')
   }
 }
 
@@ -119,29 +112,58 @@ function toast(message: string, type: 'info' | 'error' = 'info') {
   setTimeout(() => (toastSignal.value = null), 3000)
 }
 
-function _deleteTeam(id: number) {
-  if (projects.value.some((p) => p.teamId === id)) {
-    toast('Cannot delete a team that still has projects.', 'error')
-    return
-  }
-  teams.value = teams.value.filter((t) => t.id !== id)
-  toast('Team deleted.')
-}
-
-function addUserToTeam(userId: number, teamId: number) {
-  const user = users.value.find((u) => u.id === userId)
-  if (!user) return
-  if (!user.teamIds.includes(teamId)) {
-    user.teamIds = [...user.teamIds, teamId]
-    users.value = [...users.value]
+async function deleteProject(slug: string) {
+  try {
+    await api['DELETE/api/project'].fetch({ projectSlug: slug })
+    toast('Project deleted.', 'info')
+    projects.fetch()
+    navigate({ params: { dialog: null, id: null, key: null }, replace: true })
+  } catch (err) {
+    toast(err instanceof Error ? err.message : String(err), 'error')
   }
 }
 
-function removeUserFromTeam(userId: number, teamId: number) {
-  const user = users.value.find((u) => u.id === userId)
-  if (!user) return
-  user.teamIds = user.teamIds.filter((id) => id !== teamId)
-  users.value = [...users.value]
+async function deleteTeam(id: string) {
+  try {
+    await api['DELETE/api/team'].fetch({ teamId: id })
+    toast('Team deleted.', 'info')
+    teams.fetch()
+    navigate({ params: { dialog: null, id: null, key: null }, replace: true })
+  } catch (err) {
+    toast(err instanceof Error ? err.message : String(err), 'error')
+  }
+}
+
+async function addUserToTeam(user: User, team: Team) {
+  if (team.teamMembers.includes(user.userEmail)) return
+  const updatedMembers = [...team.teamMembers, user.userEmail]
+  try {
+    await api['PUT/api/team'].fetch({
+      ...team,
+      teamMembers: updatedMembers,
+    })
+    toast(`${user.userFullName} added to ${team.teamName}.`)
+    teams.fetch()
+  } catch (err) {
+    toast(err instanceof Error ? err.message : String(err), 'error')
+  }
+}
+
+async function removeUserFromTeam(user: User, team: Team) {
+  const updatedMembers = team.teamMembers.filter((email) =>
+    email !== user.userEmail
+  )
+  if (updatedMembers.length === team.teamMembers.length) return
+  try {
+    await api['PUT/api/team'].fetch({
+      ...team,
+      teamMembers: updatedMembers,
+    })
+    toast(`${user.userFullName} removed from ${team.teamName}.`)
+    teams.fetch()
+  } catch (err) {
+    toast(err instanceof Error ? err.message : String(err), 'error')
+  }
 }
 
 const PageLayout = (
@@ -198,38 +220,49 @@ const EmptyState = (
   </div>
 )
 
-const ProjectCard = ({ project }: { project: Project }) => (
-  <A
-    key={project.slug}
-    href={`/projects/${project.slug}`}
-    class='block hover:no-underline w-full h-18'
-  >
-    <article class='card bg-base-200 border border-base-300 hover:bg-base-300 transition-colors h-full'>
-      <div class='card-body p-4 h-full flex-row items-center gap-4'>
-        <div class='flex-1 min-w-0 flex flex-col justify-center'>
-          <h3
-            class='font-semibold text-base-content text-base leading-tight truncate'
-            title={project.name}
-          >
-            {project.name.length > 25
-              ? project.name.slice(0, 22) + '…'
-              : project.name}
-          </h3>
-          <div class='flex items-center gap-3 mt-1 text-xs text-base-content/70'>
-            <span class='font-mono truncate'>{project.slug}</span>
-            <div class='flex items-center gap-1 flex-shrink-0'>
-              <Calendar class='w-3.5 h-3.5' />
-              <span>
-                {new Date(project.createdAt).toLocaleDateString()}
-              </span>
+const ProjectCard = (
+  { project, team }: { project: ApiProject; team: Team },
+) => {
+  const isMember = team.teamMembers.includes(user.data?.userEmail || '')
+  return (
+    <A
+      key={project.projectSlug}
+      href={isMember ? `/projects/${project.projectSlug}` : undefined}
+      class={'block hover:no-underline w-full h-18 ' +
+        (isMember ? '' : 'pointer-events-none')}
+    >
+      <article class='card bg-base-200 border border-base-300 hover:bg-base-300 transition-colors h-full'>
+        <div class='card-body p-4 h-full flex-row items-center gap-4'>
+          <div class='flex-1 min-w-0 flex flex-col justify-center'>
+            <h3
+              class='font-semibold text-base-content text-base leading-tight truncate'
+              title={project.projectName}
+            >
+              {project.projectName.length > 25
+                ? project.projectName.slice(0, 22) + '…'
+                : project.projectName}
+            </h3>
+            <div class='flex items-center gap-3 mt-1 text-xs text-base-content/70'>
+              <span class='font-mono truncate'>{project.projectSlug}</span>
+              <div class='flex items-center gap-1 flex-shrink-0'>
+                <Calendar class='w-3.5 h-3.5' />
+                <span>
+                  {project.createdAt &&
+                    new Date(project.createdAt).toLocaleDateString()}
+                </span>
+              </div>
             </div>
           </div>
+          {isMember
+            ? (
+              <ArrowRight class='w-5 h-5 text-primary flex-shrink-0 group-hover:translate-x-1 transition-transform duration-200' />
+            )
+            : <Lock class='w-5 h-5 text-base-content/70 flex-shrink-0' />}
         </div>
-        <ArrowRight class='w-5 h-5 text-primary flex-shrink-0 group-hover:translate-x-1 transition-transform duration-200' />
-      </div>
-    </article>
-  </A>
-)
+      </article>
+    </A>
+  )
+}
 
 const Toast = () => {
   if (!toastSignal.value) return null
@@ -246,41 +279,41 @@ const Toast = () => {
 const TeamMembersRow = ({ user, team }: { user: User; team: Team }) => (
   <tr class='border-b border-divider'>
     <td class='py-3'>
-      <div class='font-medium truncate'>{user.name}</div>
-      <div class='text-text2 truncate'>{user.email}</div>
+      <div class='font-medium truncate'>{user.userFullName}</div>
+      <div class='text-text2 truncate'>{user.userEmail}</div>
     </td>
     <td class='py-3'>{user.isAdmin ? 'Admin' : 'Member'}</td>
     <td class='py-3 text-right'>
       <input
         type='checkbox'
         class='toggle toggle-sm toggle-primary'
-        checked={user.teamIds.includes(team.id)}
+        checked={team.teamMembers.includes(user.userEmail)}
         onChange={(e) => {
           if ((e.target as HTMLInputElement).checked) {
-            addUserToTeam(user.id, team.id)
-          } else removeUserFromTeam(user.id, team.id)
+            addUserToTeam(user, team)
+          } else removeUserFromTeam(user, team)
         }}
       />
     </td>
   </tr>
 )
 
-const TeamProjectsRow = ({ project }: { project: Project }) => (
+const TeamProjectsRow = ({ project }: { project: ApiProject }) => (
   <tr class='border-b border-divider'>
-    <td class='py-3 font-medium truncate'>{project.name}</td>
-    <td class='py-3 text-text2 truncate'>{project.slug}</td>
+    <td class='py-3 font-medium truncate'>{project.projectName}</td>
+    <td class='py-3 text-text2 truncate'>{project.projectSlug}</td>
     <td class='py-3 text-text2 whitespace-nowrap'>
-      {new Date(project.createdAt).toLocaleDateString()}
+      {project.createdAt && new Date(project.createdAt).toLocaleDateString()}
     </td>
     <td class='py-3 text-right flex gap-2 justify-end'>
       <A
-        params={{ dialog: 'edit-project', slug: project.slug }}
+        params={{ dialog: 'edit-project', slug: project.projectSlug }}
         class='btn btn-ghost btn-xs'
       >
         Edit
       </A>
       <A
-        params={{ dialog: 'delete', id: project.slug, key: 'project' }}
+        params={{ dialog: 'delete', id: project.projectSlug, key: 'project' }}
         class='btn btn-ghost btn-xs text-danger'
       >
         Delete
@@ -307,57 +340,82 @@ const DialogTitle = (props: JSX.HTMLAttributes<HTMLHeadingElement>) => (
   </>
 )
 
-const onSubmit = (e: Event) => {
-  e.preventDefault()
-  const { dialog, slug } = url.params
-  const isEdit = dialog === 'edit-project'
-  const project = isEdit
-    ? projects.value.find((p) => p.slug === slug)
-    : undefined
-  const form = e.currentTarget as HTMLFormElement
-  const name = (form.elements.namedItem('name') as HTMLInputElement).value
-  const teamId = (form.elements.namedItem('teamId') as HTMLSelectElement).value
-  if (!teamId || !name) return
-  saveProject({
-    name,
-    teamId: Number(teamId),
-    slug: isEdit ? project?.slug : undefined,
-  })
-}
-
 function ProjectDialog() {
   const { dialog, slug } = url.params
   const isEdit = dialog === 'edit-project'
   const project = isEdit
-    ? projects.value.find((p) => p.slug === slug)
+    ? projects.data?.find((p) => p.projectSlug === slug)
     : undefined
+
+  const handleSubmit = (e: Event) => {
+    e.preventDefault()
+    const form = e.target as HTMLFormElement
+    const formData = new FormData(form)
+    const name = formData.get('name') as string
+    const teamId = formData.get('teamId') as string
+    const repositoryUrl = formData.get('repositoryUrl') as string
+    const isPublic = formData.get('isPublic') === 'on'
+
+    if (name && teamId) {
+      saveProject({
+        name,
+        teamId,
+        slug: slug || undefined,
+        repositoryUrl,
+        isPublic,
+      })
+    }
+  }
 
   return (
     <DialogModal id={isEdit ? 'edit-project' : 'add-project'}>
       <DialogTitle>{isEdit ? 'Edit Project' : 'Add Project'}</DialogTitle>
-      <form onSubmit={onSubmit} class='space-y-4'>
+      <form onSubmit={handleSubmit} class='space-y-4'>
         <FormField label='Name'>
           <input
             type='text'
-            defaultValue={project?.name || ''}
+            name='name'
+            defaultValue={project?.projectName || ''}
             required
             class='input input-bordered w-full'
           />
         </FormField>
         <FormField label='Team'>
           <select
+            name='teamId'
             defaultValue={project?.teamId || ''}
             required
             class='select select-bordered w-full'
           >
             <option disabled value=''>Select a team</option>
-            {teams.value.map((t) => (
-              <option key={t.id} value={t.id}>{t.name}</option>
+            {teams.data?.map((t) => (
+              <option key={t.teamId} value={t.teamId}>{t.teamName}</option>
             ))}
           </select>
         </FormField>
+        <FormField label='Repository URL'>
+          <input
+            type='url'
+            name='repositoryUrl'
+            defaultValue={project?.repositoryUrl || ''}
+            class='input input-bordered w-full'
+          />
+        </FormField>
+        <div class='form-control'>
+          <label class='label cursor-pointer'>
+            <span class='label-text'>Public</span>
+            <input
+              type='checkbox'
+              name='isPublic'
+              defaultChecked={project?.isPublic}
+              class='toggle'
+            />
+          </label>
+        </div>
         <div class='modal-action'>
-          <A class='btn btn-ghost' params={{ dialog: null }}>Cancel</A>
+          <A class='btn btn-ghost' params={{ dialog: null, slug: null }}>
+            Cancel
+          </A>
           <button type='submit' class='btn btn-primary'>Save</button>
         </div>
       </form>
@@ -368,27 +426,30 @@ function ProjectDialog() {
 function TeamSettingsSection({ team }: { team: Team }) {
   return (
     <div class='space-y-6 max-w-md'>
-      <div>
+      <form
+        onSubmit={(e) => saveTeam(e, team.teamId)}
+        class='space-y-4'
+      >
         <FormField label='Team Name'>
           <input
             type='text'
-            defaultValue={team.name}
+            name='name'
+            defaultValue={team.teamName}
             class='input input-bordered w-full'
           />
         </FormField>
         <button
-          type='button'
+          type='submit'
           class='btn btn-primary btn-sm mt-2'
-          onClick={() => saveTeam({ id: team.id, name: team.name })}
         >
           Save
         </button>
-      </div>
+      </form>
       <div class='divider' />
       <div>
         <h4 class='font-medium mb-2 text-error'>Danger Zone</h4>
         <A
-          params={{ dialog: 'delete', id: team.id, key: 'team' }}
+          params={{ dialog: 'delete', id: team.teamId, key: 'team' }}
           class='btn btn-error btn-sm'
         >
           Delete Team
@@ -410,8 +471,8 @@ function TeamMembersSection({ team }: { team: Team }) {
           </tr>
         </thead>
         <tbody>
-          {users.value.map((u) => (
-            <TeamMembersRow key={u.id} user={u} team={team} />
+          {users.data?.map((u) => (
+            <TeamMembersRow key={u.userEmail} user={u} team={team} />
           ))}
         </tbody>
       </table>
@@ -420,12 +481,13 @@ function TeamMembersSection({ team }: { team: Team }) {
 }
 
 function TeamProjectsSection({ team }: { team: Team }) {
-  const teamProjects = projects.value.filter((p) => p.teamId === team.id)
+  const teamProjects = projects.data?.filter((p) => p.teamId === team.teamId) ||
+    []
   return (
     <div>
       <A
         class='btn btn-primary btn-sm mb-4'
-        params={{ dialog: 'add-project', teamId: team.id }}
+        params={{ dialog: 'add-project', teamId: team.teamId }}
       >
         + Add Project
       </A>
@@ -446,7 +508,7 @@ function TeamProjectsSection({ team }: { team: Team }) {
               </thead>
               <tbody>
                 {teamProjects.map((p) => (
-                  <TeamProjectsRow key={p.slug} project={p} />
+                  <TeamProjectsRow key={p.projectSlug} project={p} />
                 ))}
               </tbody>
             </table>
@@ -454,15 +516,6 @@ function TeamProjectsSection({ team }: { team: Team }) {
         )}
     </div>
   )
-}
-
-const submitTeam = (e: Event) => {
-  e.preventDefault()
-  const form = e.currentTarget as HTMLFormElement
-  const name = (form.elements.namedItem('name') as HTMLInputElement).value
-  if (!name.trim()) return
-  saveTeam({ name })
-  form.reset()
 }
 
 const TabNav = ({ tab, sections }: { tab: string; sections: string[] }) => (
@@ -485,15 +538,14 @@ const TabNav = ({ tab, sections }: { tab: string; sections: string[] }) => (
 
 function TeamsManagementDialog() {
   const { dialog, steamid, tab } = url.params
-  if (dialog !== 'manage-teams' || !steamid) return null
+  if (dialog !== 'manage-teams') return null
   if (tab !== 'members' && tab !== 'projects' && tab !== 'settings') {
     navigate({ params: { tab: 'members' }, replace: true })
     return null
   }
 
-  const selectedTeamId = Number(steamid) || teams.value[0]?.id
-  const selectedTeam = teams.value
-    .find((t) => t.id === selectedTeamId)
+  const selectedTeamId = steamid || (teams.data || [])[0]?.teamId
+  const selectedTeam = teams.data?.find((t) => t.teamId === selectedTeamId)
 
   return (
     <Dialog id='manage-teams' class='modal'>
@@ -504,25 +556,35 @@ function TeamsManagementDialog() {
             <div class='p-4 flex-1 flex flex-col'>
               <DialogSectionTitle>My Teams</DialogSectionTitle>
               <ul class='space-y-1 flex-1 overflow-y-auto'>
-                {teams.value.map((t) => (
-                  <li key={t.id}>
+                {teams.data?.map((t) => (
+                  <li key={t.teamId}>
                     <A
-                      params={{ steamid: t.id, tab: 'members' }}
+                      params={{ steamid: t.teamId, tab: 'members' }}
                       class={`w-full text-left px-3 py-2 rounded-md text-sm transition ${
-                        t.id === selectedTeamId
+                        t.teamId === selectedTeamId
                           ? 'bg-primary/10 text-primary font-medium'
                           : 'hover:bg-surface2'
                       }`}
                     >
-                      {t.name}
+                      {t.teamName}
                     </A>
                   </li>
                 ))}
               </ul>
-              <form onSubmit={submitTeam} class='mt-4'>
+              <form onSubmit={(e) => saveTeam(e)} class='mt-4 space-y-2'>
+                <FormField label='New team ID'>
+                  <input
+                    type='text'
+                    name='teamId'
+                    required
+                    class='input input-bordered input-sm w-full'
+                  />
+                </FormField>
                 <FormField label='New team name'>
                   <input
                     type='text'
+                    name='name'
+                    required
                     class='input input-bordered input-sm w-full'
                   />
                 </FormField>
@@ -540,7 +602,7 @@ function TeamsManagementDialog() {
               ? (
                 <>
                   <h3 class='text-lg font-semibold mb-4'>
-                    {selectedTeam.name}
+                    {selectedTeam.teamName}
                   </h3>
                   <TabNav
                     tab={tab}
@@ -565,20 +627,27 @@ function TeamsManagementDialog() {
   )
 }
 
-const onDelete = (e: Event) => {
-  e.preventDefault()
-}
 function DeleteDialog() {
   const { dialog, id, key } = url.params
-  if (dialog !== 'delete' || (key !== 'project' && key !== 'team')) return null
+  if (dialog !== 'delete' || !id || (key !== 'project' && key !== 'team')) {
+    return null
+  }
 
   const name = key === 'project'
-    ? projects.value.find((p) => p.slug === id)?.name
-    : teams.value.find((t) => t.id === Number(id))?.name
+    ? projects.data?.find((p) => p.projectSlug === id)?.projectName
+    : teams.data?.find((t) => t.teamId === id)?.teamName
 
   if (!name) return null
-  const confirmSlug = useSignal('')
-  const canDelete = confirmSlug.value === id
+  const canDelete = useSignal(false)
+
+  const handleDelete = (e: Event) => {
+    e.preventDefault()
+    if (key === 'project') {
+      deleteProject(id)
+    } else if (key === 'team') {
+      deleteTeam(id)
+    }
+  }
 
   return (
     <DialogModal id='delete'>
@@ -587,24 +656,29 @@ function DeleteDialog() {
         Are you sure you want to delete{' '}
         <span class='font-medium'>"{name}"</span>? This action cannot be undone.
       </p>
-      <form onSubmit={onDelete}>
+      <form onSubmit={handleDelete}>
         <FormField label={`Type ${id} to confirm`}>
           <input
             type='text'
             class='input input-bordered input-sm w-full'
-            onChange={(e: Event) =>
-              confirmSlug.value = (e.target as HTMLInputElement).value.trim()}
+            onInput={(
+              e,
+            ) => (canDelete.value =
+              (e.target as HTMLInputElement).value.trim() === id)}
             placeholder={id || undefined}
           />
         </FormField>
         <div class='modal-action'>
-          <A class='btn btn-ghost' params={{ dialog: null, slug: null }}>
+          <A
+            class='btn btn-ghost'
+            params={{ dialog: null, slug: null, id: null, key: null }}
+          >
             Cancel
           </A>
           <button
             type='submit'
             class='btn btn-error'
-            disabled={!canDelete}
+            disabled={!canDelete.value}
           >
             Delete
           </button>
@@ -624,15 +698,16 @@ export function ProjectsPage() {
     })
 
   const filteredProjects = q
-    ? projects.value.filter((p) =>
-      p.name.toLowerCase().includes(q) || p.slug.toLowerCase().includes(q)
+    ? projects.data?.filter((p) =>
+      p.projectName.toLowerCase().includes(q) ||
+      p.projectSlug.toLowerCase().includes(q)
     )
-    : projects.value
+    : projects.data
 
-  const projectsByTeam = filteredProjects.reduce((acc, p) => {
-    ;(acc[p.teamId] ||= []).push(p)
+  const projectsByTeam = filteredProjects?.reduce((acc, p) => {
+    ;(acc[p.teamId] ||= []).push(p as Project)
     return acc
-  }, {} as Record<number, Project[]>)
+  }, {} as Record<string, Project[]>) || {}
 
   const isAdmin = user.data?.isAdmin ?? false
 
@@ -640,6 +715,7 @@ export function ProjectsPage() {
     ? ''
     : 'pointer-events-none cursor-not-allowed opacity-20'
 
+  const hasTeams = teams.data && teams.data.length > 0
   return (
     <PageLayout>
       <PageHeader>
@@ -675,24 +751,33 @@ export function ProjectsPage() {
       </PageHeader>
 
       <PageContent>
-        {teams.value.length === 0
+        {!hasTeams
           ? (
             <EmptyState
               icon={Search}
-              title='No teams available'
-              subtitle='Contact an administrator'
+              title={teams.pending ? 'Loading teams...' : 'No teams found'}
+              subtitle={teams.pending
+                ? 'Please wait while we load the teams.'
+                : 'Contact an administrator'}
             />
           )
-          : teams.value.map((team) => {
-            const teamProjects = projectsByTeam[team.id] ?? []
+          : teams.data?.map((team) => {
+            const teamProjects = projectsByTeam[team.teamId] ?? []
             return (
-              <section key={team.id} class='mb-12 last:mb-0'>
-                <SectionTitle title={team.name} count={teamProjects.length} />
+              <section key={team.teamId} class='mb-12 last:mb-0'>
+                <SectionTitle
+                  title={team.teamName}
+                  count={teamProjects.length}
+                />
                 {teamProjects.length > 0
                   ? (
                     <div class='grid gap-4 sm:gap-6 grid-cols-[repeat(auto-fill,minmax(320px,1fr))]'>
                       {teamProjects.map((p) => (
-                        <ProjectCard key={p.slug} project={p} />
+                        <ProjectCard
+                          key={p.projectSlug}
+                          project={p}
+                          team={team}
+                        />
                       ))}
                     </div>
                   )
@@ -708,7 +793,7 @@ export function ProjectsPage() {
                   )}
               </section>
             )
-          })}
+          }) || []}
       </PageContent>
       <ProjectDialog />
       <TeamsManagementDialog />
