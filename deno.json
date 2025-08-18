@@ -16,7 +16,7 @@
     "test": "deno test --env-file=.env.test -A --unstable-worker-options --no-check",
     "all": "deno task check && deno task lint && deno task test --parallel",
     "docker:build": "docker build -t devtools .",
-    "docker:prod": "docker run --name devtools-app -p 8877:3021 --env-file .env.prod devtools",
+    "docker:prod": "docker run --name devtools-app -v \"$(pwd)/db:/app/db\" -p 8877:3021 --env-file .env.prod devtools",
     "docker:stop": "docker stop devtools-app",
     "docker:start": "docker start devtools-app",
     "docker:restart": "docker restart devtools-app",
