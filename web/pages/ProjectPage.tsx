@@ -1,25 +1,24 @@
-import { SideBar } from '../components/SideBar.tsx'
-import { url } from '../lib/router.tsx'
-import { PageContent, PageHeader, PageLayout } from './ProjectsPage.tsx'
+import { navigate, url } from '../lib/router.tsx'
+import { PageLayoutWithSideBar } from '../components/Layout.tsx'
+import { DeploymentPage } from './project/DeploymentPage.tsx'
+import { TasksPage } from './project/TaskPage.tsx'
+import { SettingsPage } from './project/SettingsPage.tsx'
+
+const pageMap = {
+  deployment: <DeploymentPage />,
+  tasks: <TasksPage />,
+  settings: <SettingsPage />,
+}
 
 export function ProjectPage() {
-  const slug = url.path.split('/')[2]
-
+  const { nav } = url.params
+  if (!nav || !pageMap[nav as keyof typeof pageMap]) {
+    navigate({ params: { nav: 'deployment' } })
+    return null
+  }
   return (
-    <div class='h-screen flex bg-bg'>
-      <SideBar />
-      <div class='flex-1 flex-col'>
-        <PageLayout>
-          <PageHeader>
-            <h1 class='text-xl sm:text-2xl font-semibold text-text'>
-              Project: {slug}
-            </h1>
-          </PageHeader>
-          <PageContent>
-            <p>This is the project page for {slug}.</p>
-          </PageContent>
-        </PageLayout>
-      </div>
-    </div>
+    <PageLayoutWithSideBar>
+      {pageMap[nav as keyof typeof pageMap]}
+    </PageLayoutWithSideBar>
   )
 }
