@@ -166,7 +166,7 @@ async function removeUserFromTeam(user: User, team: Team) {
   }
 }
 
-const PageLayout = (
+export const PageLayout = (
   { children }: { children: JSX.Element | JSX.Element[] },
 ) => (
   <div class='h-screen flex justify-center bg-bg'>
@@ -175,7 +175,7 @@ const PageLayout = (
     </div>
   </div>
 )
-const PageHeader = (
+export const PageHeader = (
   { children }: { children: JSX.Element | JSX.Element[] },
 ) => (
   <header class='px-4 sm:px-6 py-4 bg-surface border-b border-divider'>
@@ -184,7 +184,7 @@ const PageHeader = (
     </div>
   </header>
 )
-const PageContent = (
+export const PageContent = (
   { children }: { children: JSX.Element | JSX.Element[] },
 ) => (
   <main class='flex-1 overflow-y-auto px-4 sm:px-6 py-6 pb-20'>{children}</main>
