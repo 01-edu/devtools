@@ -1,17 +1,16 @@
+import { Project } from '../../../api/schema.ts'
 import { PageContent, PageHeader } from '../../components/Layout.tsx'
-import { url } from '../../lib/router.tsx'
 
-export const TasksPage = () => {
-  const slug = url.path.split('/')[2]
+export const TasksPage = ({ project }: { project: Project }) => {
   return (
     <>
       <PageHeader>
         <h1 class='text-xl sm:text-2xl font-semibold text-text'>
-          Project: {slug}
+          Project: {project.name}
         </h1>
       </PageHeader>
       <PageContent>
-        <p>This is the project page for {slug}.</p>
+        <p>This is the project page for {project.name}.</p>
       </PageContent>
     </>
   )

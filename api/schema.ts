@@ -21,13 +21,23 @@ export const TeamDef = OBJ({
 export type Team = Asserted<typeof TeamDef> & BaseRecord
 
 export const ProjectDef = OBJ({
-  projectSlug: STR('The unique identifier for the project'),
-  projectName: STR('The name of the project'),
+  slug: STR('The unique identifier for the project'),
+  name: STR('The name of the project'),
   teamId: STR('The ID of the team that owns the project'),
   isPublic: BOOL('Is the project public?'),
   repositoryUrl: optional(STR('The URL of the project repository')),
 }, 'The project schema definition')
 export type Project = Asserted<typeof ProjectDef> & BaseRecord
+
+export const DeploymentDef = OBJ({
+  projectId: STR('The ID of the project this deployment belongs to'),
+  url: STR('The URL of the deployment'),
+  logsEnabled: BOOL('Are logs enabled for this deployment?'),
+  databaseEnabled: BOOL('Is the database enabled for this deployment?'),
+  sqlEndpoint: optional(STR('The SQL execution endpoint for the database')),
+  sqlToken: optional(STR('The security token for the SQL endpoint')),
+}, 'The deployment schema definition')
+export type Deployment = Asserted<typeof DeploymentDef> & BaseRecord
 
 export const UsersCollection = await createCollection<User, 'userEmail'>(
   { name: 'users', primaryKey: 'userEmail' },
@@ -39,7 +49,14 @@ export const TeamsCollection = await createCollection<Team, 'teamId'>(
 
 export const ProjectsCollection = await createCollection<
   Project,
-  'projectSlug'
+  'slug'
 >(
-  { name: 'projects', primaryKey: 'projectSlug' },
+  { name: 'projects', primaryKey: 'slug' },
+)
+
+export const DeploymentsCollection = await createCollection<
+  Deployment & { tokenSalt: string },
+  'url'
+>(
+  { name: 'deployments', primaryKey: 'url' },
 )

@@ -23,9 +23,15 @@ export const PageLayout = (
 )
 
 export const PageHeader = (
-  { children }: { children: JSX.Element | JSX.Element[] },
+  { children, className }: {
+    className?: string
+    children: JSX.Element | JSX.Element[]
+  },
 ) => (
-  <header class='px-4 sm:px-6 py-4 bg-surface border-b border-divider'>
+  <header
+    class={['px-4 sm:px-6 py-4 bg-surface border-b border-divider', className]
+      .join(' ')}
+  >
     <div class='flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 sm:gap-4'>
       {children}
     </div>

@@ -138,8 +138,8 @@ const defs = {
     authorize: withAdminSession,
     fn: (_ctx, project) => ProjectsCollection.insert(project),
     input: OBJ({
-      projectSlug: STR('The unique identifier for the project'),
-      projectName: STR('The name of the project'),
+      slug: STR('The unique identifier for the project'),
+      name: STR('The name of the project'),
       teamId: STR('The ID of the team that owns the project'),
       isPublic: BOOL('Is the project public?'),
       repositoryUrl: optional(STR('The URL of the project repository')),
@@ -149,21 +149,21 @@ const defs = {
   }),
   'GET/api/project': route({
     authorize: withUserSession,
-    fn: (_ctx, { projectSlug }) => {
-      const project = ProjectsCollection.get(projectSlug)
+    fn: (_ctx, { slug }) => {
+      const project = ProjectsCollection.get(slug)
       if (!project) throw respond.NotFound({ message: 'Project not found' })
       return project
     },
-    input: OBJ({ projectSlug: STR('The slug of the project') }),
+    input: OBJ({ slug: STR('The slug of the project') }),
     output: ProjectDef,
     description: 'Get a project by ID',
   }),
   'PUT/api/project': route({
     authorize: withAdminSession,
-    fn: (_ctx, input) => ProjectsCollection.update(input.projectSlug, input),
+    fn: (_ctx, input) => ProjectsCollection.update(input.slug, input),
     input: OBJ({
-      projectSlug: STR('The unique identifier for the project'),
-      projectName: STR('The name of the project'),
+      slug: STR('The unique identifier for the project'),
+      name: STR('The name of the project'),
       teamId: STR('The ID of the team that owns the project'),
       isPublic: BOOL('Is the project public?'),
       repositoryUrl: optional(STR('The URL of the project repository')),
@@ -173,13 +173,13 @@ const defs = {
   }),
   'DELETE/api/project': route({
     authorize: withAdminSession,
-    fn: (_ctx, { projectSlug }) => {
-      const project = ProjectsCollection.get(projectSlug)
+    fn: (_ctx, { slug }) => {
+      const project = ProjectsCollection.get(slug)
       if (!project) throw respond.NotFound({ message: 'Project not found' })
-      ProjectsCollection.delete(projectSlug)
+      ProjectsCollection.delete(slug)
       return true
     },
-    input: OBJ({ projectSlug: STR('The slug of the project') }),
+    input: OBJ({ slug: STR('The slug of the project') }),
     output: BOOL('Indicates if the project was deleted'),
     description: 'Delete a project by ID',
   }),

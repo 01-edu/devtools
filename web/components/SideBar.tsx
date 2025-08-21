@@ -7,6 +7,7 @@ import {
   Settings,
 } from 'lucide-preact'
 import { A, LinkProps, url } from '../lib/router.tsx'
+import { user } from '../lib/session.ts'
 
 const NavLink = (
   { icon: Icon, children, current, ...props }: LinkProps & {
@@ -21,6 +22,7 @@ const NavLink = (
         ? 'bg-primary/10 text-primary'
         : 'text-base-content/70 hover:bg-base-300'
     } ${url.params.sidebar_collapsed === 'true' ? 'justify-center' : ''}`}
+    replace
   >
     <Icon class='h-5 w-5' />
     {url.params.sidebar_collapsed !== 'true' && <span>{children}</span>}
@@ -70,10 +72,16 @@ export const SideBar = () => {
             Tasks
           </NavLink>
         </nav>
-        <div class='border-t border-base-300 p-4'>
+        <div
+          class={`border-t border-base-300 p-4 ${
+            user.data?.isAdmin ? '' : 'opacity-50 pointer-events-none'
+          }`}
+        >
           <NavLink
             current={nav === 'settings'}
-            params={{ ...url.params, nav: 'settings' }}
+            {...user.data?.isAdmin
+              ? { params: { ...url.params, nav: 'settings' } }
+              : {}}
             icon={Settings}
           >
             Settings
