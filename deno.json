@@ -34,6 +34,7 @@
     "preact": "npm:preact@^10.26.9",
     "@preact/preset-vite": "npm:@preact/preset-vite@^2.10.2",
     "@preact/signals": "npm:@preact/signals",
+    "@@clickhouse/client": "npm:@clickhouse/client",
     "@tailwindcss/vite": "npm:@tailwindcss/vite@^4.1.11",
     "tailwindcss": "npm:tailwindcss@^4.1.11",
     "daisyui": "npm:daisyui@^5.0.46",
