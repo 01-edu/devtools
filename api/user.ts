@@ -7,7 +7,7 @@ const encoder = new TextEncoder()
 const decoder = new TextDecoder()
 const IV_SIZE = 12 // Initialization vector (12 bytes for AES-GCM)
 
-async function encryptMessage(message: string) {
+export async function encryptMessage(message: string) {
   const iv = crypto.getRandomValues(new Uint8Array(IV_SIZE))
   const encryptedMessage = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv },
