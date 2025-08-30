@@ -41,22 +41,22 @@ const teams: Team[] = [
 
 const projects: Omit<Project, 'createdAt'>[] = [
   {
-    projectSlug: 'website-redesign',
-    projectName: 'Website Redesign',
+    slug: 'website-redesign',
+    name: 'Website Redesign',
     teamId: 'frontend-devs',
     isPublic: true,
     repositoryUrl: 'https://github.com/example/website',
   },
   {
-    projectSlug: 'api-refactor',
-    projectName: 'API Refactor',
+    slug: 'api-refactor',
+    name: 'API Refactor',
     teamId: 'backend-devs',
     isPublic: false,
     repositoryUrl: 'https://github.com/example/api',
   },
   {
-    projectSlug: 'design-system',
-    projectName: 'Design System',
+    slug: 'design-system',
+    name: 'Design System',
     teamId: 'frontend-devs',
     isPublic: true,
     repositoryUrl: 'https://github.com/example/design-system',

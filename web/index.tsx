@@ -4,11 +4,16 @@ import { ProjectsPage } from './pages/ProjectsPage.tsx'
 import { BackgroundPattern } from './components/BackgroundPattern.tsx'
 import { Header } from './layout.tsx'
 import { user } from './lib/session.ts'
+import { url } from './lib/router.tsx'
+import { ProjectPage } from './pages/ProjectPage.tsx'
 
 const renderPage = () => {
   if (user.pending) return
   if (!user.data) {
     return <LoginPage />
+  }
+  if (url.path.startsWith('/projects/')) {
+    return <ProjectPage />
   }
   return <ProjectsPage />
 }

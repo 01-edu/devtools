@@ -16,7 +16,8 @@ import { url } from '../lib/router.tsx'
 import { JSX } from 'preact'
 import { user } from '../lib/session.ts'
 import { api } from '../lib/api.ts'
-import { Project as ApiProject, Team, User } from '../../api/schema.ts'
+import { PageContent, PageHeader, PageLayout } from '../components/Layout.tsx'
+import type { Project as ApiProject, Team, User } from '../../api/schema.ts'
 
 type Project = ApiProject
 
@@ -55,13 +56,13 @@ async function saveProject(
     do {
       finalSlug = base + suffix
       suffix = suffix ? String(Number(suffix) + 1) : '0'
-    } while (projects.data?.some((p) => p.projectSlug === finalSlug))
+    } while (projects.data?.some((p) => p.slug === finalSlug))
     slug = finalSlug
   }
   try {
     await fetcher.fetch({
-      projectSlug: finalSlug,
-      projectName: name,
+      slug: finalSlug,
+      name,
       teamId,
       repositoryUrl,
       isPublic: isPublic ?? false,
@@ -114,7 +115,7 @@ function toast(message: string, type: 'info' | 'error' = 'info') {
 
 async function deleteProject(slug: string) {
   try {
-    await api['DELETE/api/project'].fetch({ projectSlug: slug })
+    await api['DELETE/api/project'].fetch({ slug: slug })
     toast('Project deleted.', 'info')
     projects.fetch()
     navigate({ params: { dialog: null, id: null, key: null }, replace: true })
@@ -166,29 +167,6 @@ async function removeUserFromTeam(user: User, team: Team) {
   }
 }
 
-const PageLayout = (
-  { children }: { children: JSX.Element | JSX.Element[] },
-) => (
-  <div class='h-screen flex justify-center bg-bg'>
-    <div class='w-full max-w-7xl h-full bg-base-100 flex flex-col'>
-      {children}
-    </div>
-  </div>
-)
-const PageHeader = (
-  { children }: { children: JSX.Element | JSX.Element[] },
-) => (
-  <header class='px-4 sm:px-6 py-4 bg-surface border-b border-divider'>
-    <div class='flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 sm:gap-4'>
-      {children}
-    </div>
-  </header>
-)
-const PageContent = (
-  { children }: { children: JSX.Element | JSX.Element[] },
-) => (
-  <main class='flex-1 overflow-y-auto px-4 sm:px-6 py-6 pb-20'>{children}</main>
-)
 const FormField = (
   { label, children }: { label: string; children: JSX.Element | JSX.Element[] },
 ) => (
@@ -226,8 +204,8 @@ const ProjectCard = (
   const isMember = team.teamMembers.includes(user.data?.userEmail || '')
   return (
     <A
-      key={project.projectSlug}
-      href={isMember ? `/projects/${project.projectSlug}` : undefined}
+      key={project.slug}
+      href={isMember ? `/projects/${project.slug}` : undefined}
       class={'block hover:no-underline w-full h-18 ' +
         (isMember ? '' : 'pointer-events-none')}
     >
@@ -236,14 +214,14 @@ const ProjectCard = (
           <div class='flex-1 min-w-0 flex flex-col justify-center'>
             <h3
               class='font-semibold text-base-content text-base leading-tight truncate'
-              title={project.projectName}
+              title={project.name}
             >
-              {project.projectName.length > 25
-                ? project.projectName.slice(0, 22) + '…'
-                : project.projectName}
+              {project.name.length > 25
+                ? project.name.slice(0, 22) + '…'
+                : project.name}
             </h3>
             <div class='flex items-center gap-3 mt-1 text-xs text-base-content/70'>
-              <span class='font-mono truncate'>{project.projectSlug}</span>
+              <span class='font-mono truncate'>{project.slug}</span>
               <div class='flex items-center gap-1 flex-shrink-0'>
                 <Calendar class='w-3.5 h-3.5' />
                 <span>
@@ -300,20 +278,20 @@ const TeamMembersRow = ({ user, team }: { user: User; team: Team }) => (
 
 const TeamProjectsRow = ({ project }: { project: ApiProject }) => (
   <tr class='border-b border-divider'>
-    <td class='py-3 font-medium truncate'>{project.projectName}</td>
-    <td class='py-3 text-text2 truncate'>{project.projectSlug}</td>
+    <td class='py-3 font-medium truncate'>{project.name}</td>
+    <td class='py-3 text-text2 truncate'>{project.slug}</td>
     <td class='py-3 text-text2 whitespace-nowrap'>
       {project.createdAt && new Date(project.createdAt).toLocaleDateString()}
     </td>
     <td class='py-3 text-right flex gap-2 justify-end'>
       <A
-        params={{ dialog: 'edit-project', slug: project.projectSlug }}
+        params={{ dialog: 'edit-project', slug: project.slug }}
         class='btn btn-ghost btn-xs'
       >
         Edit
       </A>
       <A
-        params={{ dialog: 'delete', id: project.projectSlug, key: 'project' }}
+        params={{ dialog: 'delete', id: project.slug, key: 'project' }}
         class='btn btn-ghost btn-xs text-danger'
       >
         Delete
@@ -344,7 +322,7 @@ function ProjectDialog() {
   const { dialog, slug } = url.params
   const isEdit = dialog === 'edit-project'
   const project = isEdit
-    ? projects.data?.find((p) => p.projectSlug === slug)
+    ? projects.data?.find((p) => p.slug === slug)
     : undefined
 
   const handleSubmit = (e: Event) => {
@@ -375,7 +353,7 @@ function ProjectDialog() {
           <input
             type='text'
             name='name'
-            defaultValue={project?.projectName || ''}
+            defaultValue={project?.name || ''}
             required
             class='input input-bordered w-full'
           />
@@ -508,7 +486,7 @@ function TeamProjectsSection({ team }: { team: Team }) {
               </thead>
               <tbody>
                 {teamProjects.map((p) => (
-                  <TeamProjectsRow key={p.projectSlug} project={p} />
+                  <TeamProjectsRow key={p.slug} project={p} />
                 ))}
               </tbody>
             </table>
@@ -634,7 +612,7 @@ function DeleteDialog() {
   }
 
   const name = key === 'project'
-    ? projects.data?.find((p) => p.projectSlug === id)?.projectName
+    ? projects.data?.find((p) => p.slug === id)?.name
     : teams.data?.find((t) => t.teamId === id)?.teamName
 
   if (!name) return null
@@ -699,8 +677,8 @@ export function ProjectsPage() {
 
   const filteredProjects = q
     ? projects.data?.filter((p) =>
-      p.projectName.toLowerCase().includes(q) ||
-      p.projectSlug.toLowerCase().includes(q)
+      p.name.toLowerCase().includes(q) ||
+      p.slug.toLowerCase().includes(q)
     )
     : projects.data
 
@@ -774,7 +752,7 @@ export function ProjectsPage() {
                     <div class='grid gap-4 sm:gap-6 grid-cols-[repeat(auto-fill,minmax(320px,1fr))]'>
                       {teamProjects.map((p) => (
                         <ProjectCard
-                          key={p.projectSlug}
+                          key={p.slug}
                           project={p}
                           team={team}
                         />
