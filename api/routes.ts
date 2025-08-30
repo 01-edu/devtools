@@ -14,6 +14,8 @@ import { ARR, BOOL, OBJ, optional, STR } from './lib/validator.ts'
 import { respond } from './lib/response.ts'
 import { deleteCookie } from 'jsr:@std/http/cookie'
 import { getPicture } from '/api/picture.ts'
+import { insertLogs, LogsInputSchema } from './click-house-client.ts'
+import { decryptMessage } from './user.ts'
 
 const withUserSession = ({ user }: RequestContext) => {
   if (!user) throw Error('Missing user session')
@@ -21,6 +23,14 @@ const withUserSession = ({ user }: RequestContext) => {
 
 const withAdminSession = ({ user }: RequestContext) => {
   if (!user || !user.isAdmin) throw Error('Admin access required')
+}
+
+const withDeploymentSession = async (ctx: RequestContext) => {
+  const token = ctx.req.headers.get('Authorization')?.replace(/^Bearer /i, '')
+  if (!token) throw respond.Unauthorized({ message: 'Missing token' })
+  const data = await decryptMessage(token)
+  if (!data) throw respond.Unauthorized({ message: 'Invalid token' })
+  ctx.resource = 'default'
 }
 
 const defs = {
@@ -182,6 +192,15 @@ const defs = {
     input: OBJ({ slug: STR('The slug of the project') }),
     output: BOOL('Indicates if the project was deleted'),
     description: 'Delete a project by ID',
+  }),
+  'POST/api/logs': route({
+    authorize: withDeploymentSession,
+    fn: (ctx, logs) => {
+      if (!ctx.resource) throw respond.InternalServerError()
+      return insertLogs(ctx.resource, logs)
+    },
+    input: LogsInputSchema,
+    description: 'Insert logs into ClickHouse',
   }),
 } as const
 

@@ -22,7 +22,7 @@ async function encryptMessage(message: string) {
 }
 
 // Decrypting a message
-async function decryptMessage(encryptedMessage: string) {
+export async function decryptMessage(encryptedMessage: string) {
   const encryptedData = decodeBase64Url(encryptedMessage)
   const iv = encryptedData.slice(0, IV_SIZE)
   const decryptedMessage = await crypto.subtle.decrypt(

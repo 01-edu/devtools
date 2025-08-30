@@ -4,12 +4,34 @@ import {
   CLICKHOUSE_PASSWORD,
   CLICKHOUSE_USER,
 } from './lib/env.ts'
+import { respond } from './lib/response.ts'
+import { log } from './lib/log.ts'
+import { ARR, NUM, OBJ, STR, UNION } from './lib/validator.ts'
+import { Asserted } from './lib/router.ts'
+
+const LogSchema = OBJ({
+  timestamp: STR(),
+  trace_id: STR(),
+  span_id: STR(),
+  severity_text: STR(),
+  severity_number: NUM(),
+  attributes: OBJ({}),
+  event_name: STR(),
+})
+
+const LogsInputSchema = UNION(LogSchema, ARR(LogSchema))
+
+type Log = Asserted<typeof LogSchema>
+type LogsInput = Asserted<typeof LogsInputSchema>
 
 const client = createClient({
   url: CLICKHOUSE_HOST,
   username: CLICKHOUSE_USER,
   password: CLICKHOUSE_PASSWORD,
-  compression: {},
+  compression: {
+    request: true,
+    response: true,
+  },
 })
 
 try {
@@ -18,76 +40,54 @@ try {
   await client.command({
     query: `
       CREATE TABLE IF NOT EXISTS logs (
-        deployment_id LowCardinality(String),
+        resource String,
         timestamp DateTime64(3, 'UTC') DEFAULT now64(3, 'UTC'),
-        message String,
-        log JSON,
-        INDEX idx_message message TYPE tokenbf_v1(8192, 3, 0) GRANULARITY 4
+        observed_timestamp DateTime64(3, 'UTC') DEFAULT now64(3, 'UTC'),
+        trace_id UInt64,
+        span_id UInt64,
+        severity_text String,
+        severity_number UInt8,
+        attributes JSON,
+        event_name String
       )
       ENGINE = MergeTree
       PARTITION BY toYYYYMMDD(timestamp)
-      ORDER BY (deployment_id, timestamp)
+      ORDER BY (resource, timestamp, trace_id)
       SETTINGS index_granularity = 8192, min_bytes_for_wide_part = 0;
     `,
   })
 
-  await client.command({
-    query: `
-      CREATE TABLE IF NOT EXISTS log_attribute_keys
-      (
-        deployment_id LowCardinality(String),
-        key_path String,
-        data_type LowCardinality(String),
-        last_seen DateTime DEFAULT now()
-      )
-      ENGINE = ReplacingMergeTree(last_seen)
-      ORDER BY (deployment_id, key_path);
-    `,
-  })
-
-  await client.command({
-    query: `
-      CREATE MATERIALIZED VIEW IF NOT EXISTS log_key_extractor_mv
-      TO log_attribute_keys
-      AS
-      SELECT
-        deployment_id,
-        -- On utilise l'alias du tuple .1 pour accéder au chemin
-        arrayStringConcat(json_pair.1, '.') AS key_path,
-        multiIf(
-          -- On utilise l'alias du tuple .2 pour accéder à la valeur
-          JSONType(json_pair.2) = 'Object', 'Object',
-          JSONType(json_pair.2) = 'Array', 'Array',
-          JSONType(json_pair.2) = 'String', 'String',
-          JSONType(json_pair.2) = 'Number', 'Number',
-          JSONType(json_pair.2) = 'Bool', 'Boolean',
-          'Unknown'
-        ) AS data_type,
-        now() AS last_seen
-      FROM logs
-      -- LA CORRECTION EST ICI : on donne un seul alias au tuple
-      ARRAY JOIN JSONAllPaths(log) AS json_pair
-    `,
-  })
-  console.log('deployment_logs table is ready')
+  log.info('deployment_logs table is ready')
 } catch (error) {
-  console.error('Error creating ClickHouse table:', error)
+  log.error('Error creating ClickHouse table:', { error })
+  Deno.exit(1)
 }
 
-async function getAvailableLogKeys(
-  deploymentId: string,
-): Promise<{ key: string; type: string }[]> {
-  const resultSet = await client.query({
-    query: `
-      SELECT key_path AS key, data_type AS type
-      FROM log_attribute_keys
-      WHERE deployment_id = {deploymentId:String}
-      ORDER BY key_path
-    `,
-    query_params: { deploymentId },
-    format: 'JSONEachRow',
-  })
-  return await resultSet.json()
+async function insertLogs(
+  resource: string,
+  data: LogsInput,
+) {
+  const logsToInsert = Array.isArray(data) ? data : [data]
+  if (logsToInsert.length === 0) {
+    throw respond.NoContent()
+  }
+
+  const values = logsToInsert.map((log) => ({
+    ...log,
+    resource,
+  }))
+
+  try {
+    await client.insert({
+      table: 'logs',
+      values,
+      format: 'JSONEachRow',
+    })
+    return respond.OK()
+  } catch (error) {
+    log.error("Erreur lors de l'insertion des logs dans ClickHouse:", { error })
+    throw respond.InternalServerError()
+  }
 }
 
-export { client }
+export { client, insertLogs, LogSchema, LogsInputSchema }
