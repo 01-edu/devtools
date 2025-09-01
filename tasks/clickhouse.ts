@@ -1,5 +1,5 @@
-import { client } from '../api/click-house-client.ts'
-import { log } from '../api/lib/log.ts'
+import { client } from '/api/click-house-client.ts'
+import { log } from '/api/lib/log.ts'
 
 if (import.meta.main) {
   try {
@@ -13,10 +13,10 @@ if (import.meta.main) {
         observed_timestamp DateTime64(3, 'UTC') DEFAULT now64(3, 'UTC'),
         trace_id UInt64,
         span_id UInt64,
-        severity_text String,
         severity_number UInt8,
         attributes JSON,
-        event_name String
+        event_name String,
+        context JSON
       )
       ENGINE = MergeTree
       PARTITION BY toYYYYMMDD(timestamp)

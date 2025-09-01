@@ -13,10 +13,10 @@ const LogSchema = OBJ({
   timestamp: STR(),
   trace_id: STR(),
   span_id: STR(),
-  severity_text: STR(),
   severity_number: NUM(),
   attributes: OBJ({}),
   event_name: STR(),
+  context: OBJ({}),
 })
 
 const LogsInputSchema = UNION(LogSchema, ARR(LogSchema))
