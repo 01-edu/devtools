@@ -12,11 +12,16 @@ import {
   UserDef,
   UsersCollection,
 } from './schema.ts'
-import { ARR, BOOL, NUM, OBJ, optional, STR } from './lib/validator.ts'
+import { ARR, BOOL, LIST, NUM, OBJ, optional, STR } from './lib/validator.ts'
 import { respond } from './lib/response.ts'
 import { deleteCookie } from 'jsr:@std/http/cookie'
 import { getPicture } from '/api/picture.ts'
-import { insertLogs, LogsInputSchema } from './click-house-client.ts'
+import {
+  getLogs,
+  insertLogs,
+  LogSchema,
+  LogsInputSchema,
+} from './click-house-client.ts'
 import { decryptMessage, encryptMessage } from './user.ts'
 
 const withUserSession = ({ user }: RequestContext) => {
@@ -300,13 +305,15 @@ const defs = {
   }),
   'GET/api/deployment/token/regenerate': route({
     authorize: withAdminSession,
-    fn: async (_ctx, input) => {
-      const dep = DeploymentsCollection.get(input)
+    fn: async (_ctx, { url }) => {
+      console.log('Regenerating token for deployment:', { url })
+      const dep = DeploymentsCollection.get(url)
+      console.log('Regenerating token for deployment:', { dep })
       if (!dep) throw respond.NotFound()
       const tokenSalt = performance.now().toString()
 
       const { tokenSalt: _, ...deployment } = await DeploymentsCollection
-        .update(input, { ...dep, tokenSalt })
+        .update(url, { ...dep, tokenSalt })
       const token = await encryptMessage(
         JSON.stringify({ url: deployment.url, tokenSalt }),
       )
@@ -317,7 +324,7 @@ const defs = {
         token,
       }
     },
-    input: STR(),
+    input: OBJ({ url: STR('The URL of the deployment') }),
     output: deploymentOutput,
     description: 'Regenerate a deployment token',
   }),
@@ -340,6 +347,26 @@ const defs = {
     },
     input: LogsInputSchema,
     description: 'Insert logs into ClickHouse NB: a Bearer token is required',
+  }),
+  'GET/api/logs': route({
+    authorize: withUserSession,
+    fn: async (_ctx, params) => {
+      const logs = await getLogs(params)
+      return logs.flat()
+    },
+    input: OBJ({
+      resource: STR('The resource to fetch logs for'),
+      level: optional(STR('The log level to filter by')),
+      start_date: optional(STR('The start date for the date range filter')),
+      end_date: optional(STR('The end date for the date range filter')),
+      sort_by: optional(STR('The field to sort by')),
+      sort_order: optional(
+        LIST(['ASC', 'DESC'], 'The sort order (ASC or DESC)'),
+      ),
+      search: optional(OBJ({}, 'A map of fields to search by')),
+    }),
+    output: ARR(LogSchema, 'List of logs'),
+    description: 'Get logs from ClickHouse',
   }),
 } as const
 

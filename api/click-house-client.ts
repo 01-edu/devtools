@@ -21,7 +21,7 @@ const LogSchema = OBJ({
 
 const LogsInputSchema = UNION(LogSchema, ARR(LogSchema))
 
-type Log = Asserted<typeof LogSchema>
+export type Log = Asserted<typeof LogSchema>
 type LogsInput = Asserted<typeof LogsInputSchema>
 
 const client = createClient({
@@ -61,4 +61,88 @@ async function insertLogs(
   }
 }
 
-export { client, insertLogs, LogSchema, LogsInputSchema }
+function toClickhouseDateTime(iso: string) {
+  // "2025-09-11T17:35:00.000Z" → "2025-09-11 17:35:00"
+  const match = iso.match(
+    /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(\.\d+)?Z?$/,
+  )
+  if (!match) return iso.replace('T', ' ').replace(/(\.\d+)?Z$/, '')
+  const [_, date, h, m, s] = match
+  return `${date} ${h}:${m}:${s ?? '00'}`
+}
+
+async function getLogs({
+  resource,
+  level,
+  startDate,
+  endDate,
+  sortBy,
+  sortOrder,
+  search,
+}: {
+  resource: string
+  level?: string
+  startDate?: string
+  endDate?: string
+  sortBy?: string
+  sortOrder?: 'ASC' | 'DESC'
+  search?: Record<string, string>
+}) {
+  const queryParts: string[] = []
+  const queryParams: Record<string, unknown> = { resource }
+
+  queryParts.push('resource = {resource:String}')
+
+  if (level) {
+    queryParts.push('severity_number = {level:UInt8}')
+    queryParams.level = level
+  }
+
+  if (startDate) {
+    queryParts.push('timestamp >= {startDate:DateTime}')
+    queryParams.startDate = toClickhouseDateTime(startDate)
+  }
+
+  if (endDate) {
+    queryParts.push('timestamp <= {endDate:DateTime}')
+    queryParams.endDate = toClickhouseDateTime(endDate)
+  }
+
+  if (search) {
+    if (search.trace_id) {
+      queryParts.push('trace_id = {trace_id:String}')
+      queryParams.trace_id = search.trace_id
+    }
+    if (search.span_id) {
+      queryParts.push('span_id = {span_id:String}')
+      queryParams.span_id = search.span_id
+    }
+    if (search.event_name) {
+      queryParts.push('event_name = {event_name:String}')
+      queryParams.event_name = search.event_name
+    }
+  }
+
+  const query = `
+    SELECT *
+    FROM logs
+    WHERE ${queryParts.join(' AND ')}
+    ${sortBy ? `ORDER BY ${sortBy} ${sortOrder || 'DESC'}` : ''}
+    LIMIT 1000
+  `
+
+  try {
+    const resultSet = await client.query({
+      query,
+      query_params: queryParams,
+      format: 'JSONEachRow',
+    })
+
+    return resultSet.json<Log[]>()
+  } catch (error) {
+    log.error('Error querying logs from ClickHouse:', { error })
+    throw respond.InternalServerError()
+  }
+}
+
+export { client, getLogs, insertLogs, LogSchema, LogsInputSchema }
