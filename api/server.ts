@@ -64,6 +64,7 @@ export const fetch = async (req: Request) => {
       trace: cookies.trace ? Number(cookies.trace) : now(),
       user: await decodeSession(cookies.session),
       span: now(),
+      resource: undefined,
     }
 
     const res = await requestContext.run(ctx, handleRequest, ctx)

@@ -26,3 +26,16 @@ export const ORIGIN = new URL(REDIRECT_URI).origin
 
 export const SECRET = env.SECRET ||
   'iUokBru8WPSMAuMspijlt7F-Cnpqyg84F36b1G681h0'
+
+export const CLICKHOUSE_HOST = env.CLICKHOUSE_HOST
+if (!CLICKHOUSE_HOST) {
+  throw Error('CLICKHOUSE_HOST: field required in the env')
+}
+export const CLICKHOUSE_USER = env.CLICKHOUSE_USER
+if (!CLICKHOUSE_USER) {
+  throw Error('CLICKHOUSE_USER: field required in the env')
+}
+export const CLICKHOUSE_PASSWORD = env.CLICKHOUSE_PASSWORD
+if (!CLICKHOUSE_PASSWORD) {
+  throw Error('CLICKHOUSE_PASSWORD: field required in the env')
+}

@@ -29,6 +29,15 @@ type DefList<T extends readonly (string | number)[]> = {
   assert: (value: unknown) => T[number]
 }
 
+type DefUnion<T extends readonly Def[]> = {
+  type: 'union'
+  of: T
+  report: Validator<DefUnion<T>>
+  optional?: boolean
+  description?: string
+  assert: (value: unknown) => ReturnType<T[number]['assert']>
+}
+
 type DefObject<T extends Record<string, Def>> = {
   type: 'object'
   properties: { [K in keyof T]: T[K] }
@@ -69,6 +78,7 @@ export type DefBase =
   | DefArray<any>
   | DefObject<Record<string, any>>
   | DefList<any>
+  | DefUnion<any>
 
 type OptionalAssert<T extends Def['assert']> = (
   value: unknown,
@@ -256,6 +266,32 @@ export const LIST = <const T extends readonly (string | number)[]>(
     )
   },
   description,
+})
+
+export const UNION = <T extends readonly Def[]>(...types: T): DefUnion<T> => ({
+  type: 'union',
+  of: types,
+  report: (value: unknown, path: (string | number)[] = []) => {
+    const failures: ValidatorFailure<DefUnion<T>>[] = []
+    for (const type of types) {
+      const result = type.report(value, path)
+      if (result.length === 0) return []
+      failures.push(...result)
+    }
+    return failures
+  },
+  assert: (value: unknown): ReturnType<T[number]['assert']> => {
+    for (const type of types) {
+      try {
+        return type.assert(value)
+      } catch {
+        // Ignore
+      }
+    }
+    throw new Error(
+      `Invalid value. Expected one of: ${types.map((t) => t.type).join(', ')}`,
+    )
+  },
 })
 
 // const Article = OBJ({
