@@ -32,10 +32,10 @@ const batch = async <T>(
   await Promise.all(pool)
 }
 
-export type BaseRecord = { createdAt?: number; updatedAt?: number }
+export type BaseRecord = { createdAt: number; updatedAt: number }
 
 export async function createCollection<
-  T extends Record<PropertyKey, unknown> & BaseRecord,
+  T extends Record<PropertyKey, unknown>,
   K extends keyof T,
 >({ name, primaryKey }: CollectionOptions<T, K>) {
   const dir = join(DB_DIR, name)
@@ -66,34 +66,34 @@ export async function createCollection<
       const id = data[primaryKey]
       if (!id) throw Error(`Missing primary key ${primaryKey}`)
       if (records.has(id)) throw Error(`${id} already exists`)
-      Object.assign(data, { createdAt: Date.now() })
+      Object.assign(data, { createdAt: Date.now(), updatedAt: Date.now() })
       records.set(id, data)
       await saveRecord(data)
 
-      return data
+      return data as T & BaseRecord
     },
 
     [Symbol.iterator]: () => records[Symbol.iterator],
     keys: () => records.keys(),
-    values: () => records.values(),
-    entries: () => records.entries(),
-    get: (id: T[K]) => records.get(id),
+    values: () => records.values() as MapIterator<T & BaseRecord>,
+    entries: () => records.entries() as MapIterator<[T[K], T & BaseRecord]>,
+    get: (id: T[K]) => records.get(id) as T & BaseRecord | undefined,
     assert: (id: T[K]) => {
       const match = records.get(id)
-      if (match) return match
+      if (match) return match as T & BaseRecord
       throw new Deno.errors.NotFound(`record ${id} not found`)
     },
     find: (predicate: (record: T) => unknown) =>
-      records.values().find(predicate),
+      records.values().find(predicate) as T & BaseRecord | undefined,
     filter: (predicate: (record: T) => unknown) =>
-      records.values().filter(predicate).toArray(),
+      records.values().filter(predicate).toArray() as (T & BaseRecord)[],
     async update(id: T[K], changes: Partial<Omit<T, K>>) {
       const record = records.get(id)
       if (!record) throw new Deno.errors.NotFound(`record ${id} not found`)
-      const updated = { ...record, ...changes, _updatedAt: Date.now() } as T
+      const updated = { ...record, ...changes, updatedAt: Date.now() } as T
       records.set(id, updated)
       await saveRecord(updated)
-      return updated
+      return updated as T & BaseRecord
     },
 
     async delete(id: T[K]) {

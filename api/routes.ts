@@ -23,6 +23,7 @@ import {
   LogsInputSchema,
 } from './click-house-client.ts'
 import { decryptMessage, encryptMessage } from './user.ts'
+import { log } from './lib/log.ts'
 
 const withUserSession = ({ user }: RequestContext) => {
   if (!user) throw Error('Missing user session')
@@ -35,14 +36,19 @@ const withAdminSession = ({ user }: RequestContext) => {
 const withDeploymentSession = async (ctx: RequestContext) => {
   const token = ctx.req.headers.get('Authorization')?.replace(/^Bearer /i, '')
   if (!token) throw respond.Unauthorized({ message: 'Missing token' })
-  const message = await decryptMessage(token)
-  if (!message) throw respond.Unauthorized({ message: 'Invalid token' })
-  const data = JSON.parse(message)
-  const dep = DeploymentsCollection.get(data?.url)
-  if (!dep || dep.tokenSalt !== data?.tokenSalt) {
+  try {
+    const message = await decryptMessage(token)
+    if (!message) throw respond.Unauthorized({ message: 'Invalid token' })
+    const data = JSON.parse(message)
+    const dep = DeploymentsCollection.get(data?.url)
+    if (!dep || dep.tokenSalt !== data?.tokenSalt) {
+      throw respond.Unauthorized({ message: 'Invalid token' })
+    }
+    ctx.resource = dep?.url
+  } catch (error) {
+    log.error('Error validating deployment token:', { error })
     throw respond.Unauthorized({ message: 'Invalid token' })
   }
-  ctx.resource = dep?.url
 }
 
 const deploymentOutput = OBJ({
@@ -229,8 +235,6 @@ const defs = {
       return deployments.map(({ tokenSalt: _, ...d }) => {
         return {
           ...d,
-          createdAt: d.createdAt,
-          updatedAt: d.updatedAt,
           token: undefined,
           sqlToken: undefined,
           sqlEndpoint: undefined,
@@ -252,8 +256,6 @@ const defs = {
       )
       return {
         ...deployment,
-        createdAt: deployment.createdAt,
-        updatedAt: deployment.updatedAt,
         token,
       }
     },
@@ -275,8 +277,6 @@ const defs = {
       )
       return {
         ...deployment,
-        createdAt: deployment.createdAt,
-        updatedAt: deployment.updatedAt,
         token,
       }
     },
@@ -294,8 +294,6 @@ const defs = {
       )
       return {
         ...deployment,
-        createdAt: deployment.createdAt,
-        updatedAt: deployment.updatedAt,
         token,
       }
     },
@@ -319,8 +317,6 @@ const defs = {
       )
       return {
         ...deployment,
-        createdAt: deployment.createdAt,
-        updatedAt: deployment.updatedAt,
         token,
       }
     },
@@ -350,9 +346,22 @@ const defs = {
   }),
   'GET/api/logs': route({
     authorize: withUserSession,
-    fn: async (_ctx, params) => {
-      const logs = await getLogs(params)
-      return logs.flat()
+    fn: (ctx, params) => {
+      const deployments = DeploymentsCollection.filter((d) =>
+        d.projectId === params.resource
+      )
+      if (deployments.length === 0) {
+        throw respond.NotFound({ message: 'Deployments not found' })
+      }
+      const project = ProjectsCollection.get(deployments[0].projectId)
+      if (!project) throw respond.NotFound({ message: 'Project not found' })
+      if (!project.isPublic && !ctx.user?.isAdmin) {
+        const team = TeamsCollection.find((t) => t.teamId === project.teamId)
+        if (!team?.teamMembers.includes(ctx.user?.userEmail || '')) {
+          throw respond.Forbidden({ message: 'Access to project logs denied' })
+        }
+      }
+      return getLogs(params)
     },
     input: OBJ({
       resource: STR('The resource to fetch logs for'),
@@ -363,7 +372,7 @@ const defs = {
       sort_order: optional(
         LIST(['ASC', 'DESC'], 'The sort order (ASC or DESC)'),
       ),
-      search: optional(OBJ({}, 'A map of fields to search by')),
+      // search: optional(OBJ({}, 'A map of fields to search by')),
     }),
     output: ARR(LogSchema, 'List of logs'),
     description: 'Get logs from ClickHouse',
