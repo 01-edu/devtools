@@ -36,7 +36,7 @@ export async function decryptMessage(encryptedMessage: string) {
 
 const key = await crypto.subtle.importKey(
   'raw',
-  decodeBase64Url(SECRET),
+  decodeBase64Url(SECRET) as ArrayBufferView<ArrayBuffer>,
   { name: 'AES-GCM' },
   true, // The key should be extractable
   ['encrypt', 'decrypt'],

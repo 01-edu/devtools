@@ -3,8 +3,11 @@ import { url } from '../../lib/router.tsx'
 
 import { A, navigate } from '../../lib/router.tsx'
 import { Calendar, Database, Logs, Search } from 'lucide-preact'
-import { Deployment, Project } from '../../../api/schema.ts'
 import { deployments } from '../ProjectPage.tsx'
+import { ApiOutput } from '../../lib/api.ts'
+
+type Deployment = ApiOutput['GET/api/project/deployments'][number]
+type Project = ApiOutput['GET/api/projects'][number]
 
 const DeploymentCard = ({ dep }: { dep: Deployment }) => {
   const created = dep.createdAt ? new Date(dep.createdAt) : null
@@ -75,7 +78,7 @@ export const DeploymentPage = ({}: { project: Project }) => {
   const { deployment, deptab } = url.params
 
   const selectedDeployment = deployment
-    ? deployments.find((d) => d.url === deployment)
+    ? deployments.data?.find((d) => d.url === deployment)
     : null
 
   if (
@@ -121,7 +124,7 @@ export const DeploymentPage = ({}: { project: Project }) => {
               class='select'
             >
               <option disabled>Select Deployment</option>
-              {deployments.map((dep) => (
+              {deployments.data?.map((dep) => (
                 <option key={dep.url} value={dep.url}>
                   {dep.url}
                 </option>
@@ -169,7 +172,7 @@ export const DeploymentPage = ({}: { project: Project }) => {
           ? tab
           : (
             <div class='grid gap-6 md:grid-cols-2 lg:grid-cols-3'>
-              {deployments.map((dep) => (
+              {deployments.data?.map((dep) => (
                 <DeploymentCard key={dep.url} dep={dep} />
               ))}
             </div>

@@ -15,11 +15,12 @@ import { Dialog, DialogModal } from '../components/Dialog.tsx'
 import { url } from '../lib/router.tsx'
 import { JSX } from 'preact'
 import { user } from '../lib/session.ts'
-import { api } from '../lib/api.ts'
+import { api, ApiOutput } from '../lib/api.ts'
 import { PageContent, PageHeader, PageLayout } from '../components/Layout.tsx'
-import type { Project as ApiProject, Team, User } from '../../api/schema.ts'
 
-type Project = ApiProject
+type Project = ApiOutput['GET/api/projects'][number]
+type User = ApiOutput['GET/api/users'][number]
+type Team = ApiOutput['GET/api/teams'][number]
 
 const users = api['GET/api/users'].signal()
 users.fetch()
@@ -199,8 +200,11 @@ const EmptyState = (
 )
 
 const ProjectCard = (
-  { project, team }: { project: ApiProject; team: Team },
+  { project, team }: { project: Project; team: Team },
 ) => {
+  console.log(project)
+  console.log(team)
+
   const isMember = team.teamMembers.includes(user.data?.userEmail || '')
   return (
     <A
@@ -276,7 +280,7 @@ const TeamMembersRow = ({ user, team }: { user: User; team: Team }) => (
   </tr>
 )
 
-const TeamProjectsRow = ({ project }: { project: ApiProject }) => (
+const TeamProjectsRow = ({ project }: { project: Project }) => (
   <tr class='border-b border-divider'>
     <td class='py-3 font-medium truncate'>{project.name}</td>
     <td class='py-3 text-text2 truncate'>{project.slug}</td>

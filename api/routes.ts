@@ -4,7 +4,6 @@ import { handleGoogleCallback, initiateGoogleAuth } from './auth.ts'
 import {
   DeploymentDef,
   DeploymentsCollection,
-  ProjectDef,
   ProjectsCollection,
   TeamDef,
   TeamsCollection,
@@ -61,6 +60,16 @@ const deploymentOutput = OBJ({
   createdAt: optional(NUM('The creation date of the deployment')),
   updatedAt: optional(NUM('The last update date of the deployment')),
   token: optional(STR('The deployment token')),
+})
+
+const projectOutput = OBJ({
+  slug: STR('The unique identifier for the project'),
+  name: STR('The name of the project'),
+  teamId: STR('The ID of the team that owns the project'),
+  isPublic: BOOL('Is the project public?'),
+  repositoryUrl: optional(STR('The URL of the project repository')),
+  createdAt: optional(NUM('The creation date of the project')),
+  updatedAt: optional(NUM('The last update date of the project')),
 })
 
 const defs = {
@@ -171,7 +180,7 @@ const defs = {
   'GET/api/projects': route({
     authorize: withUserSession,
     fn: () => ProjectsCollection.values().toArray(),
-    output: ARR(ProjectDef, 'List of projects'),
+    output: ARR(projectOutput, 'List of projects'),
     description: 'Get all projects',
   }),
   'POST/api/project': route({
@@ -184,7 +193,7 @@ const defs = {
       isPublic: BOOL('Is the project public?'),
       repositoryUrl: optional(STR('The URL of the project repository')),
     }, 'Create a new project'),
-    output: ProjectDef,
+    output: projectOutput,
     description: 'Create a new project',
   }),
   'GET/api/project': route({
@@ -195,7 +204,7 @@ const defs = {
       return project
     },
     input: OBJ({ slug: STR('The slug of the project') }),
-    output: ProjectDef,
+    output: projectOutput,
     description: 'Get a project by ID',
   }),
   'PUT/api/project': route({
@@ -208,7 +217,7 @@ const defs = {
       isPublic: BOOL('Is the project public?'),
       repositoryUrl: optional(STR('The URL of the project repository')),
     }),
-    output: ProjectDef,
+    output: projectOutput,
     description: 'Update a project by ID',
   }),
   'DELETE/api/project': route({
@@ -347,13 +356,11 @@ const defs = {
   'GET/api/logs': route({
     authorize: withUserSession,
     fn: (ctx, params) => {
-      const deployments = DeploymentsCollection.filter((d) =>
-        d.projectId === params.resource
-      )
-      if (deployments.length === 0) {
-        throw respond.NotFound({ message: 'Deployments not found' })
+      const deployment = DeploymentsCollection.get(params.resource)
+      if (!deployment) {
+        throw respond.NotFound({ message: 'Deployment not found' })
       }
-      const project = ProjectsCollection.get(deployments[0].projectId)
+      const project = ProjectsCollection.get(deployment.projectId)
       if (!project) throw respond.NotFound({ message: 'Project not found' })
       if (!project.isPublic && !ctx.user?.isAdmin) {
         const team = TeamsCollection.find((t) => t.teamId === project.teamId)
@@ -361,11 +368,12 @@ const defs = {
           throw respond.Forbidden({ message: 'Access to project logs denied' })
         }
       }
+
       return getLogs(params)
     },
     input: OBJ({
       resource: STR('The resource to fetch logs for'),
-      level: optional(STR('The log level to filter by')),
+      severity_number: optional(STR('The log level to filter by')),
       start_date: optional(STR('The start date for the date range filter')),
       end_date: optional(STR('The end date for the date range filter')),
       sort_by: optional(STR('The field to sort by')),

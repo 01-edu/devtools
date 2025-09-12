@@ -19,7 +19,7 @@ if (import.meta.main) {
         span_id FixedString(16),
         severity_number UInt8,
         -- derived column, computed by DB from severity_number
-        severity_text String MATERIALIZED CASE
+        severity_text LowCardinality(String) MATERIALIZED CASE
           WHEN severity_number > 4 AND severity_number <= 8 THEN 'DEBUG'
           WHEN severity_number > 8 AND severity_number <= 12 THEN 'INFO'
           WHEN severity_number > 12 AND severity_number <= 16 THEN 'WARN'
@@ -29,7 +29,7 @@ if (import.meta.main) {
         -- Often empty, but kept for OTEL spec compliance
         body Nullable(String),
         attributes JSON,
-        event_name String
+        event_name LowCardinality(String)
       )
       ENGINE = MergeTree
       PARTITION BY toYYYYMMDD(timestamp)
