@@ -35,22 +35,27 @@ const client = createClient({
     request: true,
     response: true,
   },
+  clickhouse_settings: {
+    date_time_input_format: 'best_effort',
+  },
 })
 
-export function float64ToId128(
-  { id }: { id: number },
-) {
-  const id128 = new Uint8Array(8)
-  const view = new DataView(id128.buffer)
-  view.setFloat64(0, id, false)
-  return id128
-}
-
-export function bytesToHex(bytes: Uint8Array) {
-  return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('')
-}
-const escapeSql = (s: unknown) =>
-  String(s ?? '').replace(/\\/g, '\\\\').replace(/'/g, "''")
+const numberToHex128 = (() => {
+  const alphabet = new TextEncoder().encode('0123456789abcdef')
+  const output = new Uint8Array(16)
+  const view = new DataView(new Uint8Array(8).buffer)
+  const dec = new TextDecoder()
+  return (id: number) => {
+    view.setFloat64(0, id, false)
+    let i = -1
+    while (++i < 8) {
+      const x = view.getUint8(i)
+      output[i * 2] = alphabet[x >> 4]
+      output[i * 2 + 1] = alphabet[x & 0xF]
+    }
+    return dec.decode(output)
+  }
+})()
 
 async function insertLogs(
   service_name: string,
@@ -60,15 +65,13 @@ async function insertLogs(
   if (logsToInsert.length === 0) throw respond.NoContent()
 
   const rows = logsToInsert.map((log) => {
-    const traceHex = bytesToHex(float64ToId128({ id: log.trace_id }))
-    const spanHex = bytesToHex(
-      float64ToId128({ id: log.span_id ?? log.trace_id }),
-    )
+    const traceHex = numberToHex128(log.trace_id)
+    const spanHex = numberToHex128(log.span_id ?? log.trace_id)
     return {
       ...log,
-      timestamp: toClickhouseDateTime(new Date(log.timestamp).toISOString()),
+      timestamp: new Date(log.timestamp),
       attributes: log.attributes ?? {},
-      service_name: escapeSql(service_name),
+      service_name: service_name,
       trace_id: traceHex,
       span_id: spanHex,
     }
@@ -85,51 +88,42 @@ async function insertLogs(
   }
 }
 
-function toClickhouseDateTime(iso: string) {
-  // "2025-09-11T17:35:00.000Z" → "2025-09-11 17:35:00"
-  const match = iso.match(
-    /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(\.\d+)?Z?$/,
-  )
-  if (!match) return iso.replace('T', ' ').replace(/(\.\d+)?Z$/, '')
-  const [_, date, h, m, s] = match
-  return `${date} ${h}:${m}:${s ?? '00'}`
-}
-
 async function getLogs({
   resource,
-  level,
-  startDate,
-  endDate,
-  sortBy,
-  sortOrder,
+  severity_number,
+  start_date,
+  end_date,
+  sort_by,
+  sort_order,
   search,
 }: {
   resource: string
-  level?: string
-  startDate?: string
-  endDate?: string
-  sortBy?: string
-  sortOrder?: 'ASC' | 'DESC'
+  severity_number?: string
+  start_date?: string
+  end_date?: string
+  sort_by?: string
+  sort_order?: 'ASC' | 'DESC'
   search?: Record<string, string>
 }) {
   const queryParts: string[] = []
   const queryParams: Record<string, unknown> = { service_name: resource }
 
   queryParts.push('service_name = {service_name:String}')
+  queryParams.service_name = resource
 
-  if (level) {
-    queryParts.push('severity_number = {level:UInt8}')
-    queryParams.level = level
+  if (severity_number) {
+    queryParts.push('severity_number = {severity_number:UInt8}')
+    queryParams.severity_number = severity_number
   }
 
-  if (startDate) {
-    queryParts.push('timestamp >= {startDate:DateTime}')
-    queryParams.startDate = toClickhouseDateTime(startDate)
+  if (start_date) {
+    queryParts.push('timestamp >= {start_date:DateTime}')
+    queryParams.start_date = new Date(start_date)
   }
 
-  if (endDate) {
-    queryParts.push('timestamp <= {endDate:DateTime}')
-    queryParams.endDate = toClickhouseDateTime(endDate)
+  if (end_date) {
+    queryParts.push('timestamp <= {end_date:DateTime}')
+    queryParams.end_date = new Date(end_date)
   }
 
   if (search) {
@@ -151,14 +145,13 @@ async function getLogs({
     SELECT *
     FROM logs
     WHERE ${queryParts.join(' AND ')}
-    ${sortBy ? `ORDER BY ${sortBy} ${sortOrder || 'DESC'}` : ''}
+    ${sort_by ? `ORDER BY ${sort_by} ${sort_order || 'DESC'}` : ''}
     LIMIT 1000
   `
 
   try {
     const resultSet = await client.query({
       query,
-
       query_params: queryParams,
       format: 'JSON',
     })

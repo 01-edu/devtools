@@ -347,13 +347,11 @@ const defs = {
   'GET/api/logs': route({
     authorize: withUserSession,
     fn: (ctx, params) => {
-      const deployments = DeploymentsCollection.filter((d) =>
-        d.projectId === params.resource
-      )
-      if (deployments.length === 0) {
-        throw respond.NotFound({ message: 'Deployments not found' })
+      const deployment = DeploymentsCollection.get(params.resource)
+      if (!deployment) {
+        throw respond.NotFound({ message: 'Deployment not found' })
       }
-      const project = ProjectsCollection.get(deployments[0].projectId)
+      const project = ProjectsCollection.get(deployment.projectId)
       if (!project) throw respond.NotFound({ message: 'Project not found' })
       if (!project.isPublic && !ctx.user?.isAdmin) {
         const team = TeamsCollection.find((t) => t.teamId === project.teamId)
@@ -361,18 +359,19 @@ const defs = {
           throw respond.Forbidden({ message: 'Access to project logs denied' })
         }
       }
+
       return getLogs(params)
     },
     input: OBJ({
       resource: STR('The resource to fetch logs for'),
-      level: optional(STR('The log level to filter by')),
+      severity_number: optional(STR('The log level to filter by')),
       start_date: optional(STR('The start date for the date range filter')),
       end_date: optional(STR('The end date for the date range filter')),
       sort_by: optional(STR('The field to sort by')),
       sort_order: optional(
         LIST(['ASC', 'DESC'], 'The sort order (ASC or DESC)'),
       ),
-      // search: optional(OBJ({}, 'A map of fields to search by')),
+      search: optional(OBJ({}, 'A map of fields to search by')),
     }),
     output: ARR(LogSchema, 'List of logs'),
     description: 'Get logs from ClickHouse',
