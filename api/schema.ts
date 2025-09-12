@@ -1,6 +1,6 @@
 import { ARR, BOOL, OBJ, optional, STR } from './lib/validator.ts'
 import { Asserted } from './lib/router.ts'
-import { BaseRecord, createCollection } from './lib/json_store.ts'
+import { createCollection } from './lib/json_store.ts'
 
 export const UserDef = OBJ({
   userEmail: STR('The user email address'),
@@ -8,7 +8,7 @@ export const UserDef = OBJ({
   userPicture: optional(STR('The user profile picture URL')),
   isAdmin: BOOL('Is the user an admin?'),
 }, 'The user schema definition')
-export type User = Asserted<typeof UserDef> & BaseRecord
+export type User = Asserted<typeof UserDef>
 
 export const TeamDef = OBJ({
   teamId: STR('The unique identifier for the team'),
@@ -18,7 +18,7 @@ export const TeamDef = OBJ({
     'The list of user emails who are members of the team',
   ),
 }, 'The team schema definition')
-export type Team = Asserted<typeof TeamDef> & BaseRecord
+export type Team = Asserted<typeof TeamDef>
 
 export const ProjectDef = OBJ({
   slug: STR('The unique identifier for the project'),
@@ -27,7 +27,7 @@ export const ProjectDef = OBJ({
   isPublic: BOOL('Is the project public?'),
   repositoryUrl: optional(STR('The URL of the project repository')),
 }, 'The project schema definition')
-export type Project = Asserted<typeof ProjectDef> & BaseRecord
+export type Project = Asserted<typeof ProjectDef>
 
 export const DeploymentDef = OBJ({
   projectId: STR('The ID of the project this deployment belongs to'),
@@ -37,7 +37,7 @@ export const DeploymentDef = OBJ({
   sqlEndpoint: optional(STR('The SQL execution endpoint for the database')),
   sqlToken: optional(STR('The security token for the SQL endpoint')),
 }, 'The deployment schema definition')
-export type Deployment = Asserted<typeof DeploymentDef> & BaseRecord
+export type Deployment = Asserted<typeof DeploymentDef>
 
 export const UsersCollection = await createCollection<User, 'userEmail'>(
   { name: 'users', primaryKey: 'userEmail' },

@@ -19,6 +19,7 @@ export type RequestContext = {
   readonly user: User | undefined
   readonly trace: number
   readonly span: number | undefined
+  resource: string | undefined
 }
 
 // we set default values so we don't have to check everytime if they exists
@@ -33,6 +34,7 @@ export const makeContext = (
     cookies: {},
     user: undefined,
     span: undefined,
+    resource: undefined,
     url,
     req,
     ...extra,
