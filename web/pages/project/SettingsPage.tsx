@@ -1,12 +1,15 @@
-import { Deployment, Project, User } from '../../../api/schema.ts'
 import { PageContent, PageHeader } from '../../components/Layout.tsx'
 import { Button, Card, Input, Switch } from '../../components/forms.tsx'
 import { useSignal } from '@preact/signals'
 import { navigate, url } from '../../lib/router.tsx'
 import { JSX } from 'preact'
-import { api } from '../../lib/api.ts'
+import { api, ApiOutput } from '../../lib/api.ts'
 import { deployments } from '../ProjectPage.tsx'
 import { user } from '../../lib/session.ts'
+
+type Project = ApiOutput['GET/api/projects'][number]
+type Deployment = ApiOutput['GET/api/project/deployments'][number]
+type User = ApiOutput['GET/api/users'][number]
 
 const users = api['GET/api/users'].signal()
 users.fetch()
@@ -244,10 +247,10 @@ export const SettingsPage = ({ project }: { project: Project }) => {
         : action === 'edit' && id
         ? (
           <DeploymentForm
-            deployment={deployments.find((d) => d.url === id)}
+            deployment={deployments.data?.find((d) => d.url === id)}
           />
         )
-        : <DeploymentsList deployments={deployments} />
+        : <DeploymentsList deployments={deployments.data ?? []} />
     )
     : view === 'users'
     ? <UserManagement />

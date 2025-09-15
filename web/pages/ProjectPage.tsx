@@ -9,7 +9,6 @@ import { TasksPage } from './project/TaskPage.tsx'
 import { SettingsPage } from './project/SettingsPage.tsx'
 import { api } from '../lib/api.ts'
 import { effect } from '@preact/signals'
-import { Deployment } from '../../api/schema.ts'
 
 const pageMap = {
   deployment: DeploymentPage,
@@ -17,32 +16,16 @@ const pageMap = {
   settings: SettingsPage,
 }
 
-export const deployments: Deployment[] = [
-  {
-    projectId: 'my-awesome-project',
-    url: 'https://my-app.fly.dev',
-    logsEnabled: true,
-    databaseEnabled: false,
-    sqlEndpoint: undefined,
-    sqlToken: undefined,
-  },
-  {
-    projectId: 'my-awesome-project',
-    url: 'https://staging.my-app.fly.dev',
-    logsEnabled: false,
-    databaseEnabled: true,
-    sqlEndpoint: 'https://db.my-app.com/sql',
-    sqlToken: 'super-secret-token',
-  },
-]
+export const deployments = api['GET/api/project/deployments'].signal()
 
 const project = api['GET/api/project'].signal()
 
 effect(() => {
   const path = url.path
-  const projectSlug = path.split('/')[2]
-  if (projectSlug) {
-    project.fetch({ slug: projectSlug })
+  const slug = path.split('/')[2]
+  if (slug) {
+    project.fetch({ slug })
+    deployments.fetch({ project: slug })
   }
 })
 

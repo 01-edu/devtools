@@ -2,7 +2,8 @@ import { makeRouter, route } from '/api/lib/router.ts'
 import type { RequestContext } from '/api/lib/context.ts'
 import { handleGoogleCallback, initiateGoogleAuth } from './auth.ts'
 import {
-  ProjectDef,
+  DeploymentDef,
+  DeploymentsCollection,
   ProjectsCollection,
   TeamDef,
   TeamsCollection,
@@ -10,10 +11,18 @@ import {
   UserDef,
   UsersCollection,
 } from './schema.ts'
-import { ARR, BOOL, OBJ, optional, STR } from './lib/validator.ts'
+import { ARR, BOOL, LIST, NUM, OBJ, optional, STR } from './lib/validator.ts'
 import { respond } from './lib/response.ts'
 import { deleteCookie } from 'jsr:@std/http/cookie'
 import { getPicture } from '/api/picture.ts'
+import {
+  getLogs,
+  insertLogs,
+  LogSchema,
+  LogsInputSchema,
+} from './click-house-client.ts'
+import { decryptMessage, encryptMessage } from './user.ts'
+import { log } from './lib/log.ts'
 
 const withUserSession = ({ user }: RequestContext) => {
   if (!user) throw Error('Missing user session')
@@ -22,6 +31,46 @@ const withUserSession = ({ user }: RequestContext) => {
 const withAdminSession = ({ user }: RequestContext) => {
   if (!user || !user.isAdmin) throw Error('Admin access required')
 }
+
+const withDeploymentSession = async (ctx: RequestContext) => {
+  const token = ctx.req.headers.get('Authorization')?.replace(/^Bearer /i, '')
+  if (!token) throw respond.Unauthorized({ message: 'Missing token' })
+  try {
+    const message = await decryptMessage(token)
+    if (!message) throw respond.Unauthorized({ message: 'Invalid token' })
+    const data = JSON.parse(message)
+    const dep = DeploymentsCollection.get(data?.url)
+    if (!dep || dep.tokenSalt !== data?.tokenSalt) {
+      throw respond.Unauthorized({ message: 'Invalid token' })
+    }
+    ctx.resource = dep?.url
+  } catch (error) {
+    log.error('Error validating deployment token:', { error })
+    throw respond.Unauthorized({ message: 'Invalid token' })
+  }
+}
+
+const deploymentOutput = OBJ({
+  projectId: STR('The ID of the project'),
+  url: STR('The URL of the deployment'),
+  logsEnabled: BOOL('Whether logging is enabled'),
+  databaseEnabled: BOOL('Whether the database is enabled'),
+  sqlEndpoint: optional(STR('The SQL endpoint')),
+  sqlToken: optional(STR('The SQL token')),
+  createdAt: optional(NUM('The creation date of the deployment')),
+  updatedAt: optional(NUM('The last update date of the deployment')),
+  token: optional(STR('The deployment token')),
+})
+
+const projectOutput = OBJ({
+  slug: STR('The unique identifier for the project'),
+  name: STR('The name of the project'),
+  teamId: STR('The ID of the team that owns the project'),
+  isPublic: BOOL('Is the project public?'),
+  repositoryUrl: optional(STR('The URL of the project repository')),
+  createdAt: optional(NUM('The creation date of the project')),
+  updatedAt: optional(NUM('The last update date of the project')),
+})
 
 const defs = {
   'GET/api/health': route({
@@ -131,7 +180,7 @@ const defs = {
   'GET/api/projects': route({
     authorize: withUserSession,
     fn: () => ProjectsCollection.values().toArray(),
-    output: ARR(ProjectDef, 'List of projects'),
+    output: ARR(projectOutput, 'List of projects'),
     description: 'Get all projects',
   }),
   'POST/api/project': route({
@@ -144,7 +193,7 @@ const defs = {
       isPublic: BOOL('Is the project public?'),
       repositoryUrl: optional(STR('The URL of the project repository')),
     }, 'Create a new project'),
-    output: ProjectDef,
+    output: projectOutput,
     description: 'Create a new project',
   }),
   'GET/api/project': route({
@@ -155,7 +204,7 @@ const defs = {
       return project
     },
     input: OBJ({ slug: STR('The slug of the project') }),
-    output: ProjectDef,
+    output: projectOutput,
     description: 'Get a project by ID',
   }),
   'PUT/api/project': route({
@@ -168,7 +217,7 @@ const defs = {
       isPublic: BOOL('Is the project public?'),
       repositoryUrl: optional(STR('The URL of the project repository')),
     }),
-    output: ProjectDef,
+    output: projectOutput,
     description: 'Update a project by ID',
   }),
   'DELETE/api/project': route({
@@ -182,6 +231,159 @@ const defs = {
     input: OBJ({ slug: STR('The slug of the project') }),
     output: BOOL('Indicates if the project was deleted'),
     description: 'Delete a project by ID',
+  }),
+  'GET/api/project/deployments': route({
+    authorize: withUserSession,
+    fn: (_ctx, { project }) => {
+      const deployments = DeploymentsCollection.filter((d) =>
+        d.projectId === project
+      )
+      if (!deployments.length) {
+        throw respond.NotFound({ message: 'Deployments not found' })
+      }
+      return deployments.map(({ tokenSalt: _, ...d }) => {
+        return {
+          ...d,
+          token: undefined,
+          sqlToken: undefined,
+          sqlEndpoint: undefined,
+        }
+      })
+    },
+    input: OBJ({ project: STR('The ID of the project') }),
+    output: ARR(deploymentOutput, 'List of deployments'),
+    description: 'Get deployments by project ID',
+  }),
+  'GET/api/deployment': route({
+    authorize: withAdminSession,
+    fn: async (_ctx, url) => {
+      const dep = DeploymentsCollection.get(url)
+      if (!dep) throw respond.NotFound()
+      const { tokenSalt, ...deployment } = dep
+      const token = await encryptMessage(
+        JSON.stringify({ url: deployment.url, tokenSalt }),
+      )
+      return {
+        ...deployment,
+        token,
+      }
+    },
+    input: STR(),
+    output: deploymentOutput,
+    description: 'Get a deployment by ID',
+  }),
+  'POST/api/deployment': route({
+    authorize: withAdminSession,
+    fn: async (_ctx, input) => {
+      const tokenSalt = performance.now().toString()
+      const { tokenSalt: _, ...deployment } = await DeploymentsCollection
+        .insert({
+          ...input,
+          tokenSalt,
+        })
+      const token = await encryptMessage(
+        JSON.stringify({ url: deployment.url, tokenSalt }),
+      )
+      return {
+        ...deployment,
+        token,
+      }
+    },
+    input: DeploymentDef,
+    output: deploymentOutput,
+    description: 'Create a new deployment',
+  }),
+  'PUT/api/deployment': route({
+    authorize: withAdminSession,
+    fn: async (_ctx, input) => {
+      const { tokenSalt, ...deployment } = await DeploymentsCollection
+        .update(input.url, input)
+      const token = await encryptMessage(
+        JSON.stringify({ url: deployment.url, tokenSalt }),
+      )
+      return {
+        ...deployment,
+        token,
+      }
+    },
+    input: DeploymentDef,
+    output: deploymentOutput,
+    description: 'Update a deployment by ID',
+  }),
+  'GET/api/deployment/token/regenerate': route({
+    authorize: withAdminSession,
+    fn: async (_ctx, { url }) => {
+      console.log('Regenerating token for deployment:', { url })
+      const dep = DeploymentsCollection.get(url)
+      console.log('Regenerating token for deployment:', { dep })
+      if (!dep) throw respond.NotFound()
+      const tokenSalt = performance.now().toString()
+
+      const { tokenSalt: _, ...deployment } = await DeploymentsCollection
+        .update(url, { ...dep, tokenSalt })
+      const token = await encryptMessage(
+        JSON.stringify({ url: deployment.url, tokenSalt }),
+      )
+      return {
+        ...deployment,
+        token,
+      }
+    },
+    input: OBJ({ url: STR('The URL of the deployment') }),
+    output: deploymentOutput,
+    description: 'Regenerate a deployment token',
+  }),
+  'DELETE/api/deployment': route({
+    authorize: withAdminSession,
+    fn: async (_ctx, input) => {
+      const dep = DeploymentsCollection.get(input)
+      if (!dep) throw respond.NotFound()
+      await DeploymentsCollection.delete(input)
+      return respond.NoContent()
+    },
+    input: STR(),
+    description: 'Delete a deployment',
+  }),
+  'POST/api/logs': route({
+    authorize: withDeploymentSession,
+    fn: (ctx, logs) => {
+      if (!ctx.resource) throw respond.InternalServerError()
+      return insertLogs(ctx.resource, logs)
+    },
+    input: LogsInputSchema,
+    description: 'Insert logs into ClickHouse NB: a Bearer token is required',
+  }),
+  'GET/api/logs': route({
+    authorize: withUserSession,
+    fn: (ctx, params) => {
+      const deployment = DeploymentsCollection.get(params.resource)
+      if (!deployment) {
+        throw respond.NotFound({ message: 'Deployment not found' })
+      }
+      const project = ProjectsCollection.get(deployment.projectId)
+      if (!project) throw respond.NotFound({ message: 'Project not found' })
+      if (!project.isPublic && !ctx.user?.isAdmin) {
+        const team = TeamsCollection.find((t) => t.teamId === project.teamId)
+        if (!team?.teamMembers.includes(ctx.user?.userEmail || '')) {
+          throw respond.Forbidden({ message: 'Access to project logs denied' })
+        }
+      }
+
+      return getLogs(params)
+    },
+    input: OBJ({
+      resource: STR('The resource to fetch logs for'),
+      severity_number: optional(STR('The log level to filter by')),
+      start_date: optional(STR('The start date for the date range filter')),
+      end_date: optional(STR('The end date for the date range filter')),
+      sort_by: optional(STR('The field to sort by')),
+      sort_order: optional(
+        LIST(['ASC', 'DESC'], 'The sort order (ASC or DESC)'),
+      ),
+      // search: optional(OBJ({}, 'A map of fields to search by')),
+    }),
+    output: ARR(LogSchema, 'List of logs'),
+    description: 'Get logs from ClickHouse',
   }),
 } as const
 

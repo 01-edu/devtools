@@ -24,6 +24,7 @@
     "jsr:@std/path@^1.1.1": "1.1.1",
     "jsr:@std/streams@^1.0.8": "1.0.8",
     "jsr:@std/testing@*": "1.0.15",
+    "npm:@clickhouse/client@*": "1.12.1",
     "npm:@preact/preset-vite@^2.10.2": "2.10.2_@babel+core@7.28.0_vite@7.0.4__picomatch@4.0.2__@types+node@22.15.15_preact@10.26.9_@types+node@22.15.15",
     "npm:@preact/signals@*": "2.2.1_preact@10.26.9",
     "npm:@tailwindcss/vite@^4.1.11": "4.1.11_vite@7.0.4__picomatch@4.0.2__@types+node@22.15.15_@types+node@22.15.15",
@@ -276,6 +277,15 @@
       "dependencies": [
         "@babel/helper-string-parser",
         "@babel/helper-validator-identifier"
+      ]
+    },
+    "@clickhouse/client-common@1.12.1": {
+      "integrity": "sha512-ccw1N6hB4+MyaAHIaWBwGZ6O2GgMlO99FlMj0B0UEGfjxM9v5dYVYql6FpP19rMwrVAroYs/IgX2vyZEBvzQLg=="
+    },
+    "@clickhouse/client@1.12.1": {
+      "integrity": "sha512-7ORY85rphRazqHzImNXMrh4vsaPrpetFoTWpZYueCO2bbO6PXYDXp/GQ4DgxnGIqbWB/Di1Ai+Xuwq2o7DJ36A==",
+      "dependencies": [
+        "@clickhouse/client-common"
       ]
     },
     "@emnapi/core@1.4.4": {
@@ -1228,6 +1238,7 @@
   "workspace": {
     "dependencies": [
       "jsr:@std/assert@1",
+      "npm:@clickhouse/client@*",
       "npm:@preact/preset-vite@^2.10.2",
       "npm:@preact/signals@*",
       "npm:@tailwindcss/vite@^4.1.11",

@@ -2,13 +2,15 @@
   "tasks": {
     "api:dev": "deno run -A --env-file=.env.dev api/server.ts --env=dev --port=3021",
     "vite:dev": "deno run -A --env-file=.env.dev tasks/vite.js --env=dev",
-    "dev": { "dependencies": ["api:dev", "vite:dev"] },
+    "clickhouse:dev": "deno run -A --env-file=.env.dev tasks/clickhouse.ts --env=dev",
+    "dev": { "dependencies": ["clickhouse:dev", "api:dev", "vite:dev"] },
     "seed": "deno run -A --env-file=.env.dev tasks/seed.ts",
     "dev:with-seed": "deno task seed && deno task dev",
     "api:prod": "deno compile -A --env-file=.env.prod --no-check --output dist/api --target x86_64-unknown-linux-gnu --include dist/web api/server.ts --env=prod",
     "vite:prod": "deno run -A --env-file=.env.prod tasks/vite.js --build --env=prod",
+    "clickhouse:prod": "deno run -A --env-file=.env.prod tasks/clickhouse.ts --env=prod",
     "prod": "deno task vite:prod && deno task api:prod",
-    "start:prod": "dist/api --env=prod",
+    "start:prod": "deno task clickhouse:prod && dist/api --env=prod",
     "fmt": "deno fmt",
     "lint": "deno lint",
     "check": "deno check",
@@ -34,6 +36,7 @@
     "preact": "npm:preact@^10.26.9",
     "@preact/preset-vite": "npm:@preact/preset-vite@^2.10.2",
     "@preact/signals": "npm:@preact/signals",
+    "@clickhouse/client": "npm:@clickhouse/client",
     "@tailwindcss/vite": "npm:@tailwindcss/vite@^4.1.11",
     "tailwindcss": "npm:tailwindcss@^4.1.11",
     "daisyui": "npm:daisyui@^5.0.46",
@@ -46,6 +49,11 @@
     "semiColons": false,
     "singleQuote": true,
     "exclude": ["dist/", "metafile.json"]
+  },
+  "lint": {
+    "rules": {
+      "exclude": ["no-import-prefix", "no-unversioned-import"]
+    }
   },
   "nodeModulesDir": "auto",
   "compilerOptions": {

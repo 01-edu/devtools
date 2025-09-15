@@ -7,7 +7,7 @@ const encoder = new TextEncoder()
 const decoder = new TextDecoder()
 const IV_SIZE = 12 // Initialization vector (12 bytes for AES-GCM)
 
-async function encryptMessage(message: string) {
+export async function encryptMessage(message: string) {
   const iv = crypto.getRandomValues(new Uint8Array(IV_SIZE))
   const encryptedMessage = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv },
@@ -22,7 +22,7 @@ async function encryptMessage(message: string) {
 }
 
 // Decrypting a message
-async function decryptMessage(encryptedMessage: string) {
+export async function decryptMessage(encryptedMessage: string) {
   const encryptedData = decodeBase64Url(encryptedMessage)
   const iv = encryptedData.slice(0, IV_SIZE)
   const decryptedMessage = await crypto.subtle.decrypt(
@@ -36,7 +36,7 @@ async function decryptMessage(encryptedMessage: string) {
 
 const key = await crypto.subtle.importKey(
   'raw',
-  decodeBase64Url(SECRET),
+  decodeBase64Url(SECRET) as ArrayBufferView<ArrayBuffer>,
   { name: 'AES-GCM' },
   true, // The key should be extractable
   ['encrypt', 'decrypt'],
