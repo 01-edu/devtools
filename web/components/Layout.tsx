@@ -1,16 +1,4 @@
 import { JSX } from 'preact'
-import { SideBar } from './SideBar.tsx'
-
-export const PageLayoutWithSideBar = (
-  { children }: { children: JSX.Element | JSX.Element[] | null },
-) => (
-  <div class='h-screen flex bg-bg'>
-    <SideBar />
-    <div class='flex-1 flex flex-col'>
-      {children}
-    </div>
-  </div>
-)
 
 export const PageLayout = (
   { children }: { children: JSX.Element | JSX.Element[] },

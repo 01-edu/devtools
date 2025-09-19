@@ -1,91 +1,84 @@
+import { JSX } from 'preact'
 import {
   ChevronsLeft,
   ChevronsRight,
-  HardDrive,
-  ListTodo,
   LucideIcon,
   Settings,
 } from 'lucide-preact'
-import { A, LinkProps, url } from '../lib/router.tsx'
 import { user } from '../lib/session.ts'
+import { A, url } from '../lib/router.tsx'
 
-const NavLink = (
-  { icon: Icon, children, current, ...props }: LinkProps & {
-    current: boolean
-    icon: LucideIcon
+export type SidebarItem = {
+  label: string
+  icon: LucideIcon
+  component: () => JSX.Element
+}
+
+export function Sidebar(
+  { sidebarItems, sbi, title }: {
+    sidebarItems: Record<string, SidebarItem>
+    sbi?: string
+    title?: string
   },
-) => (
-  <A
-    {...props}
-    class={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-      current
-        ? 'bg-primary/10 text-primary'
-        : 'text-base-content/70 hover:bg-base-300'
-    } ${url.params.sidebar_collapsed === 'true' ? 'justify-center' : ''}`}
-    replace
-  >
-    <Icon class='h-5 w-5' />
-    {url.params.sidebar_collapsed !== 'true' && <span>{children}</span>}
-  </A>
-)
-
-export const SideBar = () => {
-  const { nav, sidebar_collapsed } = url.params
-  const isCollapsed = sidebar_collapsed === 'true'
+) {
+  const { sb } = url.params
   return (
-    <div
-      class={`relative h-full border-r border-base-300 bg-base-200 transition-all duration-300 ease-in-out ${
-        isCollapsed ? 'w-20' : 'w-64'
-      }`}
-    >
-      <div class='flex h-[calc(100vh-4rem)] flex-col'>
-        <div
-          class={`flex items-center border-b border-base-300 p-4 ${
-            isCollapsed ? 'justify-center' : 'justify-between'
-          }`}
-        >
-          {!isCollapsed && <h2 class='text-lg font-semibold'>Project</h2>}
-          <A
-            params={{
-              ...url.params,
-              sidebar_collapsed: isCollapsed ? null : 'true',
-            }}
-            replace
-            class='rounded-lg p-2 text-base-content/70 hover:bg-base-300'
-          >
-            {isCollapsed ? <ChevronsRight /> : <ChevronsLeft />}
-          </A>
+    <div class='drawer-side'>
+      <label htmlFor='drawer-toggle' class='drawer-overlay'></label>
+      <div
+        class={`${
+          sb ? 'w-16' : 'w-64'
+        } min-h-94/100 bg-base-100 border-r border-base-300 flex flex-col transition-all duration-300`}
+      >
+        <div class='p-4 border-b border-base-300'>
+          <div class='flex items-center justify-between'>
+            {!sb && (
+              <span class='text-sm font-medium rounded bg-base-200 w-7/10 py-1 px-2 text-center text-base-content/60'>
+                {title || 'Project Name'}
+              </span>
+            )}
+            <A
+              params={{ sb: sb ? null : 'true' }}
+              class='p-2 hover:bg-base-200 rounded'
+            >
+              {sb
+                ? <ChevronsRight class='h-4 w-4 text-base-content/60' />
+                : <ChevronsLeft class='h-4 w-4 text-base-content/60' />}
+            </A>
+          </div>
         </div>
-        <nav class='flex-1 space-y-2 p-4'>
-          <NavLink
-            current={nav === 'deployment'}
-            params={{ ...url.params, nav: 'deployment' }}
-            icon={HardDrive}
+
+        <div class='flex-1 p-2'>
+          <ul class='menu w-full space-y-1'>
+            {Object.entries(sidebarItems).map(([slug, item]) => (
+              <li key={slug}>
+                <A
+                  class={`${sbi === slug ? 'bg-base-200' : ''}`}
+                  data-tip={sb ? item.label : undefined}
+                  params={{ sbi: slug }}
+                  replace
+                >
+                  <item.icon class='h-4 w-4' />
+                  {!sb && item.label}
+                </A>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div class='p-4 border-t border-base-300'>
+          <A
+            params={{ sbi: 'settings' }}
+            replace
+            class={`rounded p-2 w-full flex items-center gap-2 ${
+              user.data?.isAdmin
+                ? 'settings' === sbi ? 'bg-primary text-primary-content' : ''
+                : 'opacity-50 pointer-events-none'
+            }`}
           >
-            Deployment
-          </NavLink>
-          <NavLink
-            current={nav === 'tasks'}
-            params={{ ...url.params, nav: 'tasks' }}
-            icon={ListTodo}
-          >
-            Tasks
-          </NavLink>
-        </nav>
-        <div
-          class={`border-t border-base-300 p-4 ${
-            user.data?.isAdmin ? '' : 'opacity-50 pointer-events-none'
-          }`}
-        >
-          <NavLink
-            current={nav === 'settings'}
-            {...user.data?.isAdmin
-              ? { params: { ...url.params, nav: 'settings' } }
-              : {}}
-            icon={Settings}
-          >
-            Settings
-          </NavLink>
+            <Settings class='h-4 w-4' />
+            {!sb && 'Settings'}
+          </A>
         </div>
       </div>
     </div>
