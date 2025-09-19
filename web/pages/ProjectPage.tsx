@@ -1,10 +1,11 @@
 import { effect } from '@preact/signals'
 import { api } from '../lib/api.ts'
 import { navigate, url } from '../lib/router.tsx'
-import { BarChart3, HardDrive, ListTodo } from 'lucide-preact'
+import { HardDrive, ListTodo } from 'lucide-preact'
 import { Sidebar, SidebarItem } from '../components/SideBar.tsx'
 import { DeploymentPage } from './DeploymentPage.tsx'
 import { user } from '../lib/session.ts'
+import { SettingsPage } from './project/SettingsPage.tsx'
 
 export const deployments = api['GET/api/project/deployments'].signal()
 
@@ -19,17 +20,19 @@ effect(() => {
   }
 })
 
-
 export const sidebarItems: Record<string, SidebarItem> = {
-  'deployment': { icon: HardDrive, label: 'Deployment', component: DeploymentPage },
-  'dashboards': { icon: BarChart3, label: 'Dashboards', component: DeploymentPage },
+  'deployment': {
+    icon: HardDrive,
+    label: 'Deployment',
+    component: DeploymentPage,
+  },
   'tasks': { icon: ListTodo, label: 'Tasks', component: DeploymentPage },
 }
 
 export function ProjectPage() {
   const sbi = url.params.sbi || Object.keys(sidebarItems)[0]
   const Component = sidebarItems[sbi as keyof typeof sidebarItems]?.component ||
-    (user.data?.isAdmin && sbi === 'settings' ? DeploymentPage : null)
+    (user.data?.isAdmin && sbi === 'settings' ? SettingsPage : null)
 
   if (!Component) {
     return null

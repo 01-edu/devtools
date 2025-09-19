@@ -1,19 +1,19 @@
 import { A, navigate, url } from '../lib/router.tsx'
 import {
-  ArrowUpDown,
+  ChevronsDown,
   Download,
   FileText,
-  Filter,
   Play,
   Plus,
   Save,
   Search,
-  ChevronsDown,
 } from 'lucide-preact'
 import { deployments, sidebarItems } from './ProjectPage.tsx'
+import { FilterMenu, SortMenu } from '../components/Filtre.tsx'
 
 export function QueryEditor() {
   const query = url.params.q || ''
+  const results = [1]
 
   return (
     <div className='flex flex-col flex-1'>
@@ -42,7 +42,15 @@ export function QueryEditor() {
           aria-label='SQL editor'
         />
       </div>
-      {/* <DataTable /> */}
+      {results.length > 0 && (
+        <div class='bg-base-100 pb-5 max-h-65/100'>
+          <div class=' flex items-center justify-between px-6 py-3 border-b border-base-300'>
+            <h2>Results (0 rows)</h2>
+            <div class='text-xs'>Query took 0.00 seconds.</div>
+          </div>
+          <DataTable />
+        </div>
+      )}
     </div>
   )
 }
@@ -101,6 +109,7 @@ export function DataTable() {
           </div>
         </div>
       </div>
+      <Drawer />
     </div>
   )
 }
@@ -164,6 +173,14 @@ export function TabNavigation({
   const tabClass = (t: 'tables' | 'queries' | 'logs') =>
     `tab ${activeTab === t ? 'tab-active' : ''}`
 
+  const filterKeyOptions = [
+    'service_name',
+    'service_version',
+    'service_instance_id',
+    'severity_text',
+    'event_name',
+  ] as const
+
   return (
     <div class='bg-base-100 border-b border-base-300'>
       <div class='tabs tabs-bordered px-6 h-full flex items-center'>
@@ -199,18 +216,24 @@ export function TabNavigation({
         </div>
 
         <div class='ml-2 flex items-center gap-2 p-2'>
-          <button type='button' class='btn btn-outline btn-sm'>
-            {activeTab !== 'queries'
-              ? <Filter class='h-4 w-4' />
-              : <Save class='h-4 w-4' />}
-            <span>{activeTab !== 'queries' ? 'Filter' : 'Save'}</span>
-          </button>
-          <button type='button' class='btn btn-outline btn-sm'>
-            {activeTab !== 'queries'
-              ? <ArrowUpDown class='h-4 w-4' />
-              : <Download class='h-4 w-4' />}
-            <span>{activeTab !== 'queries' ? 'Sort' : 'Export'}</span>
-          </button>
+          {activeTab !== 'queries' && (
+            <>
+              <FilterMenu filterKeyOptions={filterKeyOptions} tag={activeTab} />
+              <SortMenu sortKeyOptions={filterKeyOptions} tag={activeTab} />
+            </>
+          )}
+          {activeTab === 'queries' && (
+            <>
+              <button type='button' class='btn btn-outline btn-sm'>
+                <Save class='h-4 w-4' />
+                <span>Save</span>
+              </button>
+              <button type='button' class='btn btn-outline btn-sm'>
+                <Download class='h-4 w-4' />
+                <span>Download</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -224,19 +247,30 @@ const TabViews = {
 }
 
 const Drawer = () => (
-  <div class="drawer drawer-end">
-  <input id="my-drawer-4" type="checkbox" class="drawer-toggle" />
-  <div class="drawer-content">
-    <label for="my-drawer-4" class="drawer-button btn btn-primary">Open drawer</label>
+  <div class='drawer drawer-end'>
+    <input id='my-drawer-4' type='checkbox' class='drawer-toggle' />
+    <div class='drawer-content'>
+      <label for='my-drawer-4' class='drawer-button btn btn-primary'>
+        Open drawer
+      </label>
+    </div>
+    <div class='drawer-side'>
+      <label
+        for='my-drawer-4'
+        aria-label='close sidebar'
+        class='drawer-overlay'
+      >
+      </label>
+      <ul class='menu bg-base-200 text-base-content min-h-full w-80 p-4'>
+        <li>
+          <a>Sidebar Item 1</a>
+        </li>
+        <li>
+          <a>Sidebar Item 2</a>
+        </li>
+      </ul>
+    </div>
   </div>
-  <div class="drawer-side">
-    <label for="my-drawer-4" aria-label="close sidebar" class="drawer-overlay"></label>
-    <ul class="menu bg-base-200 text-base-content min-h-full w-80 p-4">
-      <li><a>Sidebar Item 1</a></li>
-      <li><a>Sidebar Item 2</a></li>
-    </ul>
-  </div>
-</div>
 )
 
 export const DeploymentPage = () => {
@@ -253,10 +287,11 @@ export const DeploymentPage = () => {
         <LeftPanel />
         <div class='flex-1 flex flex-col'>
           <TabNavigation activeTab={tab as 'tables' | 'queries' | 'logs'} />
-          {view}
+          <div class='flex-1 flex flex-col overflow-hidden drawer lg:drawer-open'>
+            {view}
+          </div>
         </div>
       </div>
-      <Drawer />
     </>
   )
 }
