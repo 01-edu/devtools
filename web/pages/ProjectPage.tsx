@@ -39,7 +39,7 @@ export function ProjectPage() {
   }
 
   if (!project.pending && !project.data) {
-    navigate({ href: '/projects', params: undefined })
+    navigate({ href: '/projects', params: undefined, replace: true })
     return null
   }
 

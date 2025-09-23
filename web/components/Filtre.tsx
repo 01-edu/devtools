@@ -1,62 +1,34 @@
-// URL filter schema (prefix = 't' | 'l'):
-// f{prefix}c0=key, f{prefix}o0=op, f{prefix}v0=value
-
 import { ArrowUpDown, Filter, Plus } from 'lucide-preact'
 import { A, navigate, url } from '../lib/router.tsx'
 
-// f{prefix}c1=..., f{prefix}o1=..., f{prefix}v1=...
 type FilterRow = { idx: number; key: string; op: string; value: string }
 
-const filterOperators = ['=', '!=', '>', '>=', '<', '<=', 'contains'] as const
-type FilterOperator = typeof filterOperators[number]
+const filterOperators = ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'like'] as const
 
 function parseFilters(prefix: string): FilterRow[] {
-  const ids: number[] = []
-  const re = new RegExp(`^f${prefix}c(\\d+)$`)
-  for (const k in url.params) {
-    const m = k.match(re)
-    if (m) ids.push(Number(m[1]))
-  }
-  ids.sort((a, b) => a - b)
-  if (!ids.length) return [{ idx: 0, key: '', op: '=', value: '' }]
-
+  const data = url.getAll(`f${prefix}`)
   const rows: FilterRow[] = []
-  for (const idx of ids) {
-    const key = (url.params[`f${prefix}c${idx}`] as string) ?? ''
-    const rawOp = (url.params[`f${prefix}o${idx}`] as string) ?? '='
-    const op: FilterOperator =
-      (filterOperators as readonly string[]).includes(rawOp)
-        ? rawOp as FilterOperator
-        : '='
-    const value = (url.params[`f${prefix}v${idx}`] as string) ?? ''
-    rows.push({ idx, key, op, value })
+  for (let i = 0; i < data.length; i++) {
+    const str = data[i]
+    const first = str.indexOf(',')
+    const second = str.indexOf(',', first + 1)
+    const key = str.slice(0, first)
+    const op = str.slice(first + 1, second)
+    const value = str.slice(second + 1)
+    rows.push({ idx: i, key, op, value })
   }
+
+  if (!rows.length) rows.push({ idx: 0, key: '', op: 'eq', value: '' })
   return rows
 }
 
 function setFilters(prefix: string, rows: FilterRow[]) {
-  const normalized = rows.map((r, i) => ({ ...r, idx: i }))
-  const next: Record<string, string> = {}
-  for (const k in url.params) {
-    if (/^f[tl][cov]\d+$/.test(k)) continue
-    const v = url.params[k]
-    if (v != null) next[k] = v as string
+  const next: string[] = []
+  for (let i = 0; i < rows.length; i++) {
+    const v = rows[i]
+    next.push([v.key, v.op, v.value].join(','))
   }
-
-  for (const r of normalized) {
-    next[`f${prefix}c${r.idx}`] = r.key
-    next[`f${prefix}o${r.idx}`] = r.op
-    next[`f${prefix}v${r.idx}`] = r.value
-  }
-
-  const allEmpty = normalized.every((r) => !r.key && !r.value)
-  if (allEmpty) {
-    for (const k in next) {
-      if (k.startsWith(`f${prefix}`)) delete next[k]
-    }
-  }
-
-  navigate({ params: next, replace: true })
+  navigate({ params: { [`f${prefix}`]: next }, replace: true })
 }
 
 function addFilter(prefix: string) {
@@ -64,7 +36,7 @@ function addFilter(prefix: string) {
   setFilters(prefix, [...rows, {
     idx: rows.length,
     key: '',
-    op: '=',
+    op: 'eq',
     value: '',
   }])
 }
@@ -78,44 +50,38 @@ function updateFilter(
   setFilters(prefix, rows.map((r) => (r.idx === idx ? { ...r, ...patch } : r)))
 }
 
+function removeFilter(prefix: string, idx: number) {
+  const rows = parseFilters(prefix)
+  setFilters(
+    prefix,
+    rows.filter((r) => r.idx !== idx),
+  )
+}
+
 // --- Sort (URL) -------------------------------------------------------------
-// s{prefix}c{n}=column, s{prefix}d{n}=asc|desc  (prefix: t = tables, l = logs)
 type SortRow = { idx: number; key: string; dir: 'asc' | 'desc' }
 
 function parseSort(prefix: string): SortRow[] {
-  const ids: number[] = []
-  const re = new RegExp(`^s${prefix}c(\\d+)$`)
-  for (const k in url.params) {
-    const m = k.match(re)
-    if (m) ids.push(Number(m[1]))
+  const data = url.getAll(`s${prefix}`)
+  const rows: SortRow[] = []
+  for (let i = 0; i < data.length; i++) {
+    const str = data[i]
+    const first = str.indexOf(',')
+    const key = str.slice(0, first)
+    const dir = str.slice(first + 1) as 'asc' | 'desc'
+    rows.push({ idx: i, key, dir })
   }
-  ids.sort((a, b) => a - b)
-  if (!ids.length) return [{ idx: 0, key: '', dir: 'asc' }]
-  return ids.map((idx) => ({
-    idx,
-    key: (url.params[`s${prefix}c${idx}`] as string) ?? '',
-    dir:
-      ((url.params[`s${prefix}d${idx}`] as string) === 'desc' ? 'desc' : 'asc'),
-  }))
+  if (!rows.length) rows.push({ idx: 0, key: '', dir: 'asc' })
+  return rows
 }
 
 function setSort(prefix: string, rows: SortRow[]) {
-  const normalized = rows.map((r, i) => ({ ...r, idx: i }))
-  const next: Record<string, string> = {}
-  // preserve non-sort params
-  for (const k in url.params) {
-    if (/^s[tl][cd]\d+$/.test(k)) continue
-    const v = url.params[k]
-    if (v != null) next[k] = v as string
+  const next: string[] = []
+  for (let i = 0; i < rows.length; i++) {
+    const v = rows[i]
+    next.push([v.key, v.dir].join(','))
   }
-  const allEmpty = normalized.every((r) => !r.key)
-  if (!allEmpty) {
-    for (const r of normalized) {
-      next[`s${prefix}c${r.idx}`] = r.key
-      next[`s${prefix}d${r.idx}`] = r.dir
-    }
-  }
-  navigate({ params: next, replace: true })
+  navigate({ params: { [`s${prefix}`]: next }, replace: true })
 }
 
 function addSort(prefix: string) {
@@ -131,6 +97,13 @@ function updateSort(
   const rows = parseSort(prefix)
   setSort(prefix, rows.map((r) => r.idx === idx ? { ...r, ...patch } : r))
 }
+
+function removeSort(prefix: string, idx: number) {
+  const rows = parseSort(prefix)
+  setSort(prefix, rows.filter((r) => r.idx !== idx))
+}
+
+// --- Components -------------------------------------------------------------
 
 export const FilterMenu = (
   { filterKeyOptions, tag }: {
@@ -190,17 +163,14 @@ export const FilterMenu = (
                     })}
                 />
 
-                <A
+                <button
+                  type='button'
                   class='btn btn-xs btn-ghost'
-                  params={{
-                    [`f${prefix}c${r.idx}`]: undefined,
-                    [`f${prefix}o${r.idx}`]: undefined,
-                    [`f${prefix}v${r.idx}`]: undefined,
-                  }}
+                  onClick={() => removeFilter(prefix, r.idx)}
                   title='Remove'
                 >
                   ✕
-                </A>
+                </button>
               </div>
             ))}
           </div>
@@ -262,16 +232,14 @@ export const SortMenu = ({ tag, sortKeyOptions }: {
                   <option value='asc'>Asc</option>
                   <option value='desc'>Desc</option>
                 </select>
-                <A
-                  params={{
-                    [`s${prefix}c${r.idx}`]: undefined,
-                    [`s${prefix}d${r.idx}`]: undefined,
-                  }}
+                <button
+                  type='button'
+                  onClick={() => removeSort(prefix, r.idx)}
                   class='btn btn-xs btn-ghost'
                   title='Remove'
                 >
                   ✕
-                </A>
+                </button>
               </div>
             ))}
           </div>
