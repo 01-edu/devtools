@@ -3,7 +3,6 @@ import {
   AlertCircle,
   AlertTriangle,
   Bug,
-  ChevronsDown,
   Clock,
   Download,
   Eye,
@@ -12,8 +11,10 @@ import {
   MoreHorizontal,
   Play,
   Plus,
+  RefreshCw,
   Save,
   Search,
+  Table,
   XCircle,
 } from 'lucide-preact'
 import { deployments, sidebarItems } from './ProjectPage.tsx'
@@ -21,54 +22,60 @@ import { FilterMenu, SortMenu } from '../components/Filtre.tsx'
 
 type AnyRecord = Record<string, unknown>
 
+const onRun = async () => {
+  // TODO: call backend here
+}
+
 export function QueryEditor() {
   const query = url.params.q || ''
-  const results = [] as AnyRecord[]
+  const results: AnyRecord[] = []
   const running = false
 
-  const onRun = async () => {
-    // TODO: call backend here
-  }
-
   return (
-    <div class='flex flex-col flex-1 min-h-0 min-w-0'>
-      <div class='relative flex-1 min-h-[12rem]'>
-        <div class='absolute inset-y-0 left-0 w-10 select-none bg-base-200/40 overflow-hidden border-r border-base-300 z-10'>
-          <div class='m-0 px-2 py-2 text-xs font-mono text-base-content/50 leading-6 text-right'>
-            {Array(Math.max(1, (query.match(/\n/g)?.length ?? 0) + 1))
-              .keys().map((i) => <div key={i}>{i + 1}</div>).toArray()}
+    <div class='flex flex-col h-full min-h-0 gap-4'>
+      <div class='flex-1 min-h-0 overflow-hidden'>
+        <div class='relative h-full'>
+          <div class='absolute inset-y-0 left-0 w-10 select-none bg-base-200/40 overflow-hidden border-r border-base-300 z-10'>
+            <div class='m-0 px-2 py-2 text-xs font-mono text-base-content/50 leading-6 text-right'>
+              {Array(Math.max(1, (query.match(/\n/g)?.length ?? 0) + 1))
+                .keys().map((i) => <div key={i}>{i + 1}</div>).toArray()}
+            </div>
+          </div>
+
+          <textarea
+            value={query}
+            onInput={(e) => {
+              const v = (e.target as HTMLTextAreaElement).value
+              navigate({ params: { q: v } })
+            }}
+            onKeyDown={(e) => {
+              if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault()
+                onRun()
+              }
+            }}
+            class='textarea w-full h-full font-mono text-sm leading-6 pl-12 pr-3 py-3 bg-base-100 border-base-300 focus:outline-none focus:ring-0 focus:shadow-none focus:border-primary resize-none'
+            placeholder='-- Write SQL here. Press Ctrl+Enter to run'
+            aria-label='SQL editor'
+          />
+        </div>
+      </div>
+
+      <div class='bg-base-100 border-t border-base-300 px-4 sm:px-6 py-3 shrink-0'>
+        <div class='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2'>
+          <div class='flex items-center gap-3'>
+            <h2 class='text-sm sm:text-base font-medium'>Results</h2>
+            <span class='text-xs text-base-content/60'>
+              {running ? 'Running…' : `${results.length} rows`}
+            </span>
+          </div>
+          <div class='text-xs text-base-content/60 tabular-nums'>
+            Query took 0.00 seconds.
           </div>
         </div>
-
-        <textarea
-          value={query}
-          onInput={(e) => {
-            const v = (e.target as HTMLTextAreaElement).value
-            navigate({ params: { q: v } })
-          }}
-          onKeyDown={(e) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-              e.preventDefault()
-              onRun()
-            }
-          }}
-          class='textarea w-full h-full font-mono text-sm leading-6 pl-12 pr-3 py-3 bg-base-100 border-base-300 focus:outline-none focus:ring-0 focus:shadow-none focus:border-base-300 resize-y'
-          placeholder='-- Write SQL here. Press Ctrl+Enter to run'
-          aria-label='SQL editor'
-        />
       </div>
 
-      <div class='flex items-center justify-between px-4 sm:px-6 py-3 border-t border-base-300'>
-        <div class='flex items-center gap-3'>
-          <h2 class='text-sm sm:text-base font-medium'>Results</h2>
-          <span class='text-xs text-base-content/60'>
-            {running ? 'Running…' : `${results.length} rows`}
-          </span>
-        </div>
-        <div class='text-xs text-base-content/60'>Query took 0.00 seconds.</div>
-      </div>
-
-      <div class='flex-1 min-h-0 overflow-auto'>
+      <div class='flex-1 min-h-0 overflow-hidden'>
         <DataTable data={results} />
       </div>
     </div>
@@ -88,46 +95,14 @@ const logData = [
     severity_number: 9,
     severity_text: 'INFO',
     body: '',
-    attributes: {},
+    attributes: {
+      http_method: 'GET',
+      http_url: '/home',
+      http_status_code: 200,
+      http_user_agent: 'Mozilla/5.0...',
+      net_peer_ip: '192.168.1.1',
+    },
     event_name: 'server-start',
-  },
-  {
-    id: 3,
-    timestamp: '2024-01-15T10:30:45.123Z',
-    observed_timestamp: '2024-01-15T10:30:45.125Z',
-    service_name: 'api-gateway',
-    service_version: '1.2.3',
-    service_instance_id: 'api-gw-001',
-    trace_id: 'a1b2c3d4e5f6g7h8',
-    span_id: 'x1y2z3w4',
-    severity_number: 17,
-    severity_text: 'ERROR',
-    body: 'Database connection timeout after 30s',
-    event_name: 'db_connection_error',
-    attributes: {
-      'db.name': 'users_db',
-      'db.operation': 'SELECT',
-      'error.type': 'TimeoutError',
-    },
-  },
-  {
-    id: 2,
-    timestamp: '2024-01-15T10:30:42.456Z',
-    observed_timestamp: '2024-01-15T10:30:42.458Z',
-    service_name: 'user-service',
-    service_version: '2.1.0',
-    service_instance_id: 'user-svc-003',
-    trace_id: 'b2c3d4e5f6g7h8i9',
-    span_id: 'y2z3w4v5',
-    severity_number: 9,
-    severity_text: 'INFO',
-    body: 'User authentication successful',
-    event_name: 'auth_success',
-    attributes: {
-      'user.id': '12345',
-      'auth.method': 'jwt',
-      'request.duration_ms': 45,
-    },
   },
 ]
 
@@ -149,59 +124,63 @@ export function DataTable({
   const totalPages = Math.max(1, Math.ceil(count / pageSize))
 
   return (
-    <div class='flex-1 flex flex-col min-h-0'>
-      <div class='flex-1 min-h-0 overflow-x-auto overflow-y-auto'>
-        <table class='table table-sm table-zebra table-fixed w-full'>
-          <thead class='bg-base-200 sticky top-0 z-10'>
-            <tr>
-              <th class='w-10 sticky left-0 bg-base-200 z-10'>#</th>
-              {columns.length > 0
-                ? columns.map((key) => (
-                  <th key={key} class='whitespace-nowrap'>{key}</th>
-                ))
-                : <th class='text-left'>No columns</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 && (
+    <div class='flex flex-col h-full min-h-0 pb-15'>
+      <div class='flex-1 min-h-0 overflow-hidden'>
+        <div class='w-full overflow-x-auto overflow-y-auto h-full'>
+          <table class='table table-zebra w-full'>
+            <thead class='sticky top-0 z-20 bg-base-100'>
               <tr>
-                <td
-                  class='p-6 text-base-content/60'
-                  colSpan={Math.max(2, columns.length + 1)}
-                >
-                  No results to display
-                </td>
+                <th class='sticky left-0 bg-base-100 z-30 min-w-[3rem]'>#</th>
+                {columns.length > 0
+                  ? columns.map((key) => (
+                    <th key={key} class='whitespace-nowrap '>
+                      {key}
+                    </th>
+                  ))
+                  : <th class='text-left'>No columns</th>}
               </tr>
-            )}
-            {rows.map((row, index) => (
-              <tr key={(row.id as number) ?? `${index}`} class='hover'>
-                <td class='sticky left-0 bg-base-100 z-10'>
-                  {(page - 1) * pageSize + index + 1}
-                </td>
-                {columns.map((key, i) => {
-                  const value = (row as AnyRecord)[key]
-                  const isObj = typeof value === 'object' && value !== null
-                  return (
-                    <td
-                      key={i}
-                      class='max-w-xs truncate whitespace-nowrap align-top'
-                    >
-                      {isObj
-                        ? (
-                          <code class='font-mono text-xs text-base-content/70'>
-                            {JSON.stringify(value)}
-                          </code>
-                        )
-                        : (
-                          String(value ?? '')
-                        )}
-                    </td>
-                  )
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.length === 0 && (
+                <tr>
+                  <td
+                    class='p-6 text-base-content/60'
+                    colSpan={Math.max(2, columns.length + 1)}
+                  >
+                    No results to display
+                  </td>
+                </tr>
+              )}
+              {rows.map((row, index) => (
+                <tr key={(row.id as number) ?? `${index}`} class='hover'>
+                  <td class='sticky left-0 bg-base-100 z-20 tabular-nums'>
+                    {(page - 1) * pageSize + index + 1}
+                  </td>
+                  {columns.map((key, i) => {
+                    const value = (row as AnyRecord)[key]
+                    const isObj = typeof value === 'object' && value !== null
+                    return (
+                      <td
+                        key={i}
+                        class='whitespace-normal break-words md:whitespace-nowrap md:overflow-hidden md:text-ellipsis align-top'
+                      >
+                        {isObj
+                          ? (
+                            <code class='font-mono text-xs text-base-content/70 truncate inline-block max-w-[12rem]'>
+                              {JSON.stringify(value)}
+                            </code>
+                          )
+                          : (
+                            String(value ?? '')
+                          )}
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div class='bg-base-100 border-t border-base-300 px-4 sm:px-6 py-3 shrink-0'>
@@ -268,43 +247,170 @@ export function Header() {
   )
 }
 
+type Schema = {
+  dialect: string
+  tables: {
+    schema?: string
+    table: string
+    columns: { name: string; type: string; ordinal: number }[]
+  }[]
+}
+
+const groupeTables = (schema?: Schema) => {
+  if (!schema?.tables?.length) return {}
+
+  const groups: Record<string, Array<typeof schema.tables[0]>> = {}
+
+  for (const table of schema.tables) {
+    if (!table.table || !Array.isArray(table.columns)) continue
+
+    const schemaName = table.schema || 'default'
+    if (!groups[schemaName]) {
+      groups[schemaName] = []
+    }
+    groups[schemaName].push(table)
+  }
+
+  for (const schemaName in groups) {
+    groups[schemaName].sort((a, b) => a.table.localeCompare(b.table))
+  }
+
+  return groups
+}
+
 export function LeftPanel() {
+  const dep = url.params.dep || deployments.data?.[0]?.url
+  const schema: Schema = {
+    dialect: 'PostgreSQL',
+    tables: [],
+  }
+  const isLoading = false
+  const hasError = false
+
+  const grouped = groupeTables(schema)
   return (
     <aside class='hidden lg:flex w-72 bg-base-100 border-r border-base-300 flex-col shrink-0'>
       <div class='p-4 flex-1 overflow-y-auto space-y-1'>
-        <div class='text-xs text-base-content/60 mb-2'>Tables (2)</div>
-        <button
-          type='button'
-          class='flex items-center justify-between p-2 hover:bg-base-200 rounded-md cursor-pointer w-full text-left'
-        >
-          <span class='text-sm'>Users</span>
-          <ChevronsDown class='h-4 w-4' />
-        </button>
-        <button
-          type='button'
-          class='flex items-center justify-between p-2 hover:bg-base-200 rounded-md cursor-pointer w-full text-left'
-        >
-          <span class='text-sm'>Entries</span>
-          <ChevronsDown class='h-4 w-4' />
-        </button>
+        <div class='flex items-center justify-between mb-3'>
+          <div class='text-xs text-base-content/60'>
+            {isLoading
+              ? 'Loading...'
+              : hasError
+              ? 'Error loading schema'
+              : `Tables (${schema?.tables?.length || 0})`}
+          </div>
+          <div class='flex items-center gap-2'>
+            {dep && (
+              <button
+                type='button'
+                class='btn btn-ghost btn-xs'
+                disabled={isLoading}
+                title='Refresh schema'
+              >
+                <RefreshCw
+                  class={`h-3 w-3 ${isLoading ? 'animate-spin' : ''}`}
+                />
+              </button>
+            )}
+            <div class='text-xs text-base-content/40'>
+              {schema?.dialect}
+            </div>
+          </div>
+        </div>
+        {hasError && (
+          <div class='alert alert-error alert-sm'>
+            <AlertCircle class='h-4 w-4' />
+            <span class='text-sm'>Failed to load schema</span>
+          </div>
+        )}
+
+        {isLoading && (
+          <div class='flex items-center justify-center py-8'>
+            <span class='loading loading-spinner loading-sm'></span>
+          </div>
+        )}
+
+        {!isLoading && !hasError && schema && (
+          <div class='space-y-2'>
+            {Object.entries(grouped).map(([schemaName, tables]) => (
+              <div key={schemaName} class='space-y-1'>
+                {schemaName !== 'default' && (
+                  <div class='text-xs font-medium text-base-content px-2 py-1 bg-base-200/50 rounded'>
+                    {schemaName}
+                  </div>
+                )}
+
+                <div class='space-y-1'>
+                  {tables.map((table, index) => {
+                    return (
+                      <div
+                        tabindex={index}
+                        class='collapse collapse-arrow bg-base-200/50 rounded-sm items-center'
+                      >
+                        <div class='collapse-title font-semibold flex items-end justify-between gap-2 flex-1 min-w-0 py-2'>
+                          <div class='flex items-center gap-2'>
+                            <Table class='h-4 w-4 text-base-content/60 shrink-0' />
+                            <span class='text-sm truncate'>{table.table}</span>
+                          </div>
+                          <span class='badge badge-outline badge-xs'>
+                            {table.columns.length}
+                          </span>
+                        </div>
+                        <div class='collapse-content text-sm'>
+                          {table.columns
+                            .sort((a, b) => a.ordinal - b.ordinal)
+                            .map((column) => {
+                              return (
+                                <div class='flex items-center gap-2 p-1.5 rounded text-sm w-full text-left hover:bg-base-200/50'>
+                                  <span class='w-1 h-1 bg-base-content/40 rounded-full shrink-0' />
+                                  <span class='font-mono text-xs flex-1 truncate'>
+                                    {column.name}
+                                  </span>
+                                  <span class='badge badge-ghost badge-xs text-xs'>
+                                    {column.type}
+                                  </span>
+                                  <span class='text-xs text-base-content/40 tabular-nums hidden sm:block'>
+                                    {column.ordinal}
+                                  </span>
+                                </div>
+                              )
+                            })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+
+            {(!schema.tables || schema.tables.length === 0) && (
+              <div class='text-center py-8 text-base-content/50'>
+                <Table class='h-8 w-8 mx-auto mb-2 opacity-50' />
+                <p class='text-sm'>No tables found</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </aside>
   )
 }
 
-export function TabNavigation({
-  activeTab = 'tables',
-}: { activeTab?: 'tables' | 'queries' | 'logs' }) {
-  const tab = (t: 'tables' | 'queries' | 'logs') => (
-    <A
-      params={{ tab: t }}
-      role='tab'
-      class={`tab ${activeTab === t ? 'tab-active' : ''}`}
-    >
-      {t.charAt(0).toUpperCase() + t.slice(1)}
-    </A>
-  )
+const TabButton = ({ tabName }: { tabName: 'tables' | 'queries' | 'logs' }) => (
+  <A
+    params={{ tab: tabName }}
+    role='tab'
+    class={`tab whitespace-nowrap capitalize ${
+      url.params.tab === tabName ? 'tab-active' : ''
+    }`}
+  >
+    {tabName}
+  </A>
+)
 
+export function TabNavigation({
+  activeTab,
+}: { activeTab: 'tables' | 'queries' | 'logs' }) {
   const filterKeyOptions = [
     'service_name',
     'service_version',
@@ -315,19 +421,16 @@ export function TabNavigation({
 
   return (
     <div class='bg-base-100 border-b border-base-300 relative z-30'>
-      <div class='tabs tabs-bordered px-2 sm:px-4 md:px-6 h-full flex items-center gap-2 overflow-x-auto'>
-        <div
-          role='tablist'
-          class='tabs tabs-border overflow-x-auto whitespace-nowrap'
-        >
-          {tab('tables')}
-          {tab('queries')}
-          {tab('logs')}
+      <div class='flex flex-col sm:flex-row gap-2 px-2 sm:px-4 md:px-6 py-2'>
+        <div class='tabs tabs-lifted w-full overflow-x-auto'>
+          <TabButton tabName='tables' />
+          <TabButton tabName='queries' />
+          <TabButton tabName='logs' />
         </div>
 
-        <div class='ml-auto flex items-center gap-2 p-2'>
+        <div class='flex flex-wrap items-center gap-2 shrink-0'>
           {(activeTab === 'tables' || activeTab === 'logs') && (
-            <label class='input input-sm w-[42vw] sm:w-64 md:w-72 lg:w-80'>
+            <label class='input input-sm min-w-0 w-full sm:w-64'>
               <Search class='opacity-50' />
               <input type='search' class='grow' placeholder='Search' />
             </label>
@@ -342,9 +445,6 @@ export function TabNavigation({
               </span>
             </label>
           )}
-        </div>
-
-        <div class='ml-1 sm:ml-2 flex items-center gap-2 p-2'>
           {activeTab !== 'queries' && (
             <>
               <FilterMenu filterKeyOptions={filterKeyOptions} tag={activeTab} />
@@ -378,21 +478,15 @@ const severityConfig = {
 } as const
 
 const safeFormatTimestamp = (timestamp: string) => {
-  const d = new Date(timestamp)
-  if (isNaN(d.getTime())) return timestamp
-  try {
-    return d.toLocaleString(undefined, {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      fractionalSecondDigits: 3,
-    })
-  } catch {
-    return d.toISOString()
-  }
+  return new Date(timestamp).toLocaleString(undefined, {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    fractionalSecondDigits: 3,
+  })
 }
 
 const logThreads = [
@@ -408,93 +502,101 @@ export function LogsViewer() {
   const filteredLogs = logData
 
   return (
-    <div class='flex-1 min-h-0 flex flex-col'>
-      <div class='flex-1 min-h-0 overflow-x-auto overflow-y-auto'>
-        <table class='table table-zebra table-fixed w-full'>
-          <thead class='sticky top-0 z-10 bg-base-100'>
-            <tr class='border-b border-base-300'>
-              {logThreads.map((header) => (
-                <th
-                  key={header}
-                  class='text-left font-medium text-base-content/70 whitespace-nowrap'
-                >
-                  {header}
+    <div class='flex flex-col h-full min-h-0'>
+      <div class='flex-1 min-h-0 overflow-hidden'>
+        <div class='w-full overflow-x-auto overflow-y-auto h-full'>
+          <table class='table table-zebra w-full'>
+            <thead class='sticky top-0 z-20 bg-base-100'>
+              <tr class='border-b border-base-300'>
+                {logThreads.map((header) => (
+                  <th
+                    key={header}
+                    class='text-left font-medium text-base-content/70 whitespace-nowrap'
+                  >
+                    {header}
+                  </th>
+                ))}
+                <th class='text-left font-medium text-base-content/70 w-16'>
                 </th>
-              ))}
-              <th class='text-left font-medium text-base-content/70 w-16'></th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredLogs.map((log) => {
-              const conf =
-                severityConfig[log.severity_text as keyof typeof severityConfig]
-              const SeverityIcon = conf?.icon || Info
-              const severityColor = conf?.color || 'text-base-content'
-              const severityBg = conf?.bg || 'bg-base-300/10'
+              </tr>
+            </thead>
+            <tbody>
+              {filteredLogs.map((log) => {
+                const conf = severityConfig[
+                  log.severity_text as keyof typeof severityConfig
+                ]
+                const SeverityIcon = conf?.icon || Info
+                const severityColor = conf?.color || 'text-base-content'
+                const severityBg = conf?.bg || 'bg-base-300/10'
 
-              return (
-                <tr
-                  key={log.id}
-                  class='hover:bg-base-200/50 border-b border-base-300/50'
-                >
-                  <td class='font-mono text-xs sm:text-sm text-base-content/70 whitespace-nowrap'>
-                    <div class='flex items-center gap-2 truncate'>
-                      <Clock class='w-3 h-3 shrink-0' />
-                      {safeFormatTimestamp(log.timestamp)}
-                    </div>
-                  </td>
-                  <td>
-                    <div
-                      class={`badge badge-outline ${severityColor} ${severityBg} border-current/20`}
-                    >
-                      <SeverityIcon class='w-3 h-3 mr-1' />
-                      {log.severity_text}
-                    </div>
-                  </td>
-                  <td class='max-w-md'>
-                    <div class='flex flex-col'>
-                      <span class='text-sm text-base-content'>
-                        {log.event_name}
-                      </span>
-                      <span class='text-xs text-base-content/50 truncate inline-block max-w-[25ch]'>
-                        {log.body}
-                      </span>
-                    </div>
-                  </td>
-                  <td class='font-mono text-[10px] sm:text-xs text-base-content/50 truncate whitespace-nowrap hidden md:table-cell'>
-                    {log.trace_id}
-                  </td>
-                  <td class='font-mono text-[10px] sm:text-xs text-base-content/50 truncate whitespace-nowrap hidden md:table-cell'>
-                    {log.span_id}
-                  </td>
-                  <td class='text-[10px] sm:text-xs text-base-content/60 hidden lg:table-cell'>
-                    <code class='font-mono truncate inline-block max-w-[50ch] whitespace-nowrap'>
-                      {JSON.stringify(log.attributes ?? {}, null, 2)}
-                    </code>
-                  </td>
-                  <td class='align-middle'>
-                    <div class='flex items-center gap-1 sm:gap-2'>
-                      <button
-                        type='button'
-                        class='btn btn-ghost btn-xs sm:btn-sm'
-                        aria-label='Toggle details'
+                return (
+                  <tr
+                    key={log.id}
+                    class='hover:bg-base-200/50 border-b border-base-300/50'
+                  >
+                    <td class='font-mono text-xs text-base-content/70 tabular-nums'>
+                      <div class='flex items-center gap-2 whitespace-normal break-words md:whitespace-nowrap'>
+                        <Clock class='w-3 h-3 shrink-0' />
+                        <span class='break-all md:break-normal'>
+                          {safeFormatTimestamp(log.timestamp)}
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <div
+                        class={`badge badge-outline ${severityColor} ${severityBg} border-current/20`}
                       >
-                        <Eye class='w-4 h-4' />
-                      </button>
-                      <button
-                        type='button'
-                        class='btn btn-ghost btn-xs sm:btn-sm'
-                        aria-label='More actions'
-                      >
-                        <MoreHorizontal class='w-4 h-4' />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+                        <SeverityIcon class='w-3 h-3 mr-1' />
+                        {log.severity_text}
+                      </div>
+                    </td>
+                    <td class='min-w-[12rem]'>
+                      <div class='flex flex-col'>
+                        <span class='text-sm text-base-content font-medium'>
+                          {log.event_name}
+                        </span>
+                        {log.body && (
+                          <span class='text-xs text-base-content/50 whitespace-normal break-words mt-1'>
+                            {log.body}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td class='font-mono text-xs text-base-content/50 whitespace-normal break-all md:whitespace-nowrap hidden md:table-cell'>
+                      {log.trace_id}
+                    </td>
+                    <td class='font-mono text-xs text-base-content/50 whitespace-normal break-all md:whitespace-nowrap hidden md:table-cell'>
+                      {log.span_id}
+                    </td>
+                    <td class='text-xs text-base-content/60 hidden lg:table-cell'>
+                      <code class='font-mono truncate inline-block max-w-[12rem]'>
+                        {JSON.stringify(log.attributes ?? {}, null, 2)}
+                      </code>
+                    </td>
+                    <td class='align-middle'>
+                      <div class='flex items-center gap-1'>
+                        <button
+                          type='button'
+                          class='btn btn-ghost btn-xs'
+                          aria-label='Toggle details'
+                        >
+                          <Eye class='w-4 h-4' />
+                        </button>
+                        <button
+                          type='button'
+                          class='btn btn-ghost btn-xs'
+                          aria-label='More actions'
+                        >
+                          <MoreHorizontal class='w-4 h-4' />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {filteredLogs.length === 0 && (
@@ -523,7 +625,7 @@ const TabViews = {
 }
 
 const Drawer = () => (
-  <div class='drawer drawer-end'>
+  <div class='drawer drawer-end z-40'>
     <input id='my-drawer-4' type='checkbox' class='drawer-toggle' />
     <div class='drawer-side'>
       <label

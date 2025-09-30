@@ -1,5 +1,5 @@
 import { ArrowUpDown, Filter, Plus } from 'lucide-preact'
-import { A, navigate, url } from '../lib/router.tsx'
+import { navigate, url } from '../lib/router.tsx'
 
 type FilterRow = { idx: number; key: string; op: string; value: string }
 
