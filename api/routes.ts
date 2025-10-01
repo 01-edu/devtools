@@ -2,6 +2,7 @@ import { makeRouter, route } from '/api/lib/router.ts'
 import type { RequestContext } from '/api/lib/context.ts'
 import { handleGoogleCallback, initiateGoogleAuth } from './auth.ts'
 import {
+  DatabaseSchemasCollection,
   DeploymentDef,
   DeploymentsCollection,
   ProjectsCollection,
@@ -332,6 +333,37 @@ const defs = {
     input: OBJ({ url: STR('The URL of the deployment') }),
     output: deploymentOutput,
     description: 'Regenerate a deployment token',
+  }),
+  'GET/api/deployment/schema': route({
+    authorize: withUserSession,
+    fn: (_ctx, { url }) => {
+      const dep = DeploymentsCollection.get(url)
+      if (!dep) throw respond.NotFound({ message: 'Deployment not found' })
+      if (!dep.databaseEnabled) {
+        throw respond.BadRequest({
+          message: 'Database not enabled for deployment',
+        })
+      }
+      const schema = DatabaseSchemasCollection.get(url)
+      if (!schema) throw respond.NotFound({ message: 'Schema not cached yet' })
+      return schema
+    },
+    input: OBJ({ url: STR('Deployment URL') }),
+    output: OBJ({
+      deploymentUrl: STR('Deployment url (matches deployment.url)'),
+      dialect: STR('Detected SQL dialect'),
+      refreshedAt: STR('ISO datetime of last refresh'),
+      tables: ARR(OBJ({
+        columns: ARR(OBJ({
+          name: STR('Column name'),
+          type: STR('Column data type'),
+          ordinal: NUM('Column ordinal position'),
+        })),
+        schema: optional(STR('Schema name')),
+        table: STR('Table name'),
+      })),
+    }, 'Database schema cache for a deployment'),
+    description: 'Get cached database schema for a deployment',
   }),
   'DELETE/api/deployment': route({
     authorize: withAdminSession,
