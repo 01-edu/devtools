@@ -44,12 +44,13 @@ const navigateUrl = (to: string, replace = false) => {
   dispatchNavigation()
 }
 
+type ParamPrimitive = string | number | boolean
+type ParamValue = ParamPrimitive | null | undefined | ParamPrimitive[]
 type GetUrlProps = {
   href?: string
   hash?: string
-  params?:
-    | URLSearchParams
-    | Record<string, string | number | boolean | null | undefined>
+  // params supports arrays to allow multiple identical keys: { tag: ['a','b'] } -> ?tag=a&tag=b
+  params?: URLSearchParams | Record<string, ParamValue>
 }
 
 const getUrl = ({ href, hash, params }: GetUrlProps) => {
@@ -63,6 +64,19 @@ const getUrl = ({ href, hash, params }: GetUrlProps) => {
     return url
   }
   for (const [key, value] of Object.entries(params)) {
+    if (Array.isArray(value)) {
+      // Remove existing then append each to preserve ordering
+      url.searchParams.delete(key)
+      for (const v of value) {
+        if (v === false || v == null) continue // skip deletions inside arrays
+        if (v === true) {
+          url.searchParams.append(key, '')
+        } else {
+          url.searchParams.append(key, v)
+        }
+      }
+      continue
+    }
     if (value === true) {
       url.searchParams.set(key, '')
     } else if (value === false || value == null) {
@@ -192,5 +206,9 @@ export const url = {
     return hashSignal.value
   },
   params,
+  // Retrieve all values (including duplicates) for a given key
+  getAll: (key: string) => urlSignal.value.searchParams.getAll(key),
+  // All param entries preserving duplicates & order
+  paramEntries: () => [...urlSignal.value.searchParams.entries()],
   equals: (url: URL) => isCurrentURL(url),
 }

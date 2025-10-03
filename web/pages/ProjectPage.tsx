@@ -1,20 +1,11 @@
-import { A, navigate, url } from '../lib/router.tsx'
-import {
-  PageContent,
-  PageHeader,
-  PageLayoutWithSideBar,
-} from '../components/Layout.tsx'
-import { DeploymentPage } from './project/DeploymentPage.tsx'
-import { TasksPage } from './project/TaskPage.tsx'
-import { SettingsPage } from './project/SettingsPage.tsx'
-import { api } from '../lib/api.ts'
 import { effect } from '@preact/signals'
-
-const pageMap = {
-  deployment: DeploymentPage,
-  tasks: TasksPage,
-  settings: SettingsPage,
-}
+import { api } from '../lib/api.ts'
+import { navigate, url } from '../lib/router.tsx'
+import { HardDrive, ListTodo } from 'lucide-preact'
+import { Sidebar, SidebarItem } from '../components/SideBar.tsx'
+import { DeploymentPage } from './DeploymentPage.tsx'
+import { user } from '../lib/session.ts'
+import { SettingsPage } from './project/SettingsPage.tsx'
 
 export const deployments = api['GET/api/project/deployments'].signal()
 
@@ -29,46 +20,40 @@ effect(() => {
   }
 })
 
-export function ProjectPage() {
-  const { nav } = url.params
+export const sidebarItems: Record<string, SidebarItem> = {
+  'deployment': {
+    icon: HardDrive,
+    label: 'Deployment',
+    component: DeploymentPage,
+  },
+  'tasks': { icon: ListTodo, label: 'Tasks', component: DeploymentPage },
+}
 
-  const Component = pageMap[nav as keyof typeof pageMap]
+export function ProjectPage() {
+  const sbi = url.params.sbi || Object.keys(sidebarItems)[0]
+  const Component = sidebarItems[sbi as keyof typeof sidebarItems]?.component ||
+    (user.data?.isAdmin && sbi === 'settings' ? SettingsPage : null)
+
   if (!Component) {
-    navigate({ params: { nav: 'deployment' } })
     return null
   }
 
-  if (project.pending) {
-    return (
-      <PageLayoutWithSideBar>
-        <div class='text-center py-10'>Loading...</div>
-      </PageLayoutWithSideBar>
-    )
-  }
-
-  if (!project.data) {
-    return (
-      <>
-        <PageHeader>
-          <h1 class='text-xl sm:text-2xl font-semibold text-text'>
-            Deployments
-          </h1>
-        </PageHeader>
-        <PageContent>
-          <div class='text-center py-10'>
-            <p class='text-text2'>
-              Please select a project to view deployments.
-            </p>
-            <A href='/projects' class='btn btn-primary mt-4'>Go to Projects</A>
-          </div>
-        </PageContent>
-      </>
-    )
+  if (!project.pending && !project.data) {
+    navigate({ href: '/projects', params: undefined, replace: true })
+    return null
   }
 
   return (
-    <PageLayoutWithSideBar>
-      <Component project={project.data} />
-    </PageLayoutWithSideBar>
+    <div class='drawer lg:drawer-open'>
+      <input id='drawer-toggle' type='checkbox' class='drawer-toggle' />
+      <div class='drawer-content flex flex-col'>
+        <Component />
+      </div>
+      <Sidebar
+        sidebarItems={sidebarItems}
+        sbi={sbi}
+        title={project.data?.name}
+      />
+    </div>
   )
 }
