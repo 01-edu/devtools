@@ -1,4 +1,4 @@
-import { ARR, BOOL, OBJ, optional, STR } from './lib/validator.ts'
+import { ARR, BOOL, NUM, OBJ, optional, STR } from './lib/validator.ts'
 import { Asserted } from './lib/router.ts'
 import { createCollection } from './lib/json_store.ts'
 
@@ -39,6 +39,25 @@ export const DeploymentDef = OBJ({
 }, 'The deployment schema definition')
 export type Deployment = Asserted<typeof DeploymentDef>
 
+// A flattened representation of a remote SQL database logical schema for a deployment
+// "dialect" is a best-effort detection (postgres | mysql | sqlite | sqlserver | oracle | duckdb | unknown)
+// "tables" is a JSON stringified array of { schema?, table, columns: [{ name, type, ordinal }] }
+export const DatabaseSchemaDef = OBJ({
+  deploymentUrl: STR('Deployment url (matches deployment.url)'),
+  dialect: STR('Detected SQL dialect'),
+  refreshedAt: STR('ISO datetime of last refresh'),
+  tables: ARR(OBJ({
+    columns: ARR(OBJ({
+      name: STR(),
+      type: STR(),
+      ordinal: NUM(),
+    })),
+    schema: optional(STR()),
+    table: STR(),
+  })),
+}, 'Database schema cache for a deployment')
+export type DatabaseSchema = Asserted<typeof DatabaseSchemaDef>
+
 export const UsersCollection = await createCollection<User, 'userEmail'>(
   { name: 'users', primaryKey: 'userEmail' },
 )
@@ -60,3 +79,8 @@ export const DeploymentsCollection = await createCollection<
 >(
   { name: 'deployments', primaryKey: 'url' },
 )
+
+export const DatabaseSchemasCollection = await createCollection<
+  DatabaseSchema,
+  'deploymentUrl'
+>({ name: 'db_schemas', primaryKey: 'deploymentUrl' })

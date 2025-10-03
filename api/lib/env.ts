@@ -39,3 +39,8 @@ export const CLICKHOUSE_PASSWORD = env.CLICKHOUSE_PASSWORD
 if (!CLICKHOUSE_PASSWORD) {
   throw Error('CLICKHOUSE_PASSWORD: field required in the env')
 }
+
+// Optional interval (ms) for refreshing external SQL database schemas
+// Defaults to 24 hours
+export const DB_SCHEMA_REFRESH_MS = Number(env.DB_SCHEMA_REFRESH_MS) ||
+  24 * 60 * 60 * 1000
