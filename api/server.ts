@@ -9,6 +9,7 @@ import { type RequestContext, requestContext } from '/api/lib/context.ts'
 import { join } from 'jsr:@std/path/join'
 import { serveDir } from 'jsr:@std/http/file-server'
 import { PORT } from './lib/env.ts'
+import { startSchemaRefreshLoop } from './sql.ts'
 
 const isProd = Deno.args.includes('--env=prod')
 const staticDir = isProd
@@ -96,6 +97,13 @@ export const fetch = async (req: Request) => {
 }
 
 log.info('server-start')
+
+// Start periodic DB schema refresh (non-blocking)
+try {
+  startSchemaRefreshLoop()
+} catch (err) {
+  log.error('schema-loop-start-failed', { err })
+}
 
 Deno.serve({
   port: PORT,
