@@ -24,6 +24,7 @@ import {
 } from './click-house-client.ts'
 import { decryptMessage, encryptMessage } from './user.ts'
 import { log } from './lib/log.ts'
+import { table } from 'node:console'
 
 const withUserSession = ({ user }: RequestContext) => {
   if (!user) throw Error('Missing user session')
@@ -416,6 +417,28 @@ const defs = {
     }),
     output: ARR(LogSchema, 'List of logs'),
     description: 'Get logs from ClickHouse',
+  }),
+  'GET/api/deployment/table/data': route({
+    fn: (_,{deployment,table,...input}) => {
+      const depData = DeploymentsCollection.get(deployment)
+      if (!deployment) {
+        throw respond.NotFound({ message: 'Deployment not found' })
+      }
+    },
+    input: OBJ({
+      deployment: STR(),
+      table: STR(),
+      filter: ARR(OBJ({
+        key: STR(),
+        comparator: LIST([]),
+        value: STR(),
+      })),
+      sort: ARR(OBJ({
+        key: STR(),
+        value: STR(),
+      })),
+      search: STR(),
+    }),
   }),
 } as const
 
