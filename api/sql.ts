@@ -25,27 +25,10 @@ async function runSQL(
 // Dialect detection attempts (run first successful)
 const DETECTION_QUERIES: { name: string; sql: string; matcher: RegExp }[] = [
   {
-    name: 'postgres',
-    sql: 'SELECT version() as v',
-    matcher: /postgres|cockroach/i,
-  },
-  { name: 'mysql', sql: 'SELECT VERSION() as v', matcher: /mysql|mariadb/i },
-  {
     name: 'sqlite',
     sql: 'SELECT sqlite_version() as v',
     matcher: /\d+\.\d+\.\d+/,
   },
-  {
-    name: 'sqlserver',
-    sql: 'SELECT @@VERSION as v',
-    matcher: /microsoft sql server/i,
-  },
-  {
-    name: 'oracle',
-    sql: 'SELECT banner as v FROM v$version WHERE ROWNUM = 1',
-    matcher: /oracle/i,
-  },
-  { name: 'duckdb', sql: 'PRAGMA version', matcher: /duckdb/i },
 ]
 
 async function detectDialect(endpoint: string, token: string): Promise<string> {
@@ -65,16 +48,6 @@ async function detectDialect(endpoint: string, token: string): Promise<string> {
 // Introspection queries per dialect returning columns list
 // Standardized output fields: table_schema (nullable), table_name, column_name, data_type, ordinal_position
 const INTROSPECTION: Record<string, string> = {
-  postgres:
-    `SELECT table_schema, table_name, column_name, data_type, ordinal_position FROM information_schema.columns WHERE table_schema NOT IN ('pg_catalog','information_schema') ORDER BY table_schema, table_name, ordinal_position`,
-  mysql:
-    `SELECT table_schema, table_name, column_name, data_type, ordinal_position FROM information_schema.columns WHERE table_schema NOT IN ('mysql','information_schema','performance_schema','sys') ORDER BY table_schema, table_name, ordinal_position`,
-  sqlserver:
-    `SELECT table_schema = TABLE_SCHEMA, table_name = TABLE_NAME, column_name = COLUMN_NAME, data_type = DATA_TYPE, ordinal_position = ORDINAL_POSITION FROM INFORMATION_SCHEMA.COLUMNS ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION`,
-  oracle:
-    `SELECT table_schema = owner AS table_schema, table_name, column_name, data_type, column_id AS ordinal_position FROM all_tab_columns ORDER BY owner, table_name, column_id`,
-  duckdb:
-    `SELECT table_schema, table_name, column_name, data_type, ordinal_position FROM information_schema.columns ORDER BY table_schema, table_name, ordinal_position`,
   sqlite:
     `SELECT NULL AS table_schema, m.name AS table_name, p.name AS column_name, p.type AS data_type, p.cid + 1 AS ordinal_position FROM sqlite_master m JOIN pragma_table_info(m.name) p WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' ORDER BY m.name, p.cid`,
   unknown:
