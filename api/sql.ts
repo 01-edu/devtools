@@ -1,4 +1,8 @@
-import { DatabaseSchemasCollection, DeploymentsCollection } from './schema.ts'
+import {
+  DatabaseSchemasCollection,
+  Deployment,
+  DeploymentsCollection,
+} from './schema.ts'
 import { DB_SCHEMA_REFRESH_MS } from './lib/env.ts'
 import { log } from './lib/log.ts'
 
@@ -128,4 +132,95 @@ export function startSchemaRefreshLoop() {
     refreshAllSchemas()
   }, DB_SCHEMA_REFRESH_MS) as unknown as number
   log.info('schema-refresh-loop-started', { everyMs: DB_SCHEMA_REFRESH_MS })
+}
+
+type FetchTablesParams = {
+  deployment: Deployment
+  table: string
+  filter: { key: string; comparator: string; value: string }[]
+  sort: { key: string; order: 'asc' | 'desc' }[]
+  limit: string
+  offset: string
+  search: string
+}
+
+const constructWhereClause = (
+  params: FetchTablesParams,
+  columnsMap: Map<string, ColumnInfo>,
+) => {
+  const whereClauses: string[] = []
+  if (params.filter.length) {
+    for (const filter of params.filter) {
+      const { key, comparator, value } = filter
+      if (
+        !['=', '!=', '<', '<=', '>', '>=', 'LIKE', 'ILIKE'].includes(comparator)
+      ) {
+        throw new Error(`Invalid comparator: ${comparator}`)
+      }
+      const column = columnsMap.get(key)
+      if (!column) {
+        throw new Error(`Invalid filter column: ${key}`)
+      }
+      const safeValue = value.replace(/'/g, "''")
+      whereClauses.push(`${key} ${comparator} '${safeValue}'`)
+    }
+  }
+  if (params.search) {
+    const searchClauses = Array.from(columnsMap.values()).map((col) => {
+      return `${col.name} LIKE '%${params.search.replace(/'/g, "''")}%'`
+    })
+    if (searchClauses.length) {
+      whereClauses.push(`(${searchClauses.join(' OR ')})`)
+    }
+  }
+  return (whereClauses.length ? 'WHERE ' + whereClauses.join(' AND ') : '')
+    .trim()
+}
+
+const constructOrderByClause = (
+  params: FetchTablesParams,
+  columnsMap: Map<string, ColumnInfo>,
+) => {
+  if (!params.sort.length) return ''
+  const orderClauses: string[] = []
+  for (const sort of params.sort) {
+    const { key, order } = sort
+    if (!['asc', 'desc'].includes(order.toLowerCase())) {
+      throw new Error(`Invalid sort order: ${order}`)
+    }
+    const column = columnsMap.get(key)
+    if (!column) {
+      throw new Error(`Invalid sort column: ${key}`)
+    }
+    orderClauses.push(`${key} ${order.toUpperCase()}`)
+  }
+  return (orderClauses.length ? 'ORDER BY ' + orderClauses.join(', ') : '')
+    .trim()
+}
+
+export const fetchTablesData = async (
+  params: FetchTablesParams,
+  columnsMap: Map<string, ColumnInfo>,
+) => {
+  const { sqlEndpoint, sqlToken } = params.deployment
+  if (!sqlToken || !sqlEndpoint) {
+    throw new Error('Missing SQL endpoint or token')
+  }
+  const whereClause = constructWhereClause(params, columnsMap)
+  const orderByClause = constructOrderByClause(params, columnsMap)
+
+  let limitOffsetClause = ''
+  if (params.limit && parseInt(params.limit) > 0) {
+    limitOffsetClause += `LIMIT ${params.limit} `
+
+    if (params.offset && parseInt(params.offset) >= 0) {
+      limitOffsetClause += `OFFSET ${params.offset} `
+    }
+  }
+
+  const query =
+    `SELECT * FROM ${params.table} ${whereClause} ${orderByClause} ${limitOffsetClause}`
+      .trim()
+  const data = await runSQL(sqlEndpoint, sqlToken, query)
+  return data
 }

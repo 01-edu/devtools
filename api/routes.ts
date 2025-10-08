@@ -25,6 +25,7 @@ import {
 import { decryptMessage, encryptMessage } from './user.ts'
 import { log } from './lib/log.ts'
 import { table } from 'node:console'
+import { fetchTablesData } from './sql.ts'
 
 const withUserSession = ({ user }: RequestContext) => {
   if (!user) throw Error('Missing user session')
@@ -418,26 +419,49 @@ const defs = {
     output: ARR(LogSchema, 'List of logs'),
     description: 'Get logs from ClickHouse',
   }),
-  'GET/api/deployment/table/data': route({
-    fn: (_,{deployment,table,...input}) => {
+  'POST/api/deployment/table/data': route({
+    fn: (_, { deployment, table, ...input }) => {
       const depData = DeploymentsCollection.get(deployment)
       if (!deployment) {
         throw respond.NotFound({ message: 'Deployment not found' })
       }
-      // Deployments
+
+      if (!depData?.databaseEnabled) {
+        throw respond.BadRequest({
+          message: 'Database not enabled for deployment',
+        })
+      }
+
+      const schema = DatabaseSchemasCollection.get(deployment)
+      if (!schema) throw respond.NotFound({ message: 'Schema not cached yet' })
+      const tableDef = schema.tables.find((t) => t.table === table)
+      if (!tableDef) {
+        throw respond.NotFound({ message: 'Table not found in schema' })
+      }
+
+      const columnsMap = new Map(
+        tableDef.columns.map((col) => [col.name, col]),
+      )
+
+      return fetchTablesData(
+        { ...input, deployment: depData, table },
+        columnsMap,
+      )
     },
     input: OBJ({
       deployment: STR(),
       table: STR(),
       filter: ARR(OBJ({
         key: STR(),
-        comparator: LIST([]),
+        comparator: LIST(['=', '!=', '<', '<=', '>', '>=', 'LIKE', 'ILIKE']),
         value: STR(),
       })),
       sort: ARR(OBJ({
         key: STR(),
-        value: STR(),
+        order: LIST(['asc', 'desc']),
       })),
+      limit: STR(),
+      offset: STR(),
       search: STR(),
     }),
   }),
