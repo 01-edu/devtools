@@ -24,7 +24,6 @@ import {
 } from './click-house-client.ts'
 import { decryptMessage, encryptMessage } from './user.ts'
 import { log } from './lib/log.ts'
-import { table } from 'node:console'
 import { fetchTablesData } from './sql.ts'
 
 const withUserSession = ({ user }: RequestContext) => {
@@ -419,14 +418,14 @@ const defs = {
     output: ARR(LogSchema, 'List of logs'),
     description: 'Get logs from ClickHouse',
   }),
-  'POST/api/deployment/table/data': route({
+  'GET/api/deployment/table/data': route({
     fn: (_, { deployment, table, ...input }) => {
-      const depData = DeploymentsCollection.get(deployment)
-      if (!deployment) {
+      const dep = DeploymentsCollection.get(deployment)
+      if (!dep) {
         throw respond.NotFound({ message: 'Deployment not found' })
       }
 
-      if (!depData?.databaseEnabled) {
+      if (!dep?.databaseEnabled) {
         throw respond.BadRequest({
           message: 'Database not enabled for deployment',
         })
@@ -444,25 +443,34 @@ const defs = {
       )
 
       return fetchTablesData(
-        { ...input, deployment: depData, table },
+        { ...input, deployment: dep, table },
         columnsMap,
       )
     },
     input: OBJ({
-      deployment: STR(),
-      table: STR(),
-      filter: ARR(OBJ({
-        key: STR(),
-        comparator: LIST(['=', '!=', '<', '<=', '>', '>=', 'LIKE', 'ILIKE']),
-        value: STR(),
-      })),
-      sort: ARR(OBJ({
-        key: STR(),
-        order: LIST(['asc', 'desc']),
-      })),
-      limit: STR(),
-      offset: STR(),
-      search: STR(),
+      deployment: STR("The deployment's URL"),
+      table: STR('The table name'),
+      filter: ARR(
+        OBJ({
+          key: STR('The column to filter by'),
+          comparator: LIST(
+            ['=', '!=', '<', '<=', '>', '>=', 'LIKE', 'ILIKE'],
+            'The comparison operator',
+          ),
+          value: STR('The value to filter by'),
+        }),
+        'The filtering criteria',
+      ),
+      sort: ARR(
+        OBJ({
+          key: STR('The column to sort by'),
+          order: LIST(['ASC', 'DESC'], 'The sort order (ASC or DESC)'),
+        }),
+        'The sorting criteria',
+      ),
+      limit: STR('The maximum number of rows to return'),
+      offset: STR('The number of rows to skip'),
+      search: STR('The search term to filter by'),
     }),
   }),
 } as const

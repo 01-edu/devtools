@@ -138,7 +138,7 @@ type FetchTablesParams = {
   deployment: Deployment
   table: string
   filter: { key: string; comparator: string; value: string }[]
-  sort: { key: string; order: 'asc' | 'desc' }[]
+  sort: { key: string; order: 'ASC' | 'DESC' }[]
   limit: string
   offset: string
   search: string
@@ -152,29 +152,23 @@ const constructWhereClause = (
   if (params.filter.length) {
     for (const filter of params.filter) {
       const { key, comparator, value } = filter
-      if (
-        !['=', '!=', '<', '<=', '>', '>=', 'LIKE', 'ILIKE'].includes(comparator)
-      ) {
-        throw new Error(`Invalid comparator: ${comparator}`)
-      }
       const column = columnsMap.get(key)
       if (!column) {
-        throw new Error(`Invalid filter column: ${key}`)
+        throw Error(`Invalid filter column: ${key}`)
       }
       const safeValue = value.replace(/'/g, "''")
       whereClauses.push(`${key} ${comparator} '${safeValue}'`)
     }
   }
   if (params.search) {
-    const searchClauses = Array.from(columnsMap.values()).map((col) => {
+    const searchClauses = columnsMap.values().map((col) => {
       return `${col.name} LIKE '%${params.search.replace(/'/g, "''")}%'`
-    })
+    }).toArray()
     if (searchClauses.length) {
       whereClauses.push(`(${searchClauses.join(' OR ')})`)
     }
   }
-  return (whereClauses.length ? 'WHERE ' + whereClauses.join(' AND ') : '')
-    .trim()
+  return whereClauses.length ? 'WHERE ' + whereClauses.join(' AND ') : ''
 }
 
 const constructOrderByClause = (
@@ -185,42 +179,40 @@ const constructOrderByClause = (
   const orderClauses: string[] = []
   for (const sort of params.sort) {
     const { key, order } = sort
-    if (!['asc', 'desc'].includes(order.toLowerCase())) {
-      throw new Error(`Invalid sort order: ${order}`)
-    }
     const column = columnsMap.get(key)
     if (!column) {
-      throw new Error(`Invalid sort column: ${key}`)
+      throw Error(`Invalid sort column: ${key}`)
     }
-    orderClauses.push(`${key} ${order.toUpperCase()}`)
+    orderClauses.push(`${key} ${order}`)
   }
-  return (orderClauses.length ? 'ORDER BY ' + orderClauses.join(', ') : '')
-    .trim()
+  return orderClauses.length ? 'ORDER BY ' + orderClauses.join(', ') : ''
 }
 
-export const fetchTablesData = async (
+export const fetchTablesData = (
   params: FetchTablesParams,
   columnsMap: Map<string, ColumnInfo>,
 ) => {
   const { sqlEndpoint, sqlToken } = params.deployment
   if (!sqlToken || !sqlEndpoint) {
-    throw new Error('Missing SQL endpoint or token')
+    throw Error('Missing SQL endpoint or token')
   }
   const whereClause = constructWhereClause(params, columnsMap)
   const orderByClause = constructOrderByClause(params, columnsMap)
 
   let limitOffsetClause = ''
-  if (params.limit && parseInt(params.limit) > 0) {
-    limitOffsetClause += `LIMIT ${params.limit} `
+  const limit = Math.floor(Number(params.limit))
 
-    if (params.offset && parseInt(params.offset) >= 0) {
-      limitOffsetClause += `OFFSET ${params.offset} `
+  if (params.limit && limit > 0) {
+    limitOffsetClause += `LIMIT ${limit}`
+
+    const offset = Math.floor(Number(params.offset))
+    if (params.offset && offset >= 0) {
+      limitOffsetClause += ` OFFSET ${offset}`
     }
   }
 
   const query =
     `SELECT * FROM ${params.table} ${whereClause} ${orderByClause} ${limitOffsetClause}`
-      .trim()
-  const data = await runSQL(sqlEndpoint, sqlToken, query)
-  return data
+
+  return runSQL(sqlEndpoint, sqlToken, query)
 }
