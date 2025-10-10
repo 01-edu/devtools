@@ -18,13 +18,74 @@ import {
   XCircle,
 } from 'lucide-preact'
 import { deployments, sidebarItems } from './ProjectPage.tsx'
-import { FilterMenu, SortMenu } from '../components/Filtre.tsx'
+import {
+  FilterMenu,
+  parseFilters,
+  parseSort,
+  SortMenu,
+} from '../components/Filtre.tsx'
+import { api } from '../lib/api.ts'
+import { effect } from '@preact/signals'
 
 type AnyRecord = Record<string, unknown>
 
 const onRun = async () => {
   // TODO: call backend here
 }
+
+const schema = api['GET/api/deployment/schema'].signal()
+
+effect(() => {
+  const dep = url.params.dep
+  if (dep) {
+    schema.fetch({ url: dep })
+  }
+})
+
+const comparators = {
+  'eq': '=',
+  'neq': '!=',
+  'lt': '<',
+  'lte': '<=',
+  'gt': '>',
+  'gte': '>=',
+  'like': 'LIKE',
+  'ilike': 'ILIKE',
+} as const
+
+const tableData = api['POST/api/deployment/table/data'].signal()
+type Order = 'ASC' | 'DESC'
+
+effect(() => {
+  const { dep, tab, table, tq } = url.params
+  if (dep && tab === 'tables') {
+    const tableName = table || schema.data?.tables?.[0]?.table
+    if (tableName) {
+      const filterRows = parseFilters('t').filter((r) =>
+        r.key !== 'key' && r.value
+      ).map((r) => ({
+        key: r.key,
+        comparator: comparators[r.op as keyof typeof comparators],
+        value: r.value,
+      }))
+      const sortRows = parseSort('t').filter((r) =>
+        r.key !== 'key' && r.key && r.dir
+      ).map((r) => ({
+        key: r.key,
+        order: r.dir === 'asc' ? 'ASC' : 'DESC' as Order,
+      }))
+      tableData.fetch({
+        deployment: dep,
+        table: tableName,
+        filter: filterRows,
+        sort: sortRows,
+        search: tq || '',
+        limit: '50',
+        offset: '0',
+      })
+    }
+  }
+})
 
 export function QueryEditor() {
   const query = url.params.q || ''
@@ -76,7 +137,7 @@ export function QueryEditor() {
       </div>
 
       <div class='flex-1 min-h-0 overflow-hidden'>
-        <DataTable data={results} />
+        <DataTable />
       </div>
     </div>
   )
@@ -107,19 +168,18 @@ const logData = [
 ]
 
 export function DataTable({
-  data = logData as AnyRecord[],
   page = 1,
   pageSize = 50,
   totalRows,
 }: {
-  data?: AnyRecord[]
   page?: number
   pageSize?: number
   totalRows?: number
 }) {
+  const { tab } = url.params
+  const data = tab === 'tables' ? tableData.data || [] : []
   const columns = Object.keys(data[0] || {})
-
-  const rows = data ?? []
+  const rows = data || []
   const count = totalRows ?? rows.length
   const totalPages = Math.max(1, Math.ceil(count / pageSize))
 
@@ -280,57 +340,54 @@ const groupeTables = (schema?: Schema) => {
 
 export function LeftPanel() {
   const dep = url.params.dep || deployments.data?.[0]?.url
-  const schema: Schema = {
-    dialect: 'PostgreSQL',
-    tables: [],
-  }
-  const isLoading = false
-  const hasError = false
 
-  const grouped = groupeTables(schema)
+  const grouped = groupeTables(schema.data)
   return (
     <aside class='hidden lg:flex w-72 bg-base-100 border-r border-base-300 flex-col shrink-0'>
       <div class='p-4 flex-1 overflow-y-auto space-y-1'>
         <div class='flex items-center justify-between mb-3'>
           <div class='text-xs text-base-content/60'>
-            {isLoading
+            {schema.pending
               ? 'Loading...'
-              : hasError
+              : schema.error
               ? 'Error loading schema'
-              : `Tables (${schema?.tables?.length || 0})`}
+              : `Tables (${schema.data?.tables?.length || 0})`}
           </div>
           <div class='flex items-center gap-2'>
             {dep && (
               <button
                 type='button'
                 class='btn btn-ghost btn-xs'
-                disabled={isLoading}
+                disabled={schema.pending !== undefined}
+                onClick={() => {
+                  schema.fetch({ url: dep })
+                }}
                 title='Refresh schema'
               >
                 <RefreshCw
-                  class={`h-3 w-3 ${isLoading ? 'animate-spin' : ''}`}
+                  class={`h-3 w-3 ${schema.pending ? 'animate-spin' : ''}`}
                 />
               </button>
             )}
             <div class='text-xs text-base-content/40'>
-              {schema?.dialect}
+              {schema.data?.dialect}
             </div>
           </div>
         </div>
-        {hasError && (
+        {schema.error && (
           <div class='alert alert-error alert-sm'>
             <AlertCircle class='h-4 w-4' />
             <span class='text-sm'>Failed to load schema</span>
           </div>
         )}
 
-        {isLoading && (
+        {schema.pending && (
           <div class='flex items-center justify-center py-8'>
             <span class='loading loading-spinner loading-sm'></span>
           </div>
         )}
 
-        {!isLoading && !hasError && schema && (
+        {!schema.pending && !schema.error && schema && (
           <div class='space-y-2'>
             {Object.entries(grouped).map(([schemaName, tables]) => (
               <div key={schemaName} class='space-y-1'>
@@ -347,7 +404,10 @@ export function LeftPanel() {
                         tabindex={index}
                         class='collapse collapse-arrow bg-base-200/50 rounded-sm items-center'
                       >
-                        <div class='collapse-title font-semibold flex items-end justify-between gap-2 flex-1 min-w-0 py-2'>
+                        <A
+                          params={{ tab: 'tables', table: table.table }}
+                          class='collapse-title font-semibold flex items-end justify-between gap-2 flex-1 min-w-0 py-2'
+                        >
                           <div class='flex items-center gap-2'>
                             <Table class='h-4 w-4 text-base-content/60 shrink-0' />
                             <span class='text-sm truncate'>{table.table}</span>
@@ -355,7 +415,7 @@ export function LeftPanel() {
                           <span class='badge badge-outline badge-xs'>
                             {table.columns.length}
                           </span>
-                        </div>
+                        </A>
                         <div class='collapse-content text-sm'>
                           {table.columns
                             .sort((a, b) => a.ordinal - b.ordinal)
@@ -383,7 +443,7 @@ export function LeftPanel() {
               </div>
             ))}
 
-            {(!schema.tables || schema.tables.length === 0) && (
+            {(!schema.data?.tables || schema.data.tables.length === 0) && (
               <div class='text-center py-8 text-base-content/50'>
                 <Table class='h-8 w-8 mx-auto mb-2 opacity-50' />
                 <p class='text-sm'>No tables found</p>
@@ -411,13 +471,10 @@ const TabButton = ({ tabName }: { tabName: 'tables' | 'queries' | 'logs' }) => (
 export function TabNavigation({
   activeTab,
 }: { activeTab: 'tables' | 'queries' | 'logs' }) {
-  const filterKeyOptions = [
-    'service_name',
-    'service_version',
-    'service_instance_id',
-    'severity_text',
-    'event_name',
-  ] as const
+  const filterKeyOptions =
+    schema.data?.tables.find((t) => t.table === url.params.table)?.columns.map((
+      c,
+    ) => c.name) || []
 
   return (
     <div class='bg-base-100 border-b border-base-300 relative z-30'>
@@ -432,7 +489,16 @@ export function TabNavigation({
           {(activeTab === 'tables' || activeTab === 'logs') && (
             <label class='input input-sm min-w-0 w-full sm:w-64'>
               <Search class='opacity-50' />
-              <input type='search' class='grow' placeholder='Search' />
+              <input
+                type='search'
+                class='grow'
+                placeholder='Search'
+                onInput={(e) => {
+                  navigate({
+                    params: { tq: (e.target as HTMLInputElement).value },
+                  })
+                }}
+              />
             </label>
           )}
           {activeTab !== 'logs' && (
