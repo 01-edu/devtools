@@ -3,7 +3,10 @@ import {
   AlertCircle,
   AlertTriangle,
   Bug,
+  ChevronDown,
+  ChevronRight,
   Clock,
+  Columns,
   Download,
   Eye,
   FileText,
@@ -24,23 +27,13 @@ import {
   parseSort,
   SortMenu,
 } from '../components/Filtre.tsx'
-import { api } from '../lib/api.ts'
 import { effect } from '@preact/signals'
+import { api } from '../lib/api.ts'
 
 type AnyRecord = Record<string, unknown>
 
-const onRun = async () => {
-  // TODO: call backend here
-}
-
+// API signals for schema and table data
 const schema = api['GET/api/deployment/schema'].signal()
-
-effect(() => {
-  const dep = url.params.dep
-  if (dep) {
-    schema.fetch({ url: dep })
-  }
-})
 
 const comparators = {
   'eq': '=',
@@ -56,6 +49,15 @@ const comparators = {
 const tableData = api['POST/api/deployment/table/data'].signal()
 type Order = 'ASC' | 'DESC'
 
+// Effect to fetch schema when deployment URL changes
+effect(() => {
+  const dep = url.params.dep
+  if (dep) {
+    schema.fetch({ url: dep })
+  }
+})
+
+// Effect to fetch table data when filters, sort, or search change
 effect(() => {
   const { dep, tab, table, tq } = url.params
   if (dep && tab === 'tables') {
@@ -91,6 +93,10 @@ export function QueryEditor() {
   const query = url.params.q || ''
   const results: AnyRecord[] = []
   const running = false
+
+  const onRun = async () => {
+    // TODO: call backend here
+  }
 
   return (
     <div class='flex flex-col h-full min-h-0 gap-4'>
@@ -176,25 +182,32 @@ export function DataTable({
   pageSize?: number
   totalRows?: number
 }) {
-  const { tab } = url.params
-  const data = tab === 'tables' ? tableData.data || [] : []
+  const data = url.params.tab === 'tables' ? tableData.data || [] : []
   const columns = Object.keys(data[0] || {})
-  const rows = data || []
+  const rows = data ?? []
   const count = totalRows ?? rows.length
   const totalPages = Math.max(1, Math.ceil(count / pageSize))
 
   return (
-    <div class='flex flex-col h-full min-h-0 pb-15'>
+    <div class='flex flex-col h-full min-h-0'>
       <div class='flex-1 min-h-0 overflow-hidden'>
         <div class='w-full overflow-x-auto overflow-y-auto h-full'>
           <table class='table table-zebra w-full'>
-            <thead class='sticky top-0 z-20 bg-base-100'>
+            <thead class='sticky top-0 z-20 bg-base-100 shadow-sm'>
               <tr>
-                <th class='sticky left-0 bg-base-100 z-30 min-w-[3rem]'>#</th>
+                <th class='sticky left-0 bg-base-100 z-30 w-16 min-w-[3rem] max-w-[4rem]'>
+                  <span class='text-xs font-semibold text-base-content/70'>
+                    #
+                  </span>
+                </th>
                 {columns.length > 0
                   ? columns.map((key) => (
-                    <th key={key} class='whitespace-nowrap '>
-                      {key}
+                    <th
+                      key={key}
+                      class='whitespace-nowrap min-w-[8rem] max-w-[20rem] font-semibold text-base-content/70'
+                      title={key}
+                    >
+                      <span class='truncate block'>{key}</span>
                     </th>
                   ))
                   : <th class='text-left'>No columns</th>}
@@ -204,34 +217,48 @@ export function DataTable({
               {rows.length === 0 && (
                 <tr>
                   <td
-                    class='p-6 text-base-content/60'
+                    class='p-6 text-base-content/60 text-center'
                     colSpan={Math.max(2, columns.length + 1)}
                   >
-                    No results to display
+                    <div class='flex flex-col items-center gap-2 py-4'>
+                      <Table class='h-12 w-12 text-base-content/30' />
+                      <span class='text-sm'>No results to display</span>
+                    </div>
                   </td>
                 </tr>
               )}
               {rows.map((row, index) => (
-                <tr key={(row.id as number) ?? `${index}`} class='hover'>
-                  <td class='sticky left-0 bg-base-100 z-20 tabular-nums'>
+                <tr
+                  key={index}
+                  class='hover:bg-base-200/50'
+                >
+                  <td class='sticky left-0 bg-base-100 z-20 tabular-nums font-medium text-xs text-base-content/60 w-16 max-w-[4rem]'>
                     {(page - 1) * pageSize + index + 1}
                   </td>
                   {columns.map((key, i) => {
                     const value = (row as AnyRecord)[key]
                     const isObj = typeof value === 'object' && value !== null
+                    const stringValue = isObj
+                      ? JSON.stringify(value)
+                      : String(value ?? '')
+                    const isTooLong = stringValue.length > 100
+
                     return (
                       <td
                         key={i}
-                        class='whitespace-normal break-words md:whitespace-nowrap md:overflow-hidden md:text-ellipsis align-top'
+                        class='align-top min-w-[8rem] max-w-[20rem]'
+                        title={isTooLong ? stringValue : undefined}
                       >
                         {isObj
                           ? (
-                            <code class='font-mono text-xs text-base-content/70 truncate inline-block max-w-[12rem]'>
-                              {JSON.stringify(value)}
+                            <code class='font-mono text-xs text-base-content/70 block overflow-hidden text-ellipsis whitespace-nowrap'>
+                              {stringValue}
                             </code>
                           )
                           : (
-                            String(value ?? '')
+                            <span class='block overflow-hidden text-ellipsis whitespace-nowrap text-sm'>
+                              {stringValue}
+                            </span>
                           )}
                       </td>
                     )
@@ -245,14 +272,28 @@ export function DataTable({
 
       <div class='bg-base-100 border-t border-base-300 px-4 sm:px-6 py-3 shrink-0'>
         <div class='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-base-content/60'>
-          <span>{count} rows</span>
+          <span class='font-medium'>
+            {count > 0
+              ? `${count.toLocaleString()} row${count !== 1 ? 's' : ''}`
+              : 'No rows'}
+          </span>
           <div class='flex items-center gap-2'>
-            <span>Page {page} of {totalPages}</span>
+            <span class='hidden sm:inline'>Page {page} of {totalPages}</span>
             <div class='join'>
-              <button type='button' class='join-item btn btn-sm' disabled>
+              <button
+                type='button'
+                class='join-item btn btn-sm'
+                disabled
+                aria-label='Previous page'
+              >
                 ‹
               </button>
-              <button type='button' class='join-item btn btn-sm' disabled>
+              <button
+                type='button'
+                class='join-item btn btn-sm'
+                disabled
+                aria-label='Next page'
+              >
                 ›
               </button>
             </div>
@@ -307,70 +348,57 @@ export function Header() {
   )
 }
 
-type Schema = {
-  dialect: string
-  tables: {
-    schema?: string
-    table: string
-    columns: { name: string; type: string; ordinal: number }[]
-  }[]
-}
-
-const groupeTables = (schema?: Schema) => {
-  if (!schema?.tables?.length) return {}
-
-  const groups: Record<string, Array<typeof schema.tables[0]>> = {}
-
-  for (const table of schema.tables) {
-    if (!table.table || !Array.isArray(table.columns)) continue
-
-    const schemaName = table.schema || 'default'
-    if (!groups[schemaName]) {
-      groups[schemaName] = []
-    }
-    groups[schemaName].push(table)
-  }
-
-  for (const schemaName in groups) {
-    groups[schemaName].sort((a, b) => a.table.localeCompare(b.table))
-  }
-
-  return groups
-}
-
 export function LeftPanel() {
-  const dep = url.params.dep || deployments.data?.[0]?.url
+  const dep = url.params.dep
 
-  const grouped = groupeTables(schema.data)
+  // Group tables by schema name
+  const grouped: Record<
+    string,
+    NonNullable<NonNullable<typeof schema.data>['tables']>
+  > = {}
+  if (schema.data?.tables) {
+    for (const table of schema.data.tables) {
+      const schemaName = table.schema || 'default'
+      if (!grouped[schemaName]) grouped[schemaName] = []
+      grouped[schemaName].push(table)
+    }
+  }
+
+  // Track which table is expanded
+  const expandedTable = url.params.expanded
+  const selectedTable = url.params.table
+
   return (
     <aside class='hidden lg:flex w-72 bg-base-100 border-r border-base-300 flex-col shrink-0'>
-      <div class='p-4 flex-1 overflow-y-auto space-y-1'>
-        <div class='flex items-center justify-between mb-3'>
-          <div class='text-xs text-base-content/60'>
-            {schema.pending
-              ? 'Loading...'
-              : schema.error
-              ? 'Error loading schema'
-              : `Tables (${schema.data?.tables?.length || 0})`}
-          </div>
-          <div class='flex items-center gap-2'>
-            {dep && (
-              <button
-                type='button'
-                class='btn btn-ghost btn-xs'
-                disabled={schema.pending !== undefined}
-                onClick={() => {
-                  schema.fetch({ url: dep })
-                }}
-                title='Refresh schema'
-              >
-                <RefreshCw
-                  class={`h-3 w-3 ${schema.pending ? 'animate-spin' : ''}`}
-                />
-              </button>
-            )}
-            <div class='text-xs text-base-content/40'>
-              {schema.data?.dialect}
+      <div class='flex-1 overflow-y-auto'>
+        <div class='p-3 border-b border-base-300 sticky top-0 bg-base-100 z-10'>
+          <div class='flex items-center justify-between'>
+            <div class='text-xs text-base-content/60'>
+              {schema.pending
+                ? 'Loading...'
+                : schema.error
+                ? 'Error loading schema'
+                : `Tables (${schema.data?.tables?.length || 0})`}
+            </div>
+            <div class='flex items-center gap-2'>
+              {dep && (
+                <button
+                  type='button'
+                  class='btn btn-ghost btn-xs'
+                  disabled={schema.pending !== undefined}
+                  onClick={() => {
+                    schema.fetch({ url: dep })
+                  }}
+                  title='Refresh schema'
+                >
+                  <RefreshCw
+                    class={`h-3 w-3 ${schema.pending ? 'animate-spin' : ''}`}
+                  />
+                </button>
+              )}
+              <div class='text-xs text-base-content/40'>
+                {schema.data?.dialect}
+              </div>
             </div>
           </div>
         </div>
@@ -387,8 +415,8 @@ export function LeftPanel() {
           </div>
         )}
 
-        {!schema.pending && !schema.error && schema && (
-          <div class='space-y-2'>
+        {!schema.pending && !schema.error && schema.data && (
+          <div class='space-y-2 p-2'>
             {Object.entries(grouped).map(([schemaName, tables]) => (
               <div key={schemaName} class='space-y-1'>
                 {schemaName !== 'default' && (
@@ -396,59 +424,82 @@ export function LeftPanel() {
                     {schemaName}
                   </div>
                 )}
-
-                <div class='space-y-1'>
-                  {tables.map((table, index) => {
-                    return (
-                      <div
-                        tabindex={index}
-                        class='collapse collapse-arrow bg-base-200/50 rounded-sm items-center'
+                {tables.map((table) => {
+                  const isExpanded = expandedTable === table.table
+                  const isSelected = selectedTable === table.table
+                  return (
+                    <div
+                      key={table.table}
+                      class={`rounded-md overflow-hidden border ${
+                        isSelected
+                          ? 'border-primary bg-primary/5'
+                          : 'border-base-300/50'
+                      }`}
+                    >
+                      <A
+                        params={{ table: table.table }}
+                        class='flex items-center gap-2 p-2 hover:bg-base-200 cursor-pointer w-full text-left transition-colors'
                       >
                         <A
-                          params={{ tab: 'tables', table: table.table }}
-                          class='collapse-title font-semibold flex items-end justify-between gap-2 flex-1 min-w-0 py-2'
+                          params={{ expanded: isExpanded ? null : table.table }}
+                          class='shrink-0'
                         >
-                          <div class='flex items-center gap-2'>
-                            <Table class='h-4 w-4 text-base-content/60 shrink-0' />
-                            <span class='text-sm truncate'>{table.table}</span>
-                          </div>
-                          <span class='badge badge-outline badge-xs'>
-                            {table.columns.length}
-                          </span>
+                          {isExpanded
+                            ? (
+                              <ChevronDown class='h-4 w-4 text-base-content/60' />
+                            )
+                            : (
+                              <ChevronRight class='h-4 w-4 text-base-content/60' />
+                            )}
                         </A>
-                        <div class='collapse-content text-sm'>
-                          {table.columns
-                            .sort((a, b) => a.ordinal - b.ordinal)
-                            .map((column) => {
-                              return (
-                                <div class='flex items-center gap-2 p-1.5 rounded text-sm w-full text-left hover:bg-base-200/50'>
-                                  <span class='w-1 h-1 bg-base-content/40 rounded-full shrink-0' />
-                                  <span class='font-mono text-xs flex-1 truncate'>
-                                    {column.name}
-                                  </span>
-                                  <span class='badge badge-ghost badge-xs text-xs'>
-                                    {column.type}
-                                  </span>
-                                  <span class='text-xs text-base-content/40 tabular-nums hidden sm:block'>
-                                    {column.ordinal}
-                                  </span>
-                                </div>
-                              )
-                            })}
+                        <Table class='h-4 w-4 text-primary shrink-0' />
+                        <div class='flex-1 min-w-0'>
+                          <div
+                            class='font-medium text-sm truncate'
+                            title={table.table}
+                          >
+                            {table.table}
+                          </div>
+                          <div class='flex items-center gap-2 text-xs text-base-content/50'>
+                            <span class='flex items-center gap-1'>
+                              <Columns class='h-3 w-3' />
+                              {table.columns.length}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    )
-                  })}
-                </div>
+                      </A>
+
+                      {isExpanded && (
+                        <div class='bg-base-200/30 px-2 pb-2 border-t border-base-300/50'>
+                          <div class='text-xs font-medium text-base-content/60 px-2 py-1.5 sticky top-[57px] bg-base-200/50'>
+                            Columns
+                          </div>
+                          <div class='space-y-0.5 max-h-64 overflow-y-auto'>
+                            {table.columns.map((col, idx) => (
+                              <div
+                                key={idx}
+                                class='flex items-center gap-2 px-2 py-1 text-xs hover:bg-base-200 rounded'
+                              >
+                                <Columns class='h-3 w-3 text-base-content/40' />
+                                <span
+                                  class='font-mono truncate'
+                                  title={col.name}
+                                >
+                                  {col.name}
+                                </span>
+                                <span class='text-base-content/40 text-[10px] ml-auto'>
+                                  {col.type}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             ))}
-
-            {(!schema.data?.tables || schema.data.tables.length === 0) && (
-              <div class='text-center py-8 text-base-content/50'>
-                <Table class='h-8 w-8 mx-auto mb-2 opacity-50' />
-                <p class='text-sm'>No tables found</p>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -469,12 +520,22 @@ const TabButton = ({ tabName }: { tabName: 'tables' | 'queries' | 'logs' }) => (
 )
 
 export function TabNavigation({
-  activeTab,
-}: { activeTab: 'tables' | 'queries' | 'logs' }) {
-  const filterKeyOptions =
-    schema.data?.tables.find((t) => t.table === url.params.table)?.columns.map((
-      c,
-    ) => c.name) || []
+  activeTab = 'tables',
+}: { activeTab?: 'tables' | 'queries' | 'logs' }) {
+  // Get column names from the currently selected table for tables tab
+  const selectedTableName = url.params.table || schema.data?.tables?.[0]?.table
+  const selectedTable = schema.data?.tables?.find((t) =>
+    t.table === selectedTableName
+  )
+  const tableColumnNames = selectedTable?.columns.map((c) => c.name) || []
+
+  const filterKeyOptions = activeTab === 'tables' ? tableColumnNames : [
+    'service_name',
+    'service_version',
+    'service_instance_id',
+    'severity_text',
+    'event_name',
+  ] as const
 
   return (
     <div class='bg-base-100 border-b border-base-300 relative z-30'>
@@ -493,10 +554,10 @@ export function TabNavigation({
                 type='search'
                 class='grow'
                 placeholder='Search'
+                value={url.params.tq || ''}
                 onInput={(e) => {
-                  navigate({
-                    params: { tq: (e.target as HTMLInputElement).value },
-                  })
+                  const value = (e.target as HTMLInputElement).value
+                  navigate({ params: { tq: value || null } })
                 }}
               />
             </label>
@@ -572,17 +633,17 @@ export function LogsViewer() {
       <div class='flex-1 min-h-0 overflow-hidden'>
         <div class='w-full overflow-x-auto overflow-y-auto h-full'>
           <table class='table table-zebra w-full'>
-            <thead class='sticky top-0 z-20 bg-base-100'>
+            <thead class='sticky top-0 z-20 bg-base-100 shadow-sm'>
               <tr class='border-b border-base-300'>
                 {logThreads.map((header) => (
                   <th
                     key={header}
-                    class='text-left font-medium text-base-content/70 whitespace-nowrap'
+                    class='text-left font-semibold text-base-content/70 whitespace-nowrap min-w-[8rem] max-w-[20rem]'
                   >
                     {header}
                   </th>
                 ))}
-                <th class='text-left font-medium text-base-content/70 w-16'>
+                <th class='text-left font-semibold text-base-content/70 w-20 max-w-[5rem]'>
                 </th>
               </tr>
             </thead>
@@ -600,43 +661,59 @@ export function LogsViewer() {
                     key={log.id}
                     class='hover:bg-base-200/50 border-b border-base-300/50'
                   >
-                    <td class='font-mono text-xs text-base-content/70 tabular-nums'>
-                      <div class='flex items-center gap-2 whitespace-normal break-words md:whitespace-nowrap'>
+                    <td class='font-mono text-xs text-base-content/70 tabular-nums max-w-[12rem]'>
+                      <div class='flex items-center gap-2'>
                         <Clock class='w-3 h-3 shrink-0' />
-                        <span class='break-all md:break-normal'>
+                        <span
+                          class='truncate block'
+                          title={safeFormatTimestamp(log.timestamp)}
+                        >
                           {safeFormatTimestamp(log.timestamp)}
                         </span>
                       </div>
                     </td>
-                    <td>
+                    <td class='max-w-[10rem]'>
                       <div
-                        class={`badge badge-outline ${severityColor} ${severityBg} border-current/20`}
+                        class={`badge badge-outline badge-sm ${severityColor} ${severityBg} border-current/20`}
                       >
                         <SeverityIcon class='w-3 h-3 mr-1' />
                         {log.severity_text}
                       </div>
                     </td>
-                    <td class='min-w-[12rem]'>
-                      <div class='flex flex-col'>
-                        <span class='text-sm text-base-content font-medium'>
+                    <td class='min-w-[12rem] max-w-[20rem]'>
+                      <div class='flex flex-col gap-1'>
+                        <span
+                          class='text-sm text-base-content font-medium truncate'
+                          title={log.event_name}
+                        >
                           {log.event_name}
                         </span>
                         {log.body && (
-                          <span class='text-xs text-base-content/50 whitespace-normal break-words mt-1'>
+                          <span
+                            class='text-xs text-base-content/50 truncate'
+                            title={log.body}
+                          >
                             {log.body}
                           </span>
                         )}
                       </div>
                     </td>
-                    <td class='font-mono text-xs text-base-content/50 whitespace-normal break-all md:whitespace-nowrap hidden md:table-cell'>
-                      {log.trace_id}
+                    <td class='font-mono text-xs text-base-content/50 max-w-[12rem] hidden md:table-cell'>
+                      <span class='block truncate' title={log.trace_id}>
+                        {log.trace_id}
+                      </span>
                     </td>
-                    <td class='font-mono text-xs text-base-content/50 whitespace-normal break-all md:whitespace-nowrap hidden md:table-cell'>
-                      {log.span_id}
+                    <td class='font-mono text-xs text-base-content/50 max-w-[12rem] hidden md:table-cell'>
+                      <span class='block truncate' title={log.span_id}>
+                        {log.span_id}
+                      </span>
                     </td>
-                    <td class='text-xs text-base-content/60 hidden lg:table-cell'>
-                      <code class='font-mono truncate inline-block max-w-[12rem]'>
-                        {JSON.stringify(log.attributes ?? {}, null, 2)}
+                    <td class='text-xs text-base-content/60 hidden lg:table-cell min-w-[12rem] max-w-[16rem]'>
+                      <code
+                        class='font-mono block overflow-hidden text-ellipsis whitespace-nowrap'
+                        title={JSON.stringify(log.attributes ?? {})}
+                      >
+                        {JSON.stringify(log.attributes ?? {})}
                       </code>
                     </td>
                     <td class='align-middle'>
@@ -714,11 +791,10 @@ const Drawer = () => (
 
 export const DeploymentPage = () => {
   const tab = (url.params.tab as 'tables' | 'queries' | 'logs') || 'tables'
-  if (!['tables', 'queries', 'logs'].includes(tab)) {
+  const view = TabViews[tab]
+  if (!view) {
     navigate({ params: { tab: 'tables' }, replace: true })
   }
-
-  const view = TabViews[tab]
   return (
     <div class='flex flex-col h-full min-h-0'>
       <Header />
