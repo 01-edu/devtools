@@ -89,14 +89,14 @@ effect(() => {
   }
 })
 
+const onRun = async () => {
+  // TODO: call backend here
+}
+
 export function QueryEditor() {
   const query = url.params.q || ''
   const results: AnyRecord[] = []
   const running = false
-
-  const onRun = async () => {
-    // TODO: call backend here
-  }
 
   return (
     <div class='flex flex-col h-full min-h-0 gap-4'>
@@ -193,7 +193,7 @@ export function DataTable({
       <div class='flex-1 min-h-0 overflow-hidden'>
         <div class='w-full overflow-x-auto overflow-y-auto h-full'>
           <table class='table table-zebra w-full'>
-            <thead class='sticky top-0 z-20 bg-base-100 shadow-sm'>
+            <thead class='sticky top-0 bg-base-100 shadow-sm'>
               <tr>
                 <th class='sticky left-0 bg-base-100 z-30 w-16 min-w-[3rem] max-w-[4rem]'>
                   <span class='text-xs font-semibold text-base-content/70'>
@@ -314,7 +314,7 @@ export function Header() {
   }
 
   return (
-    <div class='navbar bg-base-100 border-b border-base-300 sticky top-0 z-20'>
+    <div class='navbar bg-base-100 border-b border-base-300 sticky top-0'>
       <div class='flex-1 min-w-0'>
         <div class='flex items-center gap-4 md:gap-6'>
           <div class='flex items-center gap-3 min-w-0'>
@@ -371,7 +371,7 @@ export function LeftPanel() {
   return (
     <aside class='hidden lg:flex w-72 bg-base-100 border-r border-base-300 flex-col shrink-0'>
       <div class='flex-1 overflow-y-auto'>
-        <div class='p-3 border-b border-base-300 sticky top-0 bg-base-100 z-10'>
+        <div class='p-3 border-b border-base-300 sticky top-0 bg-base-100'>
           <div class='flex items-center justify-between'>
             <div class='text-xs text-base-content/60'>
               {schema.pending
@@ -538,7 +538,7 @@ export function TabNavigation({
   ] as const
 
   return (
-    <div class='bg-base-100 border-b border-base-300 relative z-30'>
+    <div class='bg-base-100 border-b border-base-300 relative'>
       <div class='flex flex-col sm:flex-row gap-2 px-2 sm:px-4 md:px-6 py-2'>
         <div class='tabs tabs-lifted w-full overflow-x-auto'>
           <TabButton tabName='tables' />
@@ -768,7 +768,7 @@ const TabViews = {
 }
 
 const Drawer = () => (
-  <div class='drawer drawer-end z-40'>
+  <div class='drawer drawer-end'>
     <input id='my-drawer-4' type='checkbox' class='drawer-toggle' />
     <div class='drawer-side'>
       <label
@@ -796,14 +796,14 @@ export const DeploymentPage = () => {
     navigate({ params: { tab: 'tables' }, replace: true })
   }
   return (
-    <div class='flex flex-col h-full min-h-0'>
+    <div class='h-screen flex flex-col'>
       <Header />
       <div class='flex flex-1 min-h-0'>
         <LeftPanel />
-        <main class='flex-1 flex flex-col min-h-0 min-w-0'>
+        <main class='flex-1 flex flex-col h-full'>
           <TabNavigation activeTab={tab} />
-          <section class='flex-1 min-h-0 overflow-hidden'>
-            <div class='h-full bg-base-100 border border-base-300 overflow-hidden flex flex-col'>
+          <section class='flex-1 h-full overflow-hidden'>
+            <div class='h-full bg-base-100 border border-base-300 overflow-hidden flex flex-col pb-15 hidden lg:flex'>
               {view}
             </div>
           </section>
