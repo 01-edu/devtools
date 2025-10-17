@@ -24,7 +24,7 @@ import {
 } from './click-house-client.ts'
 import { decryptMessage, encryptMessage } from './user.ts'
 import { log } from './lib/log.ts'
-import { fetchTablesData } from './sql.ts'
+import { type ColumnInfo, fetchTablesData } from './sql.ts'
 
 const withUserSession = ({ user }: RequestContext) => {
   if (!user) throw Error('Missing user session')
@@ -438,13 +438,9 @@ const defs = {
         throw respond.NotFound({ message: 'Table not found in schema' })
       }
 
-      const columnsMap = new Map(
-        tableDef.columns.map((col) => [col.name, col]),
-      )
-
       return fetchTablesData(
         { ...input, deployment: dep, table },
-        columnsMap,
+        tableDef.columnsMap as unknown as Map<string, ColumnInfo>,
       )
     },
     input: OBJ({

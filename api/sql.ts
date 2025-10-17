@@ -63,11 +63,12 @@ async function fetchSchema(endpoint: string, token: string, dialect: string) {
   return await runSQL(endpoint, token, sql)
 }
 
-type ColumnInfo = { name: string; type: string; ordinal: number }
+export type ColumnInfo = { name: string; type: string; ordinal: number }
 type TableInfo = {
   schema: string | undefined
   table: string
   columns: ColumnInfo[]
+  columnsMap: Map<string, ColumnInfo>
 }
 
 export async function refreshOneSchema(
@@ -84,7 +85,9 @@ export async function refreshOneSchema(
       const table = r.table_name as string
       if (!table) continue
       const key = (schema ? schema + '.' : '') + table
-      if (!tableMap.has(key)) tableMap.set(key, { schema, table, columns: [] })
+      if (!tableMap.has(key)) {
+        tableMap.set(key, { schema, table, columns: [], columnsMap: new Map() })
+      }
       tableMap.get(key)!.columns.push({
         name: String(r.column_name),
         type: String(r.data_type || ''),
@@ -94,6 +97,10 @@ export async function refreshOneSchema(
     const tables = [...tableMap.values()].map((t) => ({
       ...t,
       columns: t.columns.sort((a, b) => a.ordinal - b.ordinal),
+      columnsMap: t.columns.reduce((map, col) => {
+        map.set(col.name, col)
+        return map
+      }, new Map<string, ColumnInfo>()),
     }))
     const payload = {
       deploymentUrl: dep.url,

@@ -52,6 +52,7 @@ export const DatabaseSchemaDef = OBJ({
       type: STR(),
       ordinal: NUM(),
     })),
+    columnsMap: optional(OBJ({})),
     schema: optional(STR()),
     table: STR(),
   })),
