@@ -59,7 +59,7 @@ effect(() => {
 
 // Effect to fetch table data when filters, sort, or search change
 effect(() => {
-  const { dep, tab, table, tq } = url.params
+  const { dep, tab, table, qt } = url.params
   if (dep && tab === 'tables') {
     const tableName = table || schema.data?.tables?.[0]?.table
     if (tableName) {
@@ -81,7 +81,7 @@ effect(() => {
         table: tableName,
         filter: filterRows,
         sort: sortRows,
-        search: tq || '',
+        search: qt || '',
         limit: '50',
         offset: '0',
       })
@@ -306,7 +306,10 @@ export function DataTable({
 
 export function Header() {
   const item = sidebarItems[url.params.sbi || Object.keys(sidebarItems)[0]]
-  const dep = url.params.dep || deployments.data?.[0]?.url
+  const dep = url.params.dep
+  if (!dep && deployments.data?.length) {
+    navigate({ params: { dep: deployments.data[0].url } })
+  }
 
   const onChangeDeployment = (e: Event) => {
     const v = (e.target as HTMLSelectElement).value
@@ -326,7 +329,7 @@ export function Header() {
           <div class='min-w-[12rem]'>
             <select
               class='select select-sm md:select-md w-full'
-              value={dep}
+              value={dep || ''}
               onChange={onChangeDeployment}
             >
               {deployments.data?.map((deployment) => (
@@ -437,7 +440,12 @@ export function LeftPanel() {
                       }`}
                     >
                       <A
-                        params={{ table: table.table }}
+                        params={{
+                          table: table.table,
+                          ft: null,
+                          st: null,
+                          qt: null,
+                        }}
                         class='flex items-center gap-2 p-2 hover:bg-base-200 cursor-pointer w-full text-left transition-colors'
                       >
                         <A
@@ -554,10 +562,10 @@ export function TabNavigation({
                 type='search'
                 class='grow'
                 placeholder='Search'
-                value={url.params.tq || ''}
+                value={url.params.qt || ''}
                 onInput={(e) => {
                   const value = (e.target as HTMLInputElement).value
-                  navigate({ params: { tq: value || null } })
+                  navigate({ params: { qt: value || null } })
                 }}
               />
             </label>
