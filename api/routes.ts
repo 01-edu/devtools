@@ -24,6 +24,7 @@ import {
 } from './click-house-client.ts'
 import { decryptMessage, encryptMessage } from './user.ts'
 import { log } from './lib/log.ts'
+import { type ColumnInfo, fetchTablesData } from './sql.ts'
 
 const withUserSession = ({ user }: RequestContext) => {
   if (!user) throw Error('Missing user session')
@@ -416,6 +417,57 @@ const defs = {
     }),
     output: ARR(LogSchema, 'List of logs'),
     description: 'Get logs from ClickHouse',
+  }),
+  'POST/api/deployment/table/data': route({
+    fn: (_, { deployment, table, ...input }) => {
+      const dep = DeploymentsCollection.get(deployment)
+      if (!dep) {
+        throw respond.NotFound({ message: 'Deployment not found' })
+      }
+
+      if (!dep?.databaseEnabled) {
+        throw respond.BadRequest({
+          message: 'Database not enabled for deployment',
+        })
+      }
+
+      const schema = DatabaseSchemasCollection.get(deployment)
+      if (!schema) throw respond.NotFound({ message: 'Schema not cached yet' })
+      const tableDef = schema.tables.find((t) => t.table === table)
+      if (!tableDef) {
+        throw respond.NotFound({ message: 'Table not found in schema' })
+      }
+
+      return fetchTablesData(
+        { ...input, deployment: dep, table },
+        tableDef.columnsMap as unknown as Map<string, ColumnInfo>,
+      )
+    },
+    input: OBJ({
+      deployment: STR("The deployment's URL"),
+      table: STR('The table name'),
+      filter: ARR(
+        OBJ({
+          key: STR('The column to filter by'),
+          comparator: LIST(
+            ['=', '!=', '<', '<=', '>', '>=', 'LIKE', 'ILIKE'],
+            'The comparison operator',
+          ),
+          value: STR('The value to filter by'),
+        }),
+        'The filtering criteria',
+      ),
+      sort: ARR(
+        OBJ({
+          key: STR('The column to sort by'),
+          order: LIST(['ASC', 'DESC'], 'The sort order (ASC or DESC)'),
+        }),
+        'The sorting criteria',
+      ),
+      limit: STR('The maximum number of rows to return'),
+      offset: STR('The number of rows to skip'),
+      search: STR('The search term to filter by'),
+    }),
   }),
 } as const
 

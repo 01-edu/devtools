@@ -1,4 +1,8 @@
-import { DatabaseSchemasCollection, DeploymentsCollection } from './schema.ts'
+import {
+  DatabaseSchemasCollection,
+  Deployment,
+  DeploymentsCollection,
+} from './schema.ts'
 import { DB_SCHEMA_REFRESH_MS } from './lib/env.ts'
 import { log } from './lib/log.ts'
 
@@ -59,11 +63,12 @@ async function fetchSchema(endpoint: string, token: string, dialect: string) {
   return await runSQL(endpoint, token, sql)
 }
 
-type ColumnInfo = { name: string; type: string; ordinal: number }
+export type ColumnInfo = { name: string; type: string; ordinal: number }
 type TableInfo = {
   schema: string | undefined
   table: string
   columns: ColumnInfo[]
+  columnsMap: Map<string, ColumnInfo>
 }
 
 export async function refreshOneSchema(
@@ -80,7 +85,9 @@ export async function refreshOneSchema(
       const table = r.table_name as string
       if (!table) continue
       const key = (schema ? schema + '.' : '') + table
-      if (!tableMap.has(key)) tableMap.set(key, { schema, table, columns: [] })
+      if (!tableMap.has(key)) {
+        tableMap.set(key, { schema, table, columns: [], columnsMap: new Map() })
+      }
       tableMap.get(key)!.columns.push({
         name: String(r.column_name),
         type: String(r.data_type || ''),
@@ -90,6 +97,10 @@ export async function refreshOneSchema(
     const tables = [...tableMap.values()].map((t) => ({
       ...t,
       columns: t.columns.sort((a, b) => a.ordinal - b.ordinal),
+      columnsMap: t.columns.reduce((map, col) => {
+        map.set(col.name, col)
+        return map
+      }, new Map<string, ColumnInfo>()),
     }))
     const payload = {
       deploymentUrl: dep.url,
@@ -128,4 +139,87 @@ export function startSchemaRefreshLoop() {
     refreshAllSchemas()
   }, DB_SCHEMA_REFRESH_MS) as unknown as number
   log.info('schema-refresh-loop-started', { everyMs: DB_SCHEMA_REFRESH_MS })
+}
+
+type FetchTablesParams = {
+  deployment: Deployment
+  table: string
+  filter: { key: string; comparator: string; value: string }[]
+  sort: { key: string; order: 'ASC' | 'DESC' }[]
+  limit: string
+  offset: string
+  search: string
+}
+
+const constructWhereClause = (
+  params: FetchTablesParams,
+  columnsMap: Map<string, ColumnInfo>,
+) => {
+  const whereClauses: string[] = []
+  if (params.filter.length) {
+    for (const filter of params.filter) {
+      const { key, comparator, value } = filter
+      const column = columnsMap.get(key)
+      if (!column) {
+        throw Error(`Invalid filter column: ${key}`)
+      }
+      const safeValue = value.replace(/'/g, "''")
+      whereClauses.push(`${key} ${comparator} '${safeValue}'`)
+    }
+  }
+  if (params.search) {
+    const searchClauses = columnsMap.values().map((col) => {
+      return `${col.name} LIKE '%${params.search.replace(/'/g, "''")}%'`
+    }).toArray()
+    if (searchClauses.length) {
+      whereClauses.push(`(${searchClauses.join(' OR ')})`)
+    }
+  }
+  return whereClauses.length ? 'WHERE ' + whereClauses.join(' AND ') : ''
+}
+
+const constructOrderByClause = (
+  params: FetchTablesParams,
+  columnsMap: Map<string, ColumnInfo>,
+) => {
+  if (!params.sort.length) return ''
+  const orderClauses: string[] = []
+  for (const sort of params.sort) {
+    const { key, order } = sort
+    const column = columnsMap.get(key)
+    if (!column) {
+      throw Error(`Invalid sort column: ${key}`)
+    }
+    orderClauses.push(`${key} ${order}`)
+  }
+  return orderClauses.length ? 'ORDER BY ' + orderClauses.join(', ') : ''
+}
+
+export const fetchTablesData = (
+  params: FetchTablesParams,
+  columnsMap: Map<string, ColumnInfo>,
+) => {
+  const { sqlEndpoint, sqlToken } = params.deployment
+  if (!sqlToken || !sqlEndpoint) {
+    throw Error('Missing SQL endpoint or token')
+  }
+  const whereClause = constructWhereClause(params, columnsMap)
+  const orderByClause = constructOrderByClause(params, columnsMap)
+
+  let limitOffsetClause = ''
+  const limit = Math.floor(Number(params.limit))
+
+  if (params.limit && limit > 0) {
+    limitOffsetClause += `LIMIT ${limit}`
+
+    const offset = Math.floor(Number(params.offset))
+    if (params.offset && offset >= 0) {
+      limitOffsetClause += ` OFFSET ${offset}`
+    }
+  }
+
+  const query =
+    `SELECT * FROM ${params.table} ${whereClause} ${orderByClause} ${limitOffsetClause}`
+
+  return runSQL(sqlEndpoint, sqlToken, query)
 }
