@@ -418,7 +418,7 @@ const defs = {
     output: ARR(LogSchema, 'List of logs'),
     description: 'Get logs from ClickHouse',
   }),
-  'GET/api/deployment/table/data': route({
+  'POST/api/deployment/table/data': route({
     fn: (_, { deployment, table, ...input }) => {
       const dep = DeploymentsCollection.get(deployment)
       if (!dep) {

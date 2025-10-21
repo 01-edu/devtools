@@ -5,7 +5,7 @@ type FilterRow = { idx: number; key: string; op: string; value: string }
 
 const filterOperators = ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'like'] as const
 
-function parseFilters(prefix: string): FilterRow[] {
+export function parseFilters(prefix: string): FilterRow[] {
   const data = url.getAll(`f${prefix}`)
   const rows: FilterRow[] = []
   for (let i = 0; i < data.length; i++) {
@@ -61,7 +61,7 @@ function removeFilter(prefix: string, idx: number) {
 // --- Sort (URL) -------------------------------------------------------------
 type SortRow = { idx: number; key: string; dir: 'asc' | 'desc' }
 
-function parseSort(prefix: string): SortRow[] {
+export function parseSort(prefix: string): SortRow[] {
   const data = url.getAll(`s${prefix}`)
   const rows: SortRow[] = []
   for (let i = 0; i < data.length; i++) {
