@@ -6,7 +6,7 @@ import {
 import { DB_SCHEMA_REFRESH_MS } from './lib/env.ts'
 import { log } from './lib/log.ts'
 
-async function runSQL(
+export async function runSQL(
   endpoint: string,
   token: string,
   query: string,
@@ -146,8 +146,8 @@ type FetchTablesParams = {
   table: string
   filter: { key: string; comparator: string; value: string }[]
   sort: { key: string; order: 'ASC' | 'DESC' }[]
-  limit: string
-  offset: string
+  limit: number
+  offset: number
   search: string
 }
 
@@ -195,7 +195,7 @@ const constructOrderByClause = (
   return orderClauses.length ? 'ORDER BY ' + orderClauses.join(', ') : ''
 }
 
-export const fetchTablesData = (
+export const fetchTablesData = async (
   params: FetchTablesParams,
   columnsMap: Map<string, ColumnInfo>,
 ) => {
@@ -207,12 +207,12 @@ export const fetchTablesData = (
   const orderByClause = constructOrderByClause(params, columnsMap)
 
   let limitOffsetClause = ''
-  const limit = Math.floor(Number(params.limit))
+  const limit = Math.floor(params.limit)
 
   if (params.limit && limit > 0) {
     limitOffsetClause += `LIMIT ${limit}`
 
-    const offset = Math.floor(Number(params.offset))
+    const offset = Math.floor(params.offset)
     if (params.offset && offset >= 0) {
       limitOffsetClause += ` OFFSET ${offset}`
     }
@@ -220,6 +220,13 @@ export const fetchTablesData = (
 
   const query =
     `SELECT * FROM ${params.table} ${whereClause} ${orderByClause} ${limitOffsetClause}`
-
-  return runSQL(sqlEndpoint, sqlToken, query)
+  const countQuery =
+    `SELECT COUNT(*) as count FROM ${params.table} ${whereClause}`
+  const rows = await runSQL(sqlEndpoint, sqlToken, query)
+  return {
+    rows,
+    totalRows: limit > 0
+      ? ((await runSQL(sqlEndpoint, sqlToken, countQuery))[0].count) as number
+      : rows.length,
+  }
 }

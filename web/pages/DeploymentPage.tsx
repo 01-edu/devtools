@@ -27,7 +27,7 @@ import {
   parseSort,
   SortMenu,
 } from '../components/Filtre.tsx'
-import { effect } from '@preact/signals'
+import { effect, Signal } from '@preact/signals'
 import { api } from '../lib/api.ts'
 
 type AnyRecord = Record<string, unknown>
@@ -47,7 +47,15 @@ const comparators = {
 } as const
 
 const tableData = api['POST/api/deployment/table/data'].signal()
+const querier = api['GET/api/deployment/query'].signal()
+const queriesHistory = new Signal<AnyRecord>(
+  JSON.parse(localStorage.getItem('savedQueries') || '{}'),
+)
 type Order = 'ASC' | 'DESC'
+
+queriesHistory.subscribe((val) => {
+  localStorage.setItem('savedQueries', JSON.stringify(val))
+})
 
 // Effect to fetch schema when deployment URL changes
 effect(() => {
@@ -57,9 +65,10 @@ effect(() => {
   }
 })
 
+const pageSize = 50
 // Effect to fetch table data when filters, sort, or search change
 effect(() => {
-  const { dep, tab, table, qt } = url.params
+  const { dep, tab, table, qt, tpage } = url.params
   if (dep && tab === 'tables') {
     const tableName = table || schema.data?.tables?.[0]?.table
     if (tableName) {
@@ -82,27 +91,74 @@ effect(() => {
         filter: filterRows,
         sort: sortRows,
         search: qt || '',
-        limit: '50',
-        offset: '0',
+        limit: pageSize,
+        offset: (Number(tpage) || 0) * pageSize,
       })
     }
   }
 })
 
-const onRun = async () => {
-  // TODO: call backend here
+const onRun = () => {
+  if (querier.pending) return
+  const { dep, tab, q } = url.params
+  console.log('Running query:', { dep, tab, q })
+
+  if (dep && tab === 'queries' && q) {
+    querier.fetch({ deployment: dep, sql: q })
+  }
+}
+
+function hashQuery(query: string) {
+  let hash = 0
+  for (let i = 0; i < query.length; i++) {
+    const char = query.charCodeAt(i)
+    hash = ((hash << 5) - hash + char) | 0 // | 0 garde un entier 32-bit
+  }
+  return (hash >>> 0).toString(36) // base36
+}
+
+const onSave = () => {
+  const query = (url.params.q || '').trim()
+  if (query) {
+    const hash = hashQuery(query)
+    queriesHistory.value = { ...queriesHistory.value, [hash]: query }
+  }
+}
+
+const onDownload = () => {
+  const query = (url.params.q || '').trim()
+  if (query && querier.data?.rows) {
+    const hash = hashQuery(query)
+    const rows = querier.data.rows
+    const json = {
+      query,
+      rows,
+      metadata: {
+        downloadedAt: new Date().toISOString(),
+        duration: querier.data?.duration,
+        rowCount: rows.length,
+      },
+    }
+    const blob = new Blob([JSON.stringify(json, null, 2)], {
+      type: 'application/json;charset=utf-8;',
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `query-${hash}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 }
 
 export function QueryEditor() {
   const query = url.params.q || ''
-  const results: AnyRecord[] = []
-  const running = false
 
   return (
     <div class='flex flex-col h-full min-h-0 gap-4'>
       <div class='flex-1 min-h-0 overflow-hidden'>
         <div class='relative h-full'>
-          <div class='absolute inset-y-0 left-0 w-10 select-none bg-base-200/40 overflow-hidden border-r border-base-300 z-10'>
+          <div class='absolute inset-y-0 left-0 w-10 select-none bg-base-200/40 overflow-hidden border-r border-base-300'>
             <div class='m-0 px-2 py-2 text-xs font-mono text-base-content/50 leading-6 text-right'>
               {Array(Math.max(1, (query.match(/\n/g)?.length ?? 0) + 1))
                 .keys().map((i) => <div key={i}>{i + 1}</div>).toArray()}
@@ -133,11 +189,13 @@ export function QueryEditor() {
           <div class='flex items-center gap-3'>
             <h2 class='text-sm sm:text-base font-medium'>Results</h2>
             <span class='text-xs text-base-content/60'>
-              {running ? 'Running…' : `${results.length} rows`}
+              {querier.pending
+                ? 'Running…'
+                : `${querier.data?.rows.length ?? 0} rows`}
             </span>
           </div>
           <div class='text-xs text-base-content/60 tabular-nums'>
-            Query took 0.00 seconds.
+            Query took {querier.data?.duration.toFixed(2) ?? 0} seconds.
           </div>
         </div>
       </div>
@@ -173,20 +231,23 @@ const logData = [
   },
 ]
 
-export function DataTable({
-  page = 1,
-  pageSize = 50,
-  totalRows,
-}: {
-  page?: number
-  pageSize?: number
-  totalRows?: number
-}) {
-  const data = url.params.tab === 'tables' ? tableData.data || [] : []
+export function DataTable() {
+  const tab = url.params.tab
+  const data = tab === 'tables'
+    ? tableData.data?.rows || []
+    : tab === 'queries'
+    ? querier.data?.rows || []
+    : []
   const columns = Object.keys(data[0] || {})
   const rows = data ?? []
-  const count = totalRows ?? rows.length
-  const totalPages = Math.max(1, Math.ceil(count / pageSize))
+  const totalPages = Math.max(
+    1,
+    Math.ceil((tableData.data?.totalRows || 0) / pageSize),
+  )
+  const tpage = Number(url.params.tpage) || 0
+  const page = tpage + 1
+  const hasNext = page < totalPages
+  const hasPrev = page > 1
 
   return (
     <div class='flex flex-col h-full min-h-0'>
@@ -195,7 +256,7 @@ export function DataTable({
           <table class='table table-zebra w-full'>
             <thead class='sticky top-0 bg-base-100 shadow-sm'>
               <tr>
-                <th class='sticky left-0 bg-base-100 z-30 w-16 min-w-[3rem] max-w-[4rem]'>
+                <th class='sticky left-0 bg-base-100 w-16 min-w-[3rem] max-w-[4rem]'>
                   <span class='text-xs font-semibold text-base-content/70'>
                     #
                   </span>
@@ -232,7 +293,7 @@ export function DataTable({
                   key={index}
                   class='hover:bg-base-200/50'
                 >
-                  <td class='sticky left-0 bg-base-100 z-20 tabular-nums font-medium text-xs text-base-content/60 w-16 max-w-[4rem]'>
+                  <td class='sticky left-0 bg-base-100 tabular-nums font-medium text-xs text-base-content/60 w-16 max-w-[4rem]'>
                     {(page - 1) * pageSize + index + 1}
                   </td>
                   {columns.map((key, i) => {
@@ -270,36 +331,42 @@ export function DataTable({
         </div>
       </div>
 
-      <div class='bg-base-100 border-t border-base-300 px-4 sm:px-6 py-3 shrink-0'>
-        <div class='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-base-content/60'>
-          <span class='font-medium'>
-            {count > 0
-              ? `${count.toLocaleString()} row${count !== 1 ? 's' : ''}`
-              : 'No rows'}
-          </span>
-          <div class='flex items-center gap-2'>
-            <span class='hidden sm:inline'>Page {page} of {totalPages}</span>
-            <div class='join'>
-              <button
-                type='button'
-                class='join-item btn btn-sm'
-                disabled
-                aria-label='Previous page'
-              >
-                ‹
-              </button>
-              <button
-                type='button'
-                class='join-item btn btn-sm'
-                disabled
-                aria-label='Next page'
-              >
-                ›
-              </button>
+      {tab === 'tables' && (
+        <div class='bg-base-100 border-t border-base-300 px-4 sm:px-6 py-3 shrink-0'>
+          <div class='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-base-content/60'>
+            <span class='font-medium'>
+              {rows.length > 0
+                ? `${rows.length.toLocaleString()} row${
+                  rows.length !== 1 ? 's' : ''
+                }`
+                : 'No rows'}
+            </span>
+            <div class='flex items-center gap-2'>
+              <span class='hidden sm:inline'>Page {page} of {totalPages}</span>
+              <div class='join'>
+                <A
+                  params={{ tpage: tpage - 1 }}
+                  class={`join-item btn btn-sm ${
+                    hasPrev ? '' : 'btn-disabled'
+                  }`}
+                  aria-label='Previous page'
+                >
+                  ‹
+                </A>
+                <A
+                  params={{ tpage: tpage + 1 }}
+                  class={`join-item btn btn-sm ${
+                    hasNext ? '' : 'btn-disabled'
+                  }`}
+                  aria-label='Next page'
+                >
+                  ›
+                </A>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
@@ -441,6 +508,7 @@ export function LeftPanel() {
                     >
                       <A
                         params={{
+                          tab: 'tables',
                           table: table.table,
                           ft: null,
                           st: null,
@@ -545,6 +613,9 @@ export function TabNavigation({
     'event_name',
   ] as const
 
+  const queryHash = hashQuery((url.params.q || '').trim())
+  const querySaved = Boolean(queriesHistory.value[queryHash])
+
   return (
     <div class='bg-base-100 border-b border-base-300 relative'>
       <div class='flex flex-col sm:flex-row gap-2 px-2 sm:px-4 md:px-6 py-2'>
@@ -571,7 +642,11 @@ export function TabNavigation({
             </label>
           )}
           {activeTab !== 'logs' && (
-            <label htmlFor='my-drawer-4' class='btn btn-primary btn-sm'>
+            <label
+              onClick={activeTab === 'queries' ? onRun : undefined}
+              htmlFor={activeTab === 'tables' ? 'my-drawer-4' : undefined}
+              class='btn btn-primary btn-sm'
+            >
               {activeTab === 'queries'
                 ? <Play class='h-4 w-4' />
                 : <Plus class='h-4 w-4' />}
@@ -588,11 +663,20 @@ export function TabNavigation({
           )}
           {activeTab === 'queries' && (
             <>
-              <button type='button' class='btn btn-outline btn-sm'>
+              <button
+                disabled={querySaved}
+                onClick={onSave}
+                type='button'
+                class='btn btn-outline btn-sm'
+              >
                 <Save class='h-4 w-4' />
                 <span class='hidden sm:inline'>Save</span>
               </button>
-              <button type='button' class='btn btn-outline btn-sm'>
+              <button
+                onClick={onDownload}
+                type='button'
+                class='btn btn-outline btn-sm'
+              >
                 <Download class='h-4 w-4' />
                 <span class='hidden sm:inline'>Download</span>
               </button>
@@ -806,12 +890,12 @@ export const DeploymentPage = () => {
   return (
     <div class='h-screen flex flex-col'>
       <Header />
-      <div class='flex flex-1 min-h-0'>
+      <div class='flex flex-1 min-h-0 pb-15'>
         <LeftPanel />
         <main class='flex-1 flex flex-col h-full'>
           <TabNavigation activeTab={tab} />
           <section class='flex-1 h-full overflow-hidden'>
-            <div class='h-full bg-base-100 border border-base-300 overflow-hidden flex flex-col pb-15 hidden lg:flex'>
+            <div class='h-full bg-base-100 border border-base-300 overflow-hidden flex flex-col  hidden lg:flex'>
               {view}
             </div>
           </section>

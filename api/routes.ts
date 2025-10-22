@@ -24,7 +24,7 @@ import {
 } from './click-house-client.ts'
 import { decryptMessage, encryptMessage } from './user.ts'
 import { log } from './lib/log.ts'
-import { type ColumnInfo, fetchTablesData } from './sql.ts'
+import { type ColumnInfo, fetchTablesData, runSQL } from './sql.ts'
 
 const withUserSession = ({ user }: RequestContext) => {
   if (!user) throw Error('Missing user session')
@@ -464,10 +464,53 @@ const defs = {
         }),
         'The sorting criteria',
       ),
-      limit: STR('The maximum number of rows to return'),
-      offset: STR('The number of rows to skip'),
+      limit: NUM('The maximum number of rows to return'),
+      offset: NUM('The number of rows to skip'),
       search: STR('The search term to filter by'),
     }),
+    output: OBJ({
+      totalRows: NUM('The total number of rows matching the criteria'),
+      rows: ARR(OBJ({}, 'A row of the result set'), 'The result set rows'),
+    }),
+  }),
+  'GET/api/deployment/query': route({
+    fn: async (_ctx, { deployment, sql }) => {
+      const dep = DeploymentsCollection.get(deployment)
+
+      if (!dep) {
+        throw respond.NotFound({ message: 'Deployment not found' })
+      }
+
+      if (!dep?.databaseEnabled) {
+        throw respond.BadRequest({
+          message: 'Database not enabled for deployment',
+        })
+      }
+
+      const { sqlEndpoint, sqlToken } = dep
+      if (!sqlEndpoint || !sqlToken) {
+        throw respond.BadRequest({
+          message: 'SQL endpoint or token not configured for deployment',
+        })
+      }
+
+      const startTime = performance.now()
+      const data = await runSQL(sqlEndpoint, sqlToken, sql)
+
+      return {
+        duration: (performance.now() - startTime) / 1000, // in seconds
+        rows: data,
+      }
+    },
+    input: OBJ({
+      deployment: STR("The deployment's URL"),
+      sql: STR('The SQL query to execute'),
+    }),
+    output: OBJ({
+      duration: NUM('The duration of the query in seconds'),
+      rows: ARR(OBJ({}, 'A row of the result set'), 'The result set rows'),
+    }),
+    description: 'Run a SQL query against the deployment database',
   }),
 } as const
 
