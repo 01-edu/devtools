@@ -10,7 +10,6 @@ import {
   Download,
   Eye,
   FileText,
-  History,
   Info,
   MoreHorizontal,
   Play,
@@ -30,7 +29,8 @@ import {
 } from '../components/Filtre.tsx'
 import { effect, Signal } from '@preact/signals'
 import { api } from '../lib/api.ts'
-import { QueryHistory } from '../components/QueryHistory.tsx'
+import { QueryHistory, QueryHistoryItem } from '../components/QueryHistory.tsx'
+import { JSX } from 'preact'
 
 type AnyRecord = Record<string, unknown>
 
@@ -50,7 +50,7 @@ const comparators = {
 
 const tableData = api['POST/api/deployment/table/data'].signal()
 const querier = api['GET/api/deployment/query'].signal()
-const queriesHistory = new Signal<AnyRecord>(
+export const queriesHistory = new Signal<Record<string, QueryHistoryItem>>(
   JSON.parse(localStorage.getItem('savedQueries') || '{}'),
 )
 type Order = 'ASC' | 'DESC'
@@ -112,11 +112,11 @@ effect(() => {
   }
 })
 
-const onRun = () => {
+export const onRun = (query?: string) => {
   if (querier.pending) return
   const { dep, tab, q } = url.params
-  if (dep && tab === 'queries' && q) {
-    querier.fetch({ deployment: dep, sql: q })
+  if (dep && tab === 'queries' && (query || q)) {
+    querier.fetch({ deployment: dep, sql: query || q || '' })
   }
 }
 
@@ -124,6 +124,7 @@ function sha(message: string) {
   const data = new TextEncoder().encode(message)
   return crypto.subtle.digest('SHA-1', data)
 }
+
 function hashQuery(query: string) {
   const hash = sha(query).then((hashBuffer) => {
     const hashArray = Array.from(new Uint8Array(hashBuffer))
@@ -138,10 +139,14 @@ function hashQuery(query: string) {
 const onSave = () => {
   const query = (url.params.q || '').trim()
   if (query) {
-    console.log('queryHash', queryHash.value)
-
     if (!queryHash.value) return
-    queriesHistory.value = { ...queriesHistory.value, [queryHash.value]: query }
+    queriesHistory.value = {
+      ...queriesHistory.value,
+      [queryHash.value]: {
+        query,
+        timestamp: new Date().toISOString(),
+      },
+    }
   }
 }
 
@@ -434,11 +439,14 @@ export function Header() {
       </div>
       <div class='flex-none'>
         <label
-          htmlFor='my-drawer-4'
+          htmlFor='drawer-right'
+          onClick={() => {
+            drawerTab.value = 'history'
+          }}
           class='btn btn-outline btn-xs md:btn-sm drawer-button'
         >
-          <History class='h-4 w-4 mr-2' />
-          <span class='hidden sm:inline'>History</span>
+          <FileText class='h-4 w-4 mr-2' />
+          <span class='hidden sm:inline'>Saved Queries</span>
         </label>
       </div>
     </div>
@@ -669,7 +677,7 @@ export function TabNavigation({
           )}
           {activeTab !== 'logs' && (
             <label
-              onClick={activeTab === 'queries' ? onRun : undefined}
+              onClick={activeTab === 'queries' ? () => onRun() : undefined}
               htmlFor={activeTab === 'tables' ? 'my-drawer-4' : undefined}
               class='btn btn-primary btn-sm'
             >
@@ -751,7 +759,7 @@ export function LogsViewer() {
       <div class='flex-1 min-h-0 overflow-hidden'>
         <div class='w-full overflow-x-auto overflow-y-auto h-full'>
           <table class='table table-zebra w-full'>
-            <thead class='sticky top-0 z-20 bg-base-100 shadow-sm'>
+            <thead class='sticky top-0 bg-base-100 shadow-sm'>
               <tr class='border-b border-base-300'>
                 {logThreads.map((header) => (
                   <th
@@ -879,28 +887,36 @@ export function LogsViewer() {
   )
 }
 
-const TabViews = {
-  tables: <DataTable />,
-  queries: <QueryEditor />,
-  logs: <LogsViewer />,
-}
+type DrawerTab = 'history'
+
+const drawerTab = new Signal<DrawerTab>('history')
+
+const drawerViews: Record<DrawerTab, JSX.Element> = {
+  history: <QueryHistory />,
+} as const
 
 const Drawer = () => (
   <div class='drawer drawer-end'>
-    <input id='my-drawer-4' type='checkbox' class='drawer-toggle' />
+    <input id='drawer-right' type='checkbox' class='drawer-toggle' />
     <div class='drawer-side'>
       <label
-        htmlFor='my-drawer-4'
+        htmlFor='drawer-right'
         aria-label='close sidebar'
         class='drawer-overlay'
       >
       </label>
       <div class='bg-base-200 text-base-content min-h-full w-96'>
-        <QueryHistory />
+        {drawerViews[drawerTab.value]}
       </div>
     </div>
   </div>
 )
+
+const TabViews = {
+  tables: <DataTable />,
+  queries: <QueryEditor />,
+  logs: <LogsViewer />,
+}
 
 export const DeploymentPage = () => {
   const tab = (url.params.tab as 'tables' | 'queries' | 'logs') || 'tables'

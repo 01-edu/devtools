@@ -3,7 +3,16 @@ import { navigate, url } from '../lib/router.tsx'
 
 type FilterRow = { idx: number; key: string; op: string; value: string }
 
-const filterOperators = ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'like'] as const
+const filterOperators = [
+  'eq',
+  'neq',
+  'gt',
+  'gte',
+  'lt',
+  'lte',
+  'like',
+  'ilike',
+] as const
 
 export function parseFilters(prefix: string): FilterRow[] {
   const data = url.getAll(`f${prefix}`)
@@ -120,7 +129,7 @@ export const FilterMenu = (
         <Filter class='h-4 w-4' />
         Filters
       </summary>
-      <div class='dropdown-content z-10 w-110 mt-2'>
+      <div class='dropdown-content w-110 mt-2'>
         <div class='bg-base-100 rounded-box shadow border border-base-300 p-3 space-y-3'>
           <div class='space-y-2 max-h-72 overflow-y-auto pr-1'>
             {rows.map((r) => (
@@ -201,7 +210,7 @@ export const SortMenu = ({ tag, sortKeyOptions }: {
         <ArrowUpDown class='h-4 w-4' />
         Sort
       </summary>
-      <div class='dropdown-content z-10 w-80 mt-2'>
+      <div class='dropdown-content w-80 mt-2'>
         <div class='bg-base-100 rounded-box shadow border border-base-300 p-3 space-y-3'>
           <div class='space-y-2 max-h-60 overflow-y-auto pr-1'>
             {rows.map((r) => (

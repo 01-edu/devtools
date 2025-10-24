@@ -1,42 +1,24 @@
 import { ChevronRight, Clock, Play, Search, Trash2 } from 'lucide-preact'
 import { A } from '../lib/router.tsx'
+import { onRun, queriesHistory } from '../pages/DeploymentPage.tsx'
 
-interface QueryHistoryItem {
+export type QueryHistoryItem = {
   query: string
   timestamp: string
   columns?: number
   rows?: number
 }
 
-const deleteQuery = (_hash: string) => {
-  // TODO: implement delete functionality
+const deleteQuery = (hash: string) => {
+  const updatedHistory = { ...queriesHistory.value }
+  delete updatedHistory[hash]
+  queriesHistory.value = updatedHistory
 }
 
-export function QueryHistory({
-  onRunQuery,
-}: {
-  onRunQuery?: (query: string) => void
-}) {
-  const filteredHistory = [
-    {
-      query: 'SELECT * FROM users;',
-      timestamp: '2024-06-01T12:00:00Z',
-      columns: 5,
-      rows: 100,
-    },
-    {
-      query: 'SELECT id, name FROM products WHERE price > 100;',
-      timestamp: '2024-06-02T15:30:00Z',
-      columns: 2,
-      rows: 50,
-    },
-    {
-      query: 'UPDATE orders SET status = "shipped" WHERE id = 123;',
-      timestamp: '2024-06-03T09:45:00Z',
-      columns: 1,
-      rows: 1,
-    },
-  ]
+export const QueryHistory = () => {
+  const filteredHistory = Object.entries(queriesHistory.value).sort((a, b) =>
+    new Date(b[1].timestamp).getTime() - new Date(a[1].timestamp).getTime()
+  )
 
   return (
     <div class='flex flex-col h-full'>
@@ -52,9 +34,9 @@ export function QueryHistory({
         </div>
       </div>
       <div class='flex-1 overflow-y-auto'>
-        {filteredHistory.map((item, index) => (
+        {filteredHistory.map(([hash, item]) => (
           <div
-            key={index}
+            key={hash}
             class='p-4 border-b border-base-300 hover:bg-base-200'
           >
             <div class='flex items-center justify-between'>
@@ -75,8 +57,7 @@ export function QueryHistory({
                   type='button'
                   class='btn btn-xs btn-ghost'
                   title='Run query'
-                  onClick={() =>
-                    onRunQuery ? onRunQuery(item.query) : undefined}
+                  onClick={() => onRun(item.query)}
                 >
                   <Play class='w-4 h-4' />
                 </button>
@@ -92,7 +73,7 @@ export function QueryHistory({
                   class='btn btn-xs btn-ghost text-error'
                   title='Delete from history'
                   disabled={!deleteQuery}
-                  onClick={() => deleteQuery(item.timestamp)}
+                  onClick={() => deleteQuery(hash)}
                 >
                   <Trash2 class='w-4 h-4' />
                 </button>
