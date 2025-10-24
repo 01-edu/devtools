@@ -29,6 +29,7 @@ import {
 } from '../components/Filtre.tsx'
 import { effect, Signal } from '@preact/signals'
 import { api } from '../lib/api.ts'
+import { h } from 'preact'
 
 type AnyRecord = Record<string, unknown>
 
@@ -98,39 +99,56 @@ effect(() => {
   }
 })
 
+const queryHash = new Signal<string>('')
+effect(() => {
+  const query = (url.params.q || '').trim()
+  if (query) {
+    hashQuery(query).then((hash) => {
+      queryHash.value = hash
+    })
+  } else {
+    queryHash.value = ''
+  }
+})
+
 const onRun = () => {
   if (querier.pending) return
   const { dep, tab, q } = url.params
-  console.log('Running query:', { dep, tab, q })
-
   if (dep && tab === 'queries' && q) {
     querier.fetch({ deployment: dep, sql: q })
   }
 }
 
+function sha(message: string) {
+  const data = new TextEncoder().encode(message)
+  return crypto.subtle.digest('SHA-1', data)
+}
 function hashQuery(query: string) {
-  let hash = 0
-  for (let i = 0; i < query.length; i++) {
-    const char = query.charCodeAt(i)
-    hash = ((hash << 5) - hash + char) | 0 // | 0 garde un entier 32-bit
-  }
-  return (hash >>> 0).toString(36) // base36
+  const hash = sha(query).then((hashBuffer) => {
+    const hashArray = Array.from(new Uint8Array(hashBuffer))
+    const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join(
+      '',
+    )
+    return hashHex
+  })
+  return hash
 }
 
 const onSave = () => {
   const query = (url.params.q || '').trim()
   if (query) {
-    const hash = hashQuery(query)
-    queriesHistory.value = { ...queriesHistory.value, [hash]: query }
+    if (!queryHash.value) return
+    queriesHistory.value = { ...queriesHistory.value, [queryHash.value]: query }
   }
 }
 
 const onDownload = () => {
   const query = (url.params.q || '').trim()
   if (query && querier.data?.rows) {
-    const hash = hashQuery(query)
+    if (!queryHash.value) return
     const rows = querier.data.rows
     const json = {
+      hash: queryHash.value,
       query,
       rows,
       metadata: {
@@ -145,7 +163,7 @@ const onDownload = () => {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `query-${hash}.json`
+    a.download = `query-${queryHash.value}.json`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -613,8 +631,7 @@ export function TabNavigation({
     'event_name',
   ] as const
 
-  const queryHash = hashQuery((url.params.q || '').trim())
-  const querySaved = Boolean(queriesHistory.value[queryHash])
+  const querySaved = Boolean(queriesHistory.value[queryHash.value])
 
   return (
     <div class='bg-base-100 border-b border-base-300 relative'>
