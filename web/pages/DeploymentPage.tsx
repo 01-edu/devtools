@@ -10,6 +10,7 @@ import {
   Download,
   Eye,
   FileText,
+  History,
   Info,
   MoreHorizontal,
   Play,
@@ -29,6 +30,7 @@ import {
 } from '../components/Filtre.tsx'
 import { effect, Signal } from '@preact/signals'
 import { api } from '../lib/api.ts'
+import { QueryHistory } from '../components/QueryHistory.tsx'
 
 type AnyRecord = Record<string, unknown>
 
@@ -431,10 +433,13 @@ export function Header() {
         </div>
       </div>
       <div class='flex-none'>
-        <button type='button' class='btn btn-outline btn-xs md:btn-sm'>
-          <FileText class='h-4 w-4 mr-2' />
-          <span class='hidden sm:inline'>Queries</span>
-        </button>
+        <label
+          htmlFor='my-drawer-4'
+          class='btn btn-outline btn-xs md:btn-sm drawer-button'
+        >
+          <History class='h-4 w-4 mr-2' />
+          <span class='hidden sm:inline'>History</span>
+        </label>
       </div>
     </div>
   )
@@ -890,14 +895,9 @@ const Drawer = () => (
         class='drawer-overlay'
       >
       </label>
-      <ul class='menu bg-base-200 text-base-content min-h-full w-80 p-4'>
-        <li>
-          <a>Sidebar Item 1</a>
-        </li>
-        <li>
-          <a>Sidebar Item 2</a>
-        </li>
-      </ul>
+      <div class='bg-base-200 text-base-content min-h-full w-96'>
+        <QueryHistory />
+      </div>
     </div>
   </div>
 )
