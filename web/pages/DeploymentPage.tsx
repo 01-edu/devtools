@@ -29,7 +29,6 @@ import {
 } from '../components/Filtre.tsx'
 import { effect, Signal } from '@preact/signals'
 import { api } from '../lib/api.ts'
-import { h } from 'preact'
 
 type AnyRecord = Record<string, unknown>
 
@@ -137,6 +136,8 @@ function hashQuery(query: string) {
 const onSave = () => {
   const query = (url.params.q || '').trim()
   if (query) {
+    console.log('queryHash', queryHash.value)
+
     if (!queryHash.value) return
     queriesHistory.value = { ...queriesHistory.value, [queryHash.value]: query }
   }
@@ -187,7 +188,7 @@ export function QueryEditor() {
             value={query}
             onInput={(e) => {
               const v = (e.target as HTMLTextAreaElement).value
-              navigate({ params: { q: v } })
+              navigate({ params: { q: v }, replace: true })
             }}
             onKeyDown={(e) => {
               if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
@@ -393,12 +394,15 @@ export function Header() {
   const item = sidebarItems[url.params.sbi || Object.keys(sidebarItems)[0]]
   const dep = url.params.dep
   if (!dep && deployments.data?.length) {
-    navigate({ params: { dep: deployments.data[0].url } })
+    navigate({ params: { dep: deployments.data[0].url }, replace: true })
   }
 
   const onChangeDeployment = (e: Event) => {
     const v = (e.target as HTMLSelectElement).value
-    navigate({ params: { dep: v } })
+    navigate({
+      params: { dep: v, table: null, ft: null, st: null, qt: null },
+      replace: true,
+    })
   }
 
   return (
@@ -653,7 +657,7 @@ export function TabNavigation({
                 value={url.params.qt || ''}
                 onInput={(e) => {
                   const value = (e.target as HTMLInputElement).value
-                  navigate({ params: { qt: value || null } })
+                  navigate({ params: { qt: value || null }, replace: true })
                 }}
               />
             </label>

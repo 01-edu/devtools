@@ -223,6 +223,7 @@ export const fetchTablesData = async (
   const countQuery =
     `SELECT COUNT(*) as count FROM ${params.table} ${whereClause}`
   const rows = await runSQL(sqlEndpoint, sqlToken, query)
+
   return {
     rows,
     totalRows: limit > 0

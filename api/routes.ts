@@ -438,10 +438,15 @@ const defs = {
         throw respond.NotFound({ message: 'Table not found in schema' })
       }
 
-      return fetchTablesData(
-        { ...input, deployment: dep, table },
-        tableDef.columnsMap as unknown as Map<string, ColumnInfo>,
-      )
+      try {
+        return fetchTablesData(
+          { ...input, deployment: dep, table },
+          tableDef.columnsMap as unknown as Map<string, ColumnInfo>,
+        )
+      } catch (err) {
+        console.error('fetchTablesData error', err)
+        throw err
+      }
     },
     input: OBJ({
       deployment: STR("The deployment's URL"),
