@@ -1,5 +1,5 @@
 import { ChevronRight, Clock, Play, Search, Trash2 } from 'lucide-preact'
-import { A } from '../lib/router.tsx'
+import { A, navigate, url } from '../lib/router.tsx'
 import { onRun, queriesHistory } from '../pages/DeploymentPage.tsx'
 
 export type QueryHistoryItem = {
@@ -18,22 +18,42 @@ const deleteQuery = (hash: string) => {
 export const QueryHistory = () => {
   const filteredHistory = Object.entries(queriesHistory.value).sort((a, b) =>
     new Date(b[1].timestamp).getTime() - new Date(a[1].timestamp).getTime()
-  )
+  ).filter(([_, item]) => {
+    const qh = url.params.qh?.toLowerCase() || ''
+    return item.query.toLowerCase().includes(qh)
+  })
 
   return (
     <div class='flex flex-col h-full'>
       <div class='p-4 border-b border-base-300'>
         <h2 class='text-lg font-semibold'>Query History</h2>
-        <div class='relative mt-2'>
-          <Search class='absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-base-content/50' />
-          <input
-            type='text'
-            placeholder='Search history'
-            class='input input-sm w-full pl-8'
-          />
+        <div class='flex items-center justify-between mt-4 gap-2'>
+          <label class='input input-sm min-w-0 w-full sm:w-64'>
+            <Search class='opacity-50' />
+            <input
+              type='search'
+              class='grow'
+              placeholder='Search'
+              value={url.params.qh || ''}
+              onInput={(e) => {
+                const value = (e.target as HTMLInputElement).value
+                navigate({ params: { qh: value || null }, replace: true })
+              }}
+            />
+          </label>
+          <button
+            type='button'
+            class='btn btn-xs  btn-ghost text-error'
+            title='Delete All from history'
+            disabled={Object.keys(queriesHistory.value).length === 0}
+            onClick={() => queriesHistory.value = {}}
+          >
+            <Trash2 class='w-4 h-4' />
+            Clear All
+          </button>
         </div>
       </div>
-      <div class='flex-1 overflow-y-auto'>
+      <div class='flex-1  overflow-auto'>
         {filteredHistory.map(([hash, item]) => (
           <div
             key={hash}
@@ -53,18 +73,18 @@ export const QueryHistory = () => {
                 </div>
               </div>
               <div class='flex items-center gap-2 shrink-0 ml-4'>
-                <button
-                  type='button'
+                <A
+                  params={{ q: item.query, tab: 'queries' }}
                   class='btn btn-xs btn-ghost'
                   title='Run query'
                   onClick={() => onRun(item.query)}
                 >
                   <Play class='w-4 h-4' />
-                </button>
+                </A>
                 <A
                   class='btn btn-xs btn-ghost'
                   title='Insert into editor'
-                  params={{ q: item.query }}
+                  params={{ q: item.query, tab: 'queries' }}
                 >
                   <ChevronRight class='w-4 h-4' />
                 </A>

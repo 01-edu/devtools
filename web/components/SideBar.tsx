@@ -21,18 +21,17 @@ export function Sidebar(
     title?: string
   },
 ) {
-  const { sb } = url.params
+  const sb = url.params.sb
   return (
     <div class='drawer-side'>
-      <label htmlFor='drawer-toggle' class='drawer-overlay'></label>
       <div
         class={`${
-          sb ? 'w-16' : 'w-64'
+          sb ? 'w-64' : 'w-16'
         } min-h-94/100 bg-base-100 border-r border-base-300 flex flex-col transition-all duration-300`}
       >
         <div class='p-4 border-b border-base-300'>
           <div class='flex items-center justify-between'>
-            {!sb && (
+            {sb && (
               <span class='text-sm font-medium rounded bg-base-200 w-7/10 py-1 px-2 text-center text-base-content/60'>
                 {title || 'Project Name'}
               </span>
@@ -42,8 +41,8 @@ export function Sidebar(
               class='p-2 hover:bg-base-200 rounded'
             >
               {sb
-                ? <ChevronsRight class='h-4 w-4 text-base-content/60' />
-                : <ChevronsLeft class='h-4 w-4 text-base-content/60' />}
+                ? <ChevronsLeft class='h-4 w-4 text-base-content/60' />
+                : <ChevronsRight class='h-4 w-4 text-base-content/60' />}
             </A>
           </div>
         </div>
@@ -54,12 +53,12 @@ export function Sidebar(
               <li key={slug}>
                 <A
                   class={`${sbi === slug ? 'bg-base-200' : ''}`}
-                  data-tip={sb ? item.label : undefined}
+                  data-tip={sb ? undefined : item.label}
                   params={{ sbi: slug }}
                   replace
                 >
                   <item.icon class='h-4 w-4' />
-                  {!sb && item.label}
+                  {sb && item.label}
                 </A>
               </li>
             ))}
@@ -77,7 +76,7 @@ export function Sidebar(
             }`}
           >
             <Settings class='h-4 w-4' />
-            {!sb && 'Settings'}
+            {sb && 'Settings'}
           </A>
         </div>
       </div>

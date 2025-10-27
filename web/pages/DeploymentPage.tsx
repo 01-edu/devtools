@@ -51,12 +51,12 @@ const comparators = {
 const tableData = api['POST/api/deployment/table/data'].signal()
 const querier = api['GET/api/deployment/query'].signal()
 export const queriesHistory = new Signal<Record<string, QueryHistoryItem>>(
-  JSON.parse(localStorage.getItem('savedQueries') || '{}'),
+  JSON.parse(localStorage.getItem('saved_queries') || '{}'),
 )
 type Order = 'ASC' | 'DESC'
 
 queriesHistory.subscribe((val) => {
-  localStorage.setItem('savedQueries', JSON.stringify(val))
+  localStorage.setItem('saved_queries', JSON.stringify(val))
 })
 
 // Effect to fetch schema when deployment URL changes
@@ -87,6 +87,7 @@ effect(() => {
         key: r.key,
         order: r.dir === 'asc' ? 'ASC' : 'DESC' as Order,
       }))
+
       tableData.fetch({
         deployment: dep,
         table: tableName,
@@ -112,11 +113,11 @@ effect(() => {
   }
 })
 
-export const onRun = (query?: string) => {
+export const onRun = (query: string) => {
   if (querier.pending) return
-  const { dep, tab, q } = url.params
-  if (dep && tab === 'queries' && (query || q)) {
-    querier.fetch({ deployment: dep, sql: query || q || '' })
+  const { dep, tab } = url.params
+  if (dep && tab === 'queries' && query) {
+    querier.fetch({ deployment: dep, sql: query })
   }
 }
 
@@ -200,7 +201,10 @@ export function QueryEditor() {
             onKeyDown={(e) => {
               if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
                 e.preventDefault()
-                onRun()
+                const q = url.params.q
+                if (q) {
+                  onRun(q)
+                }
               }
             }}
             class='textarea w-full h-full font-mono text-sm leading-6 pl-12 pr-3 py-3 bg-base-100 border-base-300 focus:outline-none focus:ring-0 focus:shadow-none focus:border-primary resize-none'
@@ -438,16 +442,13 @@ export function Header() {
         </div>
       </div>
       <div class='flex-none'>
-        <label
-          htmlFor='drawer-right'
-          onClick={() => {
-            drawerTab.value = 'history'
-          }}
+        <A
+          params={{ drawer: 'history' }}
           class='btn btn-outline btn-xs md:btn-sm drawer-button'
         >
           <FileText class='h-4 w-4 mr-2' />
           <span class='hidden sm:inline'>Saved Queries</span>
-        </label>
+        </A>
       </div>
     </div>
   )
@@ -676,9 +677,11 @@ export function TabNavigation({
             </label>
           )}
           {activeTab !== 'logs' && (
-            <label
-              onClick={activeTab === 'queries' ? () => onRun() : undefined}
-              htmlFor={activeTab === 'tables' ? 'my-drawer-4' : undefined}
+            <A
+              params={{ drawer: activeTab === 'tables' ? 'insert' : null }}
+              onClick={activeTab === 'queries'
+                ? () => onRun(url.params.q || '')
+                : undefined}
               class='btn btn-primary btn-sm'
             >
               {activeTab === 'queries'
@@ -687,7 +690,7 @@ export function TabNavigation({
               <span class='hidden sm:inline'>
                 {activeTab === 'queries' ? 'Run query' : 'Insert row'}
               </span>
-            </label>
+            </A>
           )}
           {activeTab !== 'queries' && (
             <>
@@ -887,17 +890,32 @@ export function LogsViewer() {
   )
 }
 
-type DrawerTab = 'history'
+const CommingSoon = ({ title }: { title: string }) => (
+  <div class='p-4'>
+    <h3 class='text-lg font-semibold mb-4'>{title}</h3>
+    <p>This feature is coming soon!</p>
+  </div>
+)
 
-const drawerTab = new Signal<DrawerTab>('history')
-
+type DrawerTab = 'history' | 'insert'
 const drawerViews: Record<DrawerTab, JSX.Element> = {
   history: <QueryHistory />,
+  insert: <CommingSoon title='Insert Row' />,
 } as const
 
 const Drawer = () => (
   <div class='drawer drawer-end'>
-    <input id='drawer-right' type='checkbox' class='drawer-toggle' />
+    <input
+      id='drawer-right'
+      type='checkbox'
+      class='drawer-toggle'
+      checked={url.params.drawer !== null}
+      onChange={(e) => {
+        if (!e.currentTarget.checked) {
+          navigate({ params: { drawer: null }, replace: true })
+        }
+      }}
+    />
     <div class='drawer-side'>
       <label
         htmlFor='drawer-right'
@@ -905,8 +923,17 @@ const Drawer = () => (
         class='drawer-overlay'
       >
       </label>
-      <div class='bg-base-200 text-base-content min-h-full w-96'>
-        {drawerViews[drawerTab.value]}
+      <div class='bg-base-200 text-base-content min-h-full w-96 flex flex-col'>
+        <div class='flex-1 overflow-hidden'>
+          <div class='drawer-view' data-view='history'>
+            {drawerViews[url.params.drawer as DrawerTab] || (
+              <div class='p-4'>
+                <h3 class='text-lg font-semibold mb-4'>No view selected</h3>
+                <p>Please select a view from the sidebar.</p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   </div>
