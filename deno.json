@@ -26,7 +26,15 @@
     "docker:logs": "docker logs -f devtools-app",
     "docker:exec": "docker exec -it devtools-app /bin/sh",
     "docker:clean": "docker rm -f devtools-app && docker rmi devtools",
-    "env:dev": "deno run -A tasks/env.ts"
+    "env:dev": "deno run -A tasks/env.ts",
+
+    "clickhouse:clean": "deno run -A tasks/deploy-clickhouse.ts --action=clean --env=dev --force",
+    "clickhouse:deploy": "deno run -A tasks/deploy-clickhouse.ts --env=dev",
+    "clickhouse:deploy:prod": "deno run -A tasks/deploy-clickhouse.ts --env=prod",
+    "clickhouse:stop": "deno run -A tasks/deploy-clickhouse.ts --action=stop --env=dev",
+    "clickhouse:restart": "deno run -A tasks/deploy-clickhouse.ts --action=restart --env=dev",
+    "clickhouse:status": "deno run -A tasks/deploy-clickhouse.ts --action=status --env=dev",
+    "clickhouse:remove": "deno run -A tasks/deploy-clickhouse.ts --action=remove --env=dev"
   },
   "imports": {
     "./": "./",
