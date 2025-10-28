@@ -3,7 +3,16 @@ import { navigate, url } from '../lib/router.tsx'
 
 type FilterRow = { idx: number; key: string; op: string; value: string }
 
-const filterOperators = ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'like'] as const
+const filterOperators = [
+  'eq',
+  'neq',
+  'gt',
+  'gte',
+  'lt',
+  'lte',
+  'like',
+  'ilike',
+] as const
 
 export function parseFilters(prefix: string): FilterRow[] {
   const data = url.getAll(`f${prefix}`)
@@ -28,7 +37,10 @@ function setFilters(prefix: string, rows: FilterRow[]) {
     const v = rows[i]
     next.push([v.key, v.op, v.value].join(','))
   }
-  navigate({ params: { [`f${prefix}`]: next }, replace: true })
+  navigate({
+    params: { [`f${prefix}`]: next, [`${prefix}page`]: null },
+    replace: true,
+  })
 }
 
 function addFilter(prefix: string) {
@@ -115,12 +127,17 @@ export const FilterMenu = (
   const rows = parseFilters(prefix)
 
   return (
-    <details class='dropdown dropdown-end'>
-      <summary class='btn btn-outline btn-sm'>
+    <div class='dropdown dropdown-end'>
+      <button
+        type='button'
+        class='btn btn-outline btn-sm'
+        popovertarget='popover-1'
+        style='anchor-name:--anchor-1'
+      >
         <Filter class='h-4 w-4' />
         Filters
-      </summary>
-      <div class='dropdown-content z-10 w-110 mt-2'>
+      </button>
+      <div class='dropdown-content w-110 mt-2'>
         <div class='bg-base-100 rounded-box shadow border border-base-300 p-3 space-y-3'>
           <div class='space-y-2 max-h-72 overflow-y-auto pr-1'>
             {rows.map((r) => (
@@ -185,7 +202,7 @@ export const FilterMenu = (
           </button>
         </div>
       </div>
-    </details>
+    </div>
   )
 }
 
@@ -196,12 +213,17 @@ export const SortMenu = ({ tag, sortKeyOptions }: {
   const prefix = tag === 'tables' ? 't' : 'l'
   const rows = parseSort(prefix)
   return (
-    <details class='dropdown dropdown-end'>
-      <summary class='btn btn-outline btn-sm'>
+    <div class='dropdown dropdown-end'>
+      <button
+        type='button'
+        class='btn btn-outline btn-sm'
+        popovertarget='popover-1'
+        style='anchor-name:--anchor-1'
+      >
         <ArrowUpDown class='h-4 w-4' />
         Sort
-      </summary>
-      <div class='dropdown-content z-10 w-80 mt-2'>
+      </button>
+      <div class='dropdown-content w-80 mt-2'>
         <div class='bg-base-100 rounded-box shadow border border-base-300 p-3 space-y-3'>
           <div class='space-y-2 max-h-60 overflow-y-auto pr-1'>
             {rows.map((r) => (
@@ -253,6 +275,6 @@ export const SortMenu = ({ tag, sortKeyOptions }: {
           </button>
         </div>
       </div>
-    </details>
+    </div>
   )
 }

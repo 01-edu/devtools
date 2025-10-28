@@ -29,6 +29,8 @@ import {
 } from '../components/Filtre.tsx'
 import { effect, Signal } from '@preact/signals'
 import { api } from '../lib/api.ts'
+import { QueryHistory, QueryHistoryItem } from '../components/QueryHistory.tsx'
+import { JSX } from 'preact'
 
 type AnyRecord = Record<string, unknown>
 
@@ -48,13 +50,13 @@ const comparators = {
 
 const tableData = api['POST/api/deployment/table/data'].signal()
 const querier = api['GET/api/deployment/query'].signal()
-const queriesHistory = new Signal<AnyRecord>(
-  JSON.parse(localStorage.getItem('savedQueries') || '{}'),
+export const queriesHistory = new Signal<Record<string, QueryHistoryItem>>(
+  JSON.parse(localStorage.getItem('saved_queries') || '{}'),
 )
 type Order = 'ASC' | 'DESC'
 
 queriesHistory.subscribe((val) => {
-  localStorage.setItem('savedQueries', JSON.stringify(val))
+  localStorage.setItem('saved_queries', JSON.stringify(val))
 })
 
 // Effect to fetch schema when deployment URL changes
@@ -85,6 +87,7 @@ effect(() => {
         key: r.key,
         order: r.dir === 'asc' ? 'ASC' : 'DESC' as Order,
       }))
+
       tableData.fetch({
         deployment: dep,
         table: tableName,
@@ -110,11 +113,11 @@ effect(() => {
   }
 })
 
-const onRun = () => {
+export const onRun = (query: string) => {
   if (querier.pending) return
-  const { dep, tab, q } = url.params
-  if (dep && tab === 'queries' && q) {
-    querier.fetch({ deployment: dep, sql: q })
+  const { dep, tab } = url.params
+  if (dep && tab === 'queries' && query) {
+    querier.fetch({ deployment: dep, sql: query })
   }
 }
 
@@ -122,6 +125,7 @@ function sha(message: string) {
   const data = new TextEncoder().encode(message)
   return crypto.subtle.digest('SHA-1', data)
 }
+
 function hashQuery(query: string) {
   const hash = sha(query).then((hashBuffer) => {
     const hashArray = Array.from(new Uint8Array(hashBuffer))
@@ -136,10 +140,14 @@ function hashQuery(query: string) {
 const onSave = () => {
   const query = (url.params.q || '').trim()
   if (query) {
-    console.log('queryHash', queryHash.value)
-
     if (!queryHash.value) return
-    queriesHistory.value = { ...queriesHistory.value, [queryHash.value]: query }
+    queriesHistory.value = {
+      ...queriesHistory.value,
+      [queryHash.value]: {
+        query,
+        timestamp: new Date().toISOString(),
+      },
+    }
   }
 }
 
@@ -193,7 +201,10 @@ export function QueryEditor() {
             onKeyDown={(e) => {
               if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
                 e.preventDefault()
-                onRun()
+                const q = url.params.q
+                if (q) {
+                  onRun(q)
+                }
               }
             }}
             class='textarea w-full h-full font-mono text-sm leading-6 pl-12 pr-3 py-3 bg-base-100 border-base-300 focus:outline-none focus:ring-0 focus:shadow-none focus:border-primary resize-none'
@@ -431,10 +442,13 @@ export function Header() {
         </div>
       </div>
       <div class='flex-none'>
-        <button type='button' class='btn btn-outline btn-xs md:btn-sm'>
+        <A
+          params={{ drawer: 'history' }}
+          class='btn btn-outline btn-xs md:btn-sm drawer-button'
+        >
           <FileText class='h-4 w-4 mr-2' />
-          <span class='hidden sm:inline'>Queries</span>
-        </button>
+          <span class='hidden sm:inline'>Saved Queries</span>
+        </A>
       </div>
     </div>
   )
@@ -663,9 +677,11 @@ export function TabNavigation({
             </label>
           )}
           {activeTab !== 'logs' && (
-            <label
-              onClick={activeTab === 'queries' ? onRun : undefined}
-              htmlFor={activeTab === 'tables' ? 'my-drawer-4' : undefined}
+            <A
+              params={{ drawer: activeTab === 'tables' ? 'insert' : null }}
+              onClick={activeTab === 'queries'
+                ? () => onRun(url.params.q || '')
+                : undefined}
               class='btn btn-primary btn-sm'
             >
               {activeTab === 'queries'
@@ -674,7 +690,7 @@ export function TabNavigation({
               <span class='hidden sm:inline'>
                 {activeTab === 'queries' ? 'Run query' : 'Insert row'}
               </span>
-            </label>
+            </A>
           )}
           {activeTab !== 'queries' && (
             <>
@@ -746,7 +762,7 @@ export function LogsViewer() {
       <div class='flex-1 min-h-0 overflow-hidden'>
         <div class='w-full overflow-x-auto overflow-y-auto h-full'>
           <table class='table table-zebra w-full'>
-            <thead class='sticky top-0 z-20 bg-base-100 shadow-sm'>
+            <thead class='sticky top-0 bg-base-100 shadow-sm'>
               <tr class='border-b border-base-300'>
                 {logThreads.map((header) => (
                   <th
@@ -874,33 +890,60 @@ export function LogsViewer() {
   )
 }
 
+const CommingSoon = ({ title }: { title: string }) => (
+  <div class='p-4'>
+    <h3 class='text-lg font-semibold mb-4'>{title}</h3>
+    <p>This feature is coming soon!</p>
+  </div>
+)
+
+type DrawerTab = 'history' | 'insert'
+const drawerViews: Record<DrawerTab, JSX.Element> = {
+  history: <QueryHistory />,
+  insert: <CommingSoon title='Insert Row' />,
+} as const
+
+const Drawer = () => (
+  <div class='drawer drawer-end'>
+    <input
+      id='drawer-right'
+      type='checkbox'
+      class='drawer-toggle'
+      checked={url.params.drawer !== null}
+      onChange={(e) => {
+        if (!e.currentTarget.checked) {
+          navigate({ params: { drawer: null }, replace: true })
+        }
+      }}
+    />
+    <div class='drawer-side'>
+      <label
+        htmlFor='drawer-right'
+        aria-label='close sidebar'
+        class='drawer-overlay'
+      >
+      </label>
+      <div class='bg-base-200 text-base-content min-h-full w-96 flex flex-col'>
+        <div class='flex-1 overflow-hidden'>
+          <div class='drawer-view' data-view='history'>
+            {drawerViews[url.params.drawer as DrawerTab] || (
+              <div class='p-4'>
+                <h3 class='text-lg font-semibold mb-4'>No view selected</h3>
+                <p>Please select a view from the sidebar.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+)
+
 const TabViews = {
   tables: <DataTable />,
   queries: <QueryEditor />,
   logs: <LogsViewer />,
 }
-
-const Drawer = () => (
-  <div class='drawer drawer-end'>
-    <input id='my-drawer-4' type='checkbox' class='drawer-toggle' />
-    <div class='drawer-side'>
-      <label
-        htmlFor='my-drawer-4'
-        aria-label='close sidebar'
-        class='drawer-overlay'
-      >
-      </label>
-      <ul class='menu bg-base-200 text-base-content min-h-full w-80 p-4'>
-        <li>
-          <a>Sidebar Item 1</a>
-        </li>
-        <li>
-          <a>Sidebar Item 2</a>
-        </li>
-      </ul>
-    </div>
-  </div>
-)
 
 export const DeploymentPage = () => {
   const tab = (url.params.tab as 'tables' | 'queries' | 'logs') || 'tables'
