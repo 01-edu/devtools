@@ -386,40 +386,59 @@ const defs = {
     input: LogsInputSchema,
     description: 'Insert logs into ClickHouse NB: a Bearer token is required',
   }),
-  'GET/api/logs': route({
-    authorize: withUserSession,
+  'POST/api/deployment/logs': route({
+    // authorize: withUserSession,
     fn: (ctx, params) => {
-      const deployment = DeploymentsCollection.get(params.resource)
+      const deployment = DeploymentsCollection.get(params.deployment)
       if (!deployment) {
         throw respond.NotFound({ message: 'Deployment not found' })
       }
-      const project = ProjectsCollection.get(deployment.projectId)
-      if (!project) throw respond.NotFound({ message: 'Project not found' })
-      if (!project.isPublic && !ctx.user?.isAdmin) {
-        const team = TeamsCollection.find((t) => t.teamId === project.teamId)
-        if (!team?.teamMembers.includes(ctx.user?.userEmail || '')) {
-          throw respond.Forbidden({ message: 'Access to project logs denied' })
-        }
+      if (!deployment.logsEnabled) {
+        throw respond.BadRequest({
+          message: 'Logging not enabled for deployment',
+        })
       }
+      // const project = ProjectsCollection.get(deployment.projectId)
+      // if (!project) throw respond.NotFound({ message: 'Project not found' })
+      // if (!project.isPublic && !ctx.user?.isAdmin) {
+      //   const team = TeamsCollection.find((t) => t.teamId === project.teamId)
+      //   if (!team?.teamMembers.includes(ctx.user?.userEmail || '')) {
+      //     throw respond.Forbidden({ message: 'Access to project logs denied' })
+      //   }
+      // }
 
-      return getLogs(params)
+      return getLogs(deployment.url, params)
     },
     input: OBJ({
-      resource: STR('The resource to fetch logs for'),
-      severity_number: optional(STR('The log level to filter by')),
-      start_date: optional(STR('The start date for the date range filter')),
-      end_date: optional(STR('The end date for the date range filter')),
-      sort_by: optional(STR('The field to sort by')),
-      sort_order: optional(
-        LIST(['ASC', 'DESC'], 'The sort order (ASC or DESC)'),
+      deployment: STR("The deployment's URL"),
+      filter: ARR(
+        OBJ({
+          key: STR('The column to filter by'),
+          comparator: LIST(
+            ['=', '!=', '<', '<=', '>', '>=', 'LIKE', 'ILIKE'],
+            'The comparison operator',
+          ),
+          value: STR('The value to filter by'),
+        }),
+        'The filtering criteria',
       ),
-      // search: optional(OBJ({}, 'A map of fields to search by')),
+      sort: ARR(
+        OBJ({
+          key: STR('The column to sort by'),
+          order: LIST(['ASC', 'DESC'], 'The sort order (ASC or DESC)'),
+        }),
+        'The sorting criteria',
+      ),
+      limit: NUM('The maximum number of rows to return'),
+      offset: NUM('The number of rows to skip'),
+      search: STR('The search term to filter by'),
     }),
     output: ARR(LogSchema, 'List of logs'),
     description: 'Get logs from ClickHouse',
   }),
   'POST/api/deployment/table/data': route({
-    fn: (_, { deployment, table, ...input }) => {
+    authorize: withUserSession,
+    fn: (ctx, { deployment, table, ...input }) => {
       const dep = DeploymentsCollection.get(deployment)
       if (!dep) {
         throw respond.NotFound({ message: 'Deployment not found' })
@@ -429,6 +448,15 @@ const defs = {
         throw respond.BadRequest({
           message: 'Database not enabled for deployment',
         })
+      }
+
+      const project = ProjectsCollection.get(dep.projectId)
+      if (!project) throw respond.NotFound({ message: 'Project not found' })
+      if (!project.isPublic && !ctx.user?.isAdmin) {
+        const team = TeamsCollection.find((t) => t.teamId === project.teamId)
+        if (!team?.teamMembers.includes(ctx.user?.userEmail || '')) {
+          throw respond.Forbidden({ message: 'Access to project logs denied' })
+        }
       }
 
       const schema = DatabaseSchemasCollection.get(deployment)
@@ -479,7 +507,8 @@ const defs = {
     }),
   }),
   'GET/api/deployment/query': route({
-    fn: async (_ctx, { deployment, sql }) => {
+    authorize: withUserSession,
+    fn: async (ctx, { deployment, sql }) => {
       const dep = DeploymentsCollection.get(deployment)
 
       if (!dep) {
@@ -490,6 +519,15 @@ const defs = {
         throw respond.BadRequest({
           message: 'Database not enabled for deployment',
         })
+      }
+
+      const project = ProjectsCollection.get(dep.projectId)
+      if (!project) throw respond.NotFound({ message: 'Project not found' })
+      if (!project.isPublic && !ctx.user?.isAdmin) {
+        const team = TeamsCollection.find((t) => t.teamId === project.teamId)
+        if (!team?.teamMembers.includes(ctx.user?.userEmail || '')) {
+          throw respond.Forbidden({ message: 'Access to project logs denied' })
+        }
       }
 
       const { sqlEndpoint, sqlToken } = dep
