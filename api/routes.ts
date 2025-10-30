@@ -20,6 +20,7 @@ import {
   getLogs,
   insertLogs,
   LogSchema,
+  LogSchemaOutput,
   LogsInputSchema,
 } from './click-house-client.ts'
 import { decryptMessage, encryptMessage } from './user.ts'
@@ -387,7 +388,7 @@ const defs = {
     description: 'Insert logs into ClickHouse NB: a Bearer token is required',
   }),
   'POST/api/deployment/logs': route({
-    // authorize: withUserSession,
+    authorize: withUserSession,
     fn: (ctx, params) => {
       const deployment = DeploymentsCollection.get(params.deployment)
       if (!deployment) {
@@ -398,14 +399,14 @@ const defs = {
           message: 'Logging not enabled for deployment',
         })
       }
-      // const project = ProjectsCollection.get(deployment.projectId)
-      // if (!project) throw respond.NotFound({ message: 'Project not found' })
-      // if (!project.isPublic && !ctx.user?.isAdmin) {
-      //   const team = TeamsCollection.find((t) => t.teamId === project.teamId)
-      //   if (!team?.teamMembers.includes(ctx.user?.userEmail || '')) {
-      //     throw respond.Forbidden({ message: 'Access to project logs denied' })
-      //   }
-      // }
+      const project = ProjectsCollection.get(deployment.projectId)
+      if (!project) throw respond.NotFound({ message: 'Project not found' })
+      if (!project.isPublic && !ctx.user?.isAdmin) {
+        const team = TeamsCollection.find((t) => t.teamId === project.teamId)
+        if (!team?.teamMembers.includes(ctx.user?.userEmail || '')) {
+          throw respond.Forbidden({ message: 'Access to project logs denied' })
+        }
+      }
 
       return getLogs(deployment.url, params)
     },
@@ -433,7 +434,7 @@ const defs = {
       offset: NUM('The number of rows to skip'),
       search: STR('The search term to filter by'),
     }),
-    output: ARR(LogSchema, 'List of logs'),
+    output: ARR(LogSchemaOutput, 'List of logs'),
     description: 'Get logs from ClickHouse',
   }),
   'POST/api/deployment/table/data': route({
@@ -455,7 +456,7 @@ const defs = {
       if (!project.isPublic && !ctx.user?.isAdmin) {
         const team = TeamsCollection.find((t) => t.teamId === project.teamId)
         if (!team?.teamMembers.includes(ctx.user?.userEmail || '')) {
-          throw respond.Forbidden({ message: 'Access to project logs denied' })
+          throw respond.Forbidden({ message: 'Access to project tables denied' })
         }
       }
 
@@ -526,7 +527,7 @@ const defs = {
       if (!project.isPublic && !ctx.user?.isAdmin) {
         const team = TeamsCollection.find((t) => t.teamId === project.teamId)
         if (!team?.teamMembers.includes(ctx.user?.userEmail || '')) {
-          throw respond.Forbidden({ message: 'Access to project logs denied' })
+          throw respond.Forbidden({ message: 'Access to project queries denied' })
         }
       }
 

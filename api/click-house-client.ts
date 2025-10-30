@@ -19,12 +19,27 @@ const LogSchema = OBJ({
   service_version: optional(STR('Service version')),
   service_instance_id: optional(STR('Service instance ID')),
 }, 'A log event')
+
+export const LogSchemaOutput = OBJ({
+  timestamp: NUM('The timestamp of the log event'),
+  trace_id: STR('A float64 representation of the trace ID'),
+  span_id: STR('A float64 representation of the span ID'),
+  severity_number: NUM('The severity number of the log event'),
+  severity_text: STR('The severity text of the log event'),
+  body: optional(STR('The body of the log event')),
+  attributes: OBJ({}, 'A map of attributes'),
+  event_name: STR('The name of the event'),
+  service_name: STR('The service name'),
+  service_version: optional(STR('Service version')),
+  service_instance_id: optional(STR('Service instance ID')),
+}, 'A log event')
+
 const LogsInputSchema = UNION(
   LogSchema,
   ARR(LogSchema, 'An array of log events'),
 )
 
-type Log = Asserted<typeof LogSchema>
+type Log = Asserted<typeof LogSchemaOutput>
 type LogsInput = Asserted<typeof LogsInputSchema>
 
 const client = createClient({
