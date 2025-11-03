@@ -30,6 +30,7 @@ import {
 import { effect, Signal } from '@preact/signals'
 import { api } from '../lib/api.ts'
 import { QueryHistory, QueryHistoryItem } from '../components/QueryHistory.tsx'
+
 import { JSX } from 'preact'
 
 type AnyRecord = Record<string, unknown>
@@ -236,30 +237,6 @@ export function QueryEditor() {
     </div>
   )
 }
-
-const logData = [
-  {
-    id: 1,
-    service_name: 'default',
-    service_version: '28e4e8060583...',
-    service_instance_id: '1757583536.8...',
-    timestamp: '1970-01-21T00:00:00.000Z',
-    observed_timestamp: '2025-09-11T00:00:00.000Z',
-    trace_id: '41da30a62c38...',
-    span_id: '41da30a62c38...',
-    severity_number: 9,
-    severity_text: 'INFO',
-    body: '',
-    attributes: {
-      http_method: 'GET',
-      http_url: '/home',
-      http_status_code: 200,
-      http_user_agent: 'Mozilla/5.0...',
-      net_peer_ip: '192.168.1.1',
-    },
-    event_name: 'server-start',
-  },
-]
 
 export function DataTable() {
   const tab = url.params.tab
@@ -642,15 +619,20 @@ export function TabNavigation({
   const tableColumnNames = selectedTable?.columns.map((c) => c.name) || []
 
   const filterKeyOptions = activeTab === 'tables' ? tableColumnNames : [
-    'service_name',
+    'timestamp',
+    'trace_id',
+    'span_id',
+    'severity_number',
+    'severity_text',
+    'body',
+    'attributes',
+    'event_name',
     'service_version',
     'service_instance_id',
-    'severity_text',
-    'event_name',
   ] as const
 
   const querySaved = Boolean(queriesHistory.value[queryHash.value])
-
+  const tableKey = url.params.tab === 'tables' ? 'qt' : 'lq'
   return (
     <div class='bg-base-100 border-b border-base-300 relative'>
       <div class='flex flex-col sm:flex-row gap-2 px-2 sm:px-4 md:px-6 py-2'>
@@ -668,10 +650,13 @@ export function TabNavigation({
                 type='search'
                 class='grow'
                 placeholder='Search'
-                value={url.params.qt || ''}
+                value={url.params[tableKey] || ''}
                 onInput={(e) => {
                   const value = (e.target as HTMLInputElement).value
-                  navigate({ params: { qt: value || null }, replace: true })
+                  navigate({
+                    params: { [tableKey]: value || null },
+                    replace: true,
+                  })
                 }}
               />
             </label>
@@ -725,6 +710,34 @@ export function TabNavigation({
   )
 }
 
+const logData = api['POST/api/deployment/logs'].signal()
+effect(() => {
+  const { dep, lq } = url.params
+  if (dep) {
+    const filterRows = parseFilters('l').filter((r) =>
+      r.key !== 'key' && r.value
+    ).map((r) => ({
+      key: r.key,
+      comparator: comparators[r.op as keyof typeof comparators],
+      value: r.value,
+    }))
+    const sortRows = parseSort('l').filter((r) =>
+      r.key !== 'key' && r.key && r.dir
+    ).map((r) => ({
+      key: r.key,
+      order: r.dir === 'asc' ? 'ASC' : 'DESC' as Order,
+    }))
+    logData.fetch({
+      deployment: dep || '',
+      filter: filterRows,
+      sort: sortRows,
+      search: lq || '',
+      limit: 100,
+      offset: 0,
+    })
+  }
+})
+
 const severityConfig = {
   DEBUG: { icon: Bug, color: 'text-info', bg: 'bg-info/10' },
   INFO: { icon: Info, color: 'text-info', bg: 'bg-info/10' },
@@ -733,7 +746,7 @@ const severityConfig = {
   FATAL: { icon: AlertCircle, color: 'text-error', bg: 'bg-error/10' },
 } as const
 
-const safeFormatTimestamp = (timestamp: string) => {
+const safeFormatTimestamp = (timestamp: number) => {
   return new Date(timestamp).toLocaleString(undefined, {
     day: '2-digit',
     month: '2-digit',
@@ -755,7 +768,7 @@ const logThreads = [
 ] as const
 
 export function LogsViewer() {
-  const filteredLogs = logData
+  const filteredLogs = logData.data || []
 
   return (
     <div class='flex flex-col h-full min-h-0'>
@@ -778,8 +791,18 @@ export function LogsViewer() {
             </thead>
             <tbody>
               {filteredLogs.map((log) => {
+                const serverityNum = log.severity_number
+                const severity = (serverityNum < 9)
+                  ? 'DEBUG'
+                  : (serverityNum < 13)
+                  ? 'INFO'
+                  : (serverityNum < 17)
+                  ? 'WARN'
+                  : (serverityNum < 21)
+                  ? 'ERROR'
+                  : 'FATAL'
                 const conf = severityConfig[
-                  log.severity_text as keyof typeof severityConfig
+                  severity as keyof typeof severityConfig
                 ]
                 const SeverityIcon = conf?.icon || Info
                 const severityColor = conf?.color || 'text-base-content'
@@ -806,7 +829,7 @@ export function LogsViewer() {
                         class={`badge badge-outline badge-sm ${severityColor} ${severityBg} border-current/20`}
                       >
                         <SeverityIcon class='w-3 h-3 mr-1' />
-                        {log.severity_text}
+                        {severity}
                       </div>
                     </td>
                     <td class='min-w-[12rem] max-w-[20rem]'>

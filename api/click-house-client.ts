@@ -19,12 +19,28 @@ const LogSchema = OBJ({
   service_version: optional(STR('Service version')),
   service_instance_id: optional(STR('Service instance ID')),
 }, 'A log event')
+
+export const LogSchemaOutput = OBJ({
+  id: STR('The unique ID of the log event'),
+  timestamp: NUM('The timestamp of the log event'),
+  trace_id: STR('A float64 representation of the trace ID'),
+  span_id: STR('A float64 representation of the span ID'),
+  severity_number: NUM('The severity number of the log event'),
+  severity_text: STR('The severity text of the log event'),
+  body: optional(STR('The body of the log event')),
+  attributes: OBJ({}, 'A map of attributes'),
+  event_name: STR('The name of the event'),
+  service_name: STR('The service name'),
+  service_version: optional(STR('Service version')),
+  service_instance_id: optional(STR('Service instance ID')),
+}, 'A log event')
+
 const LogsInputSchema = UNION(
   LogSchema,
   ARR(LogSchema, 'An array of log events'),
 )
 
-type Log = Asserted<typeof LogSchema>
+type Log = Asserted<typeof LogSchemaOutput>
 type LogsInput = Asserted<typeof LogsInputSchema>
 
 const client = createClient({
@@ -88,79 +104,134 @@ async function insertLogs(
   }
 }
 
-async function getLogs({
-  resource,
-  severity_number,
-  start_date,
-  end_date,
-  sort_by,
-  sort_order,
-  search,
-}: {
-  resource: string
-  severity_number?: string
-  start_date?: string
-  end_date?: string
-  sort_by?: string
-  sort_order?: 'ASC' | 'DESC'
-  search?: Record<string, string>
-}) {
-  const queryParts: string[] = []
-  const queryParams: Record<string, unknown> = { service_name: resource }
+type FetchTablesParams = {
+  filter: { key: string; comparator: string; value: string }[]
+  sort: { key: string; order: 'ASC' | 'DESC' }[]
+  limit: number
+  offset: number | undefined
+  search: string | undefined
+}
 
-  queryParts.push('service_name = {service_name:String}')
-  queryParams.service_name = resource
+const severityMap = {
+  DEBUG: [5, 8],
+  INFO: [9, 12],
+  WARN: [13, 16],
+  ERROR: [17, 20],
+  FATAL: [21, 24],
+} as const
 
-  if (severity_number) {
-    queryParts.push('severity_number = {severity_number:UInt8}')
-    queryParams.severity_number = severity_number
+const searchFields = ['body', 'service_instance_id', 'event_name']
+
+const splitFirst = (s: string, sep: string): [string, string] => {
+  const i = s.indexOf(sep)
+  return i === -1 ? [s, ''] : [s.slice(0, i), s.slice(i + sep.length)]
+}
+
+function buildLogsQuery(dep: string, p: FetchTablesParams) {
+  const where: string[] = ['service_name = {service_name:String}']
+  const params: Record<string, unknown> = { service_name: dep }
+
+  if (p.search?.trim()) {
+    where.push(
+      `(${searchFields.map((f) => `${f} ILIKE {search:String}`).join(' OR ')})`,
+    )
+    params.search = `%${p.search.trim()}%`
   }
 
-  if (start_date) {
-    queryParts.push('timestamp >= {start_date:DateTime}')
-    queryParams.start_date = new Date(start_date)
-  }
-
-  if (end_date) {
-    queryParts.push('timestamp <= {end_date:DateTime}')
-    queryParams.end_date = new Date(end_date)
-  }
-
-  if (search) {
-    if (search.trace_id) {
-      queryParts.push('trace_id = {trace_id:String}')
-      queryParams.trace_id = search.trace_id
+  for (const { key, comparator, value } of p.filter) {
+    if (key === 'severity_text') {
+      const range = severityMap[value.toUpperCase() as keyof typeof severityMap]
+      if (range) {
+        where.push(
+          comparator === '='
+            ? `severity_number BETWEEN ${range[0]} AND ${range[1]}`
+            : `(severity_number < ${range[0]} OR severity_number > ${
+              range[1]
+            })`,
+        )
+        continue
+      }
     }
-    if (search.span_id) {
-      queryParts.push('span_id = {span_id:String}')
-      queryParams.span_id = search.span_id
+
+    if (key === 'attributes') {
+      const [jsonPath, target] = splitFirst(value, ':')
+      const varName = `attr_${jsonPath.replace(/\W/g, '_')}`
+      where.push(`${key}.${jsonPath} ${comparator} {${varName}:String}`)
+      params[varName] = target
+      continue
     }
-    if (search.event_name) {
-      queryParts.push('event_name = {event_name:String}')
-      queryParams.event_name = search.event_name
+
+    if (/^(null|NULL)$/i.test(value)) {
+      where.push(`${key} IS ${comparator === '=' ? '' : 'NOT '}NULL`)
+      continue
     }
+
+    const varName = `f_${key}`
+    where.push(
+      `${key} ${comparator} {${varName}:${inferParamType(key, value)}}`,
+    )
+    params[varName] = value
   }
 
-  const query = `
-    SELECT *
-    FROM logs
-    WHERE ${queryParts.join(' AND ')}
-    ${sort_by ? `ORDER BY ${sort_by} ${sort_order || 'DESC'}` : ''}
-    LIMIT 1000
-  `
+  const order = p.sort.length
+    ? p.sort.map((s) => `${s.key} ${s.order}`).join(', ')
+    : 'observed_timestamp DESC, trace_id'
 
+  params.limit = p.limit
+  params.offset = p.offset
+
+  const clauses = [
+    where.length && `WHERE ${where.join(' AND ')}`,
+    `ORDER BY ${order}`,
+    `LIMIT {limit:UInt64} OFFSET {offset:UInt64}`,
+  ].filter(Boolean)
+
+  return { query: `SELECT * FROM logs ${clauses.join(' ')}`, params }
+}
+
+function inferParamType(key: string, value: string): string {
+  if (key.includes('timestamp') || key.includes('time')) return 'DateTime'
+  if (/^\d+$/.test(value)) return 'Int64'
+  if (/^\d+\.\d+$/.test(value)) return 'Float64'
+  return 'String'
+}
+
+async function getLogs(dep: string, data: FetchTablesParams) {
+  const { query, params } = buildLogsQuery(dep, data)
   try {
-    const resultSet = await client.query({
+    const rs = await client.query({
       query,
-      query_params: queryParams,
+      query_params: params,
       format: 'JSON',
     })
-
-    return (await resultSet.json<Log>()).data
-  } catch (error) {
-    log.error('Error querying logs from ClickHouse:', { error })
+    return (await rs.json<Log>()).data
+  } catch (e) {
+    log.error('ClickHouse query failed', { error: e, query, params })
     throw respond.InternalServerError()
   }
 }
+
+// Example usage
+// console.log(await getLogs('localhost:8000', {
+//   search: '',
+//   filter: [
+//     { key: 'attributes', comparator: '>', value: 'duration:0.003' },
+//     { key: 'event_name', comparator: '=', value: 'out' },
+//   ],
+//   sort: [{ key: 'timestamp', order: 'DESC' }],
+//   limit: 3,
+//   offset: 1,
+// }))
+
+// ClickHouse query: {
+//   query: "SELECT * FROM logs WHERE service_name = {service_name:String} AND attributes.duration > {attr_duration:String} AND event_name = {f_event_name:String} ORDER BY timestamp DESC LIMIT {limit:UInt64} OFFSET {offset:UInt64}",
+//   params: {
+//     service_name: "localhost:8000",
+//     attr_duration: "0.003",
+//     f_event_name: "out",
+//     limit: 3,
+//     offset: 1
+//   }
+// }
 
 export { client, getLogs, insertLogs, LogSchema, LogsInputSchema }

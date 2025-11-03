@@ -172,12 +172,16 @@ export const FilterMenu = (
                 <input
                   type='text'
                   class='input input-xs input-bordered flex-1'
-                  placeholder='Value'
+                  placeholder={r.key === 'attributes'
+                    ? '<key>:<value>'
+                    : 'Value'}
+                  title={r.key === 'attributes'
+                    ? 'For filtering by attributes, use the format <key>:<value>'
+                    : ''}
                   value={r.value}
-                  onInput={(e) =>
-                    updateFilter(prefix, r.idx, {
-                      value: (e.target as HTMLInputElement).value,
-                    })}
+                  onInput={(e) => updateFilter(prefix, r.idx, {
+                    value: (e.target as HTMLInputElement).value,
+                  })}
                 />
 
                 <button
