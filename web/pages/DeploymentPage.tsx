@@ -632,7 +632,7 @@ export function TabNavigation({
   ] as const
 
   const querySaved = Boolean(queriesHistory.value[queryHash.value])
-
+  const tableKey = url.params.tab === 'tables' ? 'qt' : 'lq'
   return (
     <div class='bg-base-100 border-b border-base-300 relative'>
       <div class='flex flex-col sm:flex-row gap-2 px-2 sm:px-4 md:px-6 py-2'>
@@ -650,16 +650,11 @@ export function TabNavigation({
                 type='search'
                 class='grow'
                 placeholder='Search'
-                value={url.params.tab === 'tables'
-                  ? url.params.qt || ''
-                  : url.params.lq || ''}
+                value={url.params[tableKey] || ''}
                 onInput={(e) => {
                   const value = (e.target as HTMLInputElement).value
                   navigate({
-                    params: {
-                      [url.params.tab === 'tables' ? 'qt' : 'lq']: value ||
-                        null,
-                    },
+                    params: { [tableKey]: value || null },
                     replace: true,
                   })
                 }}
@@ -795,17 +790,17 @@ export function LogsViewer() {
               </tr>
             </thead>
             <tbody>
-              {filteredLogs.map((log, index) => {
+              {filteredLogs.map((log) => {
                 const serverityNum = log.severity_number
-                const severity = (serverityNum > 4 && serverityNum <= 8)
+                const severity = (serverityNum < 9)
                   ? 'DEBUG'
-                  : (serverityNum > 8 && serverityNum <= 12)
+                  : (serverityNum < 13)
                   ? 'INFO'
-                  : (serverityNum > 12 && serverityNum <= 16)
+                  : (serverityNum < 17)
                   ? 'WARN'
-                  : (serverityNum > 20 && serverityNum <= 24)
-                  ? 'FATAL'
-                  : 'ERROR'
+                  : (serverityNum < 21)
+                  ? 'ERROR'
+                  : 'FATAL'
                 const conf = severityConfig[
                   severity as keyof typeof severityConfig
                 ]
@@ -815,7 +810,7 @@ export function LogsViewer() {
 
                 return (
                   <tr
-                    key={index}
+                    key={log.id}
                     class='hover:bg-base-200/50 border-b border-base-300/50'
                   >
                     <td class='font-mono text-xs text-base-content/70 tabular-nums max-w-[12rem]'>

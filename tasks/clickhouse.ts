@@ -8,6 +8,7 @@ if (import.meta.main) {
     await client.command({
       query: `
       CREATE TABLE IF NOT EXISTS logs (
+        id UUID DEFAULT generateUUIDv4(),
         -- Flattened resource fields
         service_name LowCardinality(String),
         service_version LowCardinality(String),

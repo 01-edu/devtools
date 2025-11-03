@@ -21,6 +21,7 @@ const LogSchema = OBJ({
 }, 'A log event')
 
 export const LogSchemaOutput = OBJ({
+  id: STR('The unique ID of the log event'),
   timestamp: NUM('The timestamp of the log event'),
   trace_id: STR('A float64 representation of the trace ID'),
   span_id: STR('A float64 representation of the span ID'),

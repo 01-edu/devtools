@@ -52,6 +52,11 @@ const withDeploymentSession = async (ctx: RequestContext) => {
   }
 }
 
+const userInTeam = (teamId: string, userEmail?: string) => {
+  if (!userEmail) return false
+  return TeamsCollection.get(teamId)?.teamMembers.includes(userEmail)
+}
+
 const deploymentOutput = OBJ({
   projectId: STR('The ID of the project'),
   url: STR('The URL of the deployment'),
@@ -315,9 +320,7 @@ const defs = {
   'GET/api/deployment/token/regenerate': route({
     authorize: withAdminSession,
     fn: async (_ctx, { url }) => {
-      console.log('Regenerating token for deployment:', { url })
       const dep = DeploymentsCollection.get(url)
-      console.log('Regenerating token for deployment:', { dep })
       if (!dep) throw respond.NotFound()
       const tokenSalt = performance.now().toString()
 
@@ -401,8 +404,7 @@ const defs = {
       const project = ProjectsCollection.get(deployment.projectId)
       if (!project) throw respond.NotFound({ message: 'Project not found' })
       if (!project.isPublic && !ctx.user?.isAdmin) {
-        const team = TeamsCollection.find((t) => t.teamId === project.teamId)
-        if (!team?.teamMembers.includes(ctx.user?.userEmail || '')) {
+        if (!userInTeam(project.teamId, ctx.user?.userEmail)) {
           throw respond.Forbidden({ message: 'Access to project logs denied' })
         }
       }
@@ -453,8 +455,7 @@ const defs = {
       const project = ProjectsCollection.get(dep.projectId)
       if (!project) throw respond.NotFound({ message: 'Project not found' })
       if (!project.isPublic && !ctx.user?.isAdmin) {
-        const team = TeamsCollection.find((t) => t.teamId === project.teamId)
-        if (!team?.teamMembers.includes(ctx.user?.userEmail || '')) {
+        if (!userInTeam(project.teamId, ctx.user?.userEmail)) {
           throw respond.Forbidden({
             message: 'Access to project tables denied',
           })
@@ -526,8 +527,7 @@ const defs = {
       const project = ProjectsCollection.get(dep.projectId)
       if (!project) throw respond.NotFound({ message: 'Project not found' })
       if (!project.isPublic && !ctx.user?.isAdmin) {
-        const team = TeamsCollection.find((t) => t.teamId === project.teamId)
-        if (!team?.teamMembers.includes(ctx.user?.userEmail || '')) {
+        if (!userInTeam(project.teamId, ctx.user?.userEmail)) {
           throw respond.Forbidden({
             message: 'Access to project queries denied',
           })
