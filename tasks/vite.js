@@ -6,7 +6,7 @@ import { build, createServer } from 'vite'
 import preact from '@preact/preset-vite'
 import tailwindcss from '@tailwindcss/vite'
 const isBuild = Deno.args.includes('--build')
-const PORT = Number(Deno.env.PORT) || 2119
+const PORT = Number(Deno.env.get('PORT')) || 2119
 
 const denoProxy = () => ({
   name: 'deno-proxy',

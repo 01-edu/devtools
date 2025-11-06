@@ -24,5 +24,5 @@ jobs:
           docker stop devtools-app || true
           docker rm devtools-app || true
           docker image prune -f
-          docker run -d --name devtools-app -p 8877:3021 --env-file /root/devtools/.env-prod -v devtools-db:/app/db -v devtools-pictures:/app/.picture --restart unless-stopped ghcr.io/${{ github.repository }}:latest
+          docker run -d --name devtools-app -p 8877:3021 --env-file /root/devtools/.env.prod -v /root/devtools/db:/app/db -v devtools-pictures:/app/.picture --restart unless-stopped ghcr.io/${{ github.repository }}:latest
           echo "Deployment completed successfully!"

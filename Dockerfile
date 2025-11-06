@@ -7,7 +7,6 @@ COPY ./api  /app/api
 COPY ./tasks/vite.js /app/tasks/vite.js
 COPY ./deno.json /app/deno.json
 COPY ./deno.lock /app/deno.lock
-COPY ./.env.prod /app/.env.prod
 COPY ./web /app/web
 
 # Cache dependencies

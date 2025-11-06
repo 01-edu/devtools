@@ -913,17 +913,17 @@ export function LogsViewer() {
   )
 }
 
-const CommingSoon = ({ title }: { title: string }) => (
+const ComingSoon = ({ title }: { title: string }) => (
   <div class='p-4'>
     <h3 class='text-lg font-semibold mb-4'>{title}</h3>
-    <p>This feature is coming soon!</p>
+    <p>This feature is coming soon! 🚀</p>
   </div>
 )
 
 type DrawerTab = 'history' | 'insert'
 const drawerViews: Record<DrawerTab, JSX.Element> = {
   history: <QueryHistory />,
-  insert: <CommingSoon title='Insert Row' />,
+  insert: <ComingSoon title='Insert Row' />,
 } as const
 
 const Drawer = () => (
