@@ -1,17 +1,21 @@
 name: 🔑 Redeploy DevTools - Production
 on:
-  push:
-    branches:
-      - master
-  workflow_dispatch:
+  workflow_run:
+    workflows: ['🐳 Build Docker Image'] # Match exact workflow name
+    types: [completed]
+    branches: [master]
 
 jobs:
   deployment:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     name: 💽 Redeploy DevTools
     runs-on: devtools.01edu.ai
     environment: production
+
     permissions:
       packages: read
+      contents: read
+
     steps:
       - name: 🔐 Login to GitHub Container Registry
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
@@ -19,10 +23,53 @@ jobs:
       - name: 🐳 Pull latest Docker image
         run: docker pull ghcr.io/${{ github.repository }}:latest
 
-      - name: 🔄 Redeploy
+      - name: 🛑 Stop existing container
         run: |
-          docker stop devtools-app || true
-          docker rm devtools-app || true
+          if docker ps -q -f name=devtools-app; then
+            echo "Stopping existing devtools-app container..."
+            docker stop devtools-app
+            docker rm devtools-app
+          else
+            echo "No existing devtools-app container found"
+          fi
+
+      - name: 🧹 Clean up old images
+        run: |
           docker image prune -f
-          docker run -d --name devtools-app -p 8877:3021 --env-file /root/devtools/.env.prod -v /root/devtools/db:/app/db -v devtools-pictures:/app/.picture --restart unless-stopped ghcr.io/${{ github.repository }}:latest
-          echo "Deployment completed successfully!"
+
+      - name: 🔄 Create network and volume if not exist
+        run: |
+          if ! docker network ls | grep -q devtools-network; then
+            docker network create devtools-network
+          fi
+
+          if ! docker volume ls | grep -q devtools-pictures; then
+            docker volume create devtools-pictures
+          fi
+
+      - name: 🚀 Deploy new container
+        run: |
+          docker run -d \
+            --name devtools-app \
+            --network devtools-network \
+            --env-file /root/devtools/.env.prod \
+            -p 8877:3021 \
+            -v /root/devtools/db:/app/db \
+            -v devtools-pictures:/app/.picture \
+            --restart unless-stopped \
+            ghcr.io/${{ github.repository }}:latest
+
+      - name: ✅ Verify deployment
+        run: |
+          echo "Waiting for container to be ready..."
+          sleep 10
+
+          # Check container status
+          if docker ps | grep -q devtools-app; then
+            echo "✅ Container is running"
+            docker logs --tail=20 devtools-app
+          else
+            echo "❌ Container failed to start"
+            docker logs devtools-app
+            exit 1
+          fi
