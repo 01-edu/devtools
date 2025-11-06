@@ -1,7 +1,7 @@
 name: 🔑 Redeploy DevTools - Production
 on:
   workflow_run:
-    workflows: ['🐳 Build Docker Image'] # Match exact workflow name
+    workflows: ['🐳 Build Docker Image']
     types: [completed]
     branches: [master]
 
