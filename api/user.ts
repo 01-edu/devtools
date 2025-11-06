@@ -43,8 +43,13 @@ const key = await crypto.subtle.importKey(
 )
 
 export async function decodeSession(sessionCode?: string) {
-  const id = sessionCode == null ? '' : await decryptMessage(sessionCode)
-  return UsersCollection.find(({ userEmail }) => userEmail === id)
+  if (sessionCode == null) return
+  try {
+    const id = await decryptMessage(sessionCode)
+    return UsersCollection.find(({ userEmail }) => userEmail === id)
+  } catch (err) {
+    console.log('unable to decode session', { sessionCode })
+  }
 }
 
 export async function authenticateOauthUser(

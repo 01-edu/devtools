@@ -21,7 +21,7 @@ import {
   insertLogs,
   LogSchemaOutput,
   LogsInputSchema,
-} from './click-house-client.ts'
+} from './clickhouse-client.ts'
 import { decryptMessage, encryptMessage } from './user.ts'
 import { log } from './lib/log.ts'
 import { type ColumnInfo, fetchTablesData, runSQL } from './sql.ts'

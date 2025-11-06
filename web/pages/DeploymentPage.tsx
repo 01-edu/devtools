@@ -183,7 +183,7 @@ export function QueryEditor() {
   const query = url.params.q || ''
 
   return (
-    <div class='flex flex-col h-full min-h-0 gap-4'>
+    <div class='flex flex-col h-full min-h-0 gap-4 grow-1'>
       <div class='flex-1 min-h-0 overflow-hidden'>
         <div class='relative h-full'>
           <div class='absolute inset-y-0 left-0 w-10 select-none bg-base-200/40 overflow-hidden border-r border-base-300'>
@@ -257,7 +257,7 @@ export function DataTable() {
   const hasPrev = page > 1
 
   return (
-    <div class='flex flex-col h-full min-h-0'>
+    <div class='flex flex-col h-full min-h-0 grow-1'>
       <div class='flex-1 min-h-0 overflow-hidden'>
         <div class='w-full overflow-x-auto overflow-y-auto h-full'>
           <table class='table table-zebra w-full'>
@@ -431,7 +431,7 @@ export function Header() {
   )
 }
 
-export function LeftPanel() {
+export function SchemaPanel() {
   const dep = url.params.dep
 
   // Group tables by schema name
@@ -738,6 +738,30 @@ effect(() => {
   }
 })
 
+const parseHex128 = (() => {
+  const alphabet = new TextEncoder().encode('0123456789abcdef')
+  const alphabetMap = new Uint8Array(256)
+  const enc = new TextEncoder()
+  alphabet.forEach((c, i) => alphabetMap[c] = i)
+  return (encoded: string) => {
+    const bytes = enc.encode(encoded)
+    const buffer = new Uint8Array(8)
+    const view = new DataView(buffer.buffer)
+    let i = -1
+    while (++i < 8) {
+      const hi = alphabetMap[bytes[i * 2]]!
+      const lo = alphabetMap[bytes[i * 2 + 1]]!
+      buffer[i] = (hi << 4) | lo
+    }
+    const value = view.getFloat64(0, false)
+    return {
+      value,
+      short: encoded.slice(8),
+      hue: (((value - Math.trunc(value)) * 100000) % 3600) / 10,
+    }
+  }
+})()
+
 const severityConfig = {
   DEBUG: { icon: Bug, color: 'text-info', bg: 'bg-info/10' },
   INFO: { icon: Info, color: 'text-info', bg: 'bg-info/10' },
@@ -746,17 +770,19 @@ const severityConfig = {
   FATAL: { icon: AlertCircle, color: 'text-error', bg: 'bg-error/10' },
 } as const
 
-const safeFormatTimestamp = (timestamp: number) => {
-  return new Date(timestamp).toLocaleString(undefined, {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    fractionalSecondDigits: 3,
-  })
-}
+const dateFmtConfig = {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  fractionalSecondDigits: 3,
+} as const
+
+const safeFormatTimestamp = (timestamp: Date) =>
+  timestamp.toLocaleString('en-UK', dateFmtConfig)
+    .split(', ').reverse().join(' ')
 
 const logThreads = [
   'Timestamp',
@@ -766,6 +792,22 @@ const logThreads = [
   'Span',
   'Attributes',
 ] as const
+
+const Hex128 = ({ hex }: { hex: string }) => {
+  const { hue, short, value } = parseHex128(hex)
+  return (
+    <span
+      title={`${hex} (${value})`}
+      class='block truncate badge-sm badge badge-outline border-current/20 uppercase'
+      style={{
+        color: `oklch(0.93 0.15 ${hue})`,
+        backgroundColor: `oklch(0.25 0.01 ${hue})`,
+      }}
+    >
+      {short}
+    </span>
+  )
+}
 
 export function LogsViewer() {
   const filteredLogs = logData.data || []
@@ -807,32 +849,34 @@ export function LogsViewer() {
                 const SeverityIcon = conf?.icon || Info
                 const severityColor = conf?.color || 'text-base-content'
                 const severityBg = conf?.bg || 'bg-base-300/10'
+                const timestamp = new Date(log.timestamp)
 
                 return (
                   <tr
                     key={log.id}
                     class='hover:bg-base-200/50 border-b border-base-300/50'
                   >
-                    <td class='font-mono text-xs text-base-content/70 tabular-nums max-w-[12rem]'>
+                    <td class='p-0 pl-1 font-mono text-xs text-base-content/70 tabular-nums max-w-[12rem]'>
                       <div class='flex items-center gap-2'>
                         <Clock class='w-3 h-3 shrink-0' />
                         <span
                           class='truncate block'
-                          title={safeFormatTimestamp(log.timestamp)}
+                          title={String(timestamp.getTime())}
                         >
-                          {safeFormatTimestamp(log.timestamp)}
+                          {safeFormatTimestamp(timestamp)}
                         </span>
                       </div>
                     </td>
-                    <td class='max-w-[10rem]'>
+                    <td class='p-0 max-w-[10rem]'>
                       <div
                         class={`badge badge-outline badge-sm ${severityColor} ${severityBg} border-current/20`}
+                        title={`severity: ${serverityNum}`}
                       >
                         <SeverityIcon class='w-3 h-3 mr-1' />
                         {severity}
                       </div>
                     </td>
-                    <td class='min-w-[12rem] max-w-[20rem]'>
+                    <td class='p-0 min-w-[12rem] max-w-[20rem]'>
                       <div class='flex flex-col gap-1'>
                         <span
                           class='text-sm text-base-content font-medium truncate'
@@ -850,17 +894,13 @@ export function LogsViewer() {
                         )}
                       </div>
                     </td>
-                    <td class='font-mono text-xs text-base-content/50 max-w-[12rem] hidden md:table-cell'>
-                      <span class='block truncate' title={log.trace_id}>
-                        {log.trace_id}
-                      </span>
+                    <td class='p-0 font-mono text-xs text-base-content/50 max-w-[12rem] hidden md:table-cell'>
+                      <Hex128 hex={log.trace_id} />
                     </td>
-                    <td class='font-mono text-xs text-base-content/50 max-w-[12rem] hidden md:table-cell'>
-                      <span class='block truncate' title={log.span_id}>
-                        {log.span_id}
-                      </span>
+                    <td class='p-0 font-mono text-xs text-base-content/50 max-w-[12rem] hidden md:table-cell'>
+                      <Hex128 hex={log.span_id} />
                     </td>
-                    <td class='text-xs text-base-content/60 hidden lg:table-cell min-w-[12rem] max-w-[16rem]'>
+                    <td class='p-0 text-xs text-base-content/60 hidden lg:table-cell min-w-[12rem] max-w-[16rem]'>
                       <code
                         class='font-mono block overflow-hidden text-ellipsis whitespace-nowrap'
                         title={JSON.stringify(log.attributes ?? {})}
@@ -868,7 +908,7 @@ export function LogsViewer() {
                         {JSON.stringify(log.attributes ?? {})}
                       </code>
                     </td>
-                    <td class='align-middle'>
+                    <td class='p-0 align-middle'>
                       <div class='flex items-center gap-1'>
                         <button
                           type='button'
@@ -962,9 +1002,20 @@ const Drawer = () => (
   </div>
 )
 
+const schemaPanel = <SchemaPanel />
 const TabViews = {
-  tables: <DataTable />,
-  queries: <QueryEditor />,
+  tables: (
+    <div class='flex flex-1 h-full'>
+      {schemaPanel}
+      <DataTable />
+    </div>
+  ),
+  queries: (
+    <div class='flex flex-1 h-full'>
+      {schemaPanel}
+      <QueryEditor />
+    </div>
+  ),
   logs: <LogsViewer />,
 }
 
@@ -978,11 +1029,10 @@ export const DeploymentPage = () => {
     <div class='h-screen flex flex-col'>
       <Header />
       <div class='flex flex-1 min-h-0 pb-15'>
-        <LeftPanel />
         <main class='flex-1 flex flex-col h-full'>
           <TabNavigation activeTab={tab} />
           <section class='flex-1 h-full overflow-hidden'>
-            <div class='h-full bg-base-100 border border-base-300 overflow-hidden flex flex-col  hidden lg:flex'>
+            <div class='h-full bg-base-100 border border-base-300 overflow-hidden flex flex-col lg:flex'>
               {view}
             </div>
           </section>

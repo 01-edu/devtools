@@ -1,4 +1,4 @@
-import { client } from '/api/click-house-client.ts'
+import { client } from '/api/clickhouse-client.ts'
 import { log } from '/api/lib/log.ts'
 
 if (import.meta.main) {

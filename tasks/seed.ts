@@ -1,9 +1,13 @@
+import { insertLogs } from '/api/clickhouse-client.ts'
 import {
+  type Project,
+  type Team,
+  type User,
+  DeploymentsCollection,
   ProjectsCollection,
   TeamsCollection,
   UsersCollection,
-} from '../api/schema.ts'
-import type { Project, Team, User } from '../api/schema.ts'
+} from '/api/schema.ts'
 
 const users: User[] = [
   {
@@ -30,7 +34,8 @@ const teams: Team[] = [
   {
     teamId: 'frontend-devs',
     teamName: 'Frontend Devs',
-    teamMembers: ['admin@example.com', 'member1@example.com'],
+    teamMembers: ['admin@example.com',
+      'member1@example.com'],
   },
   {
     teamId: 'backend-devs',
@@ -67,11 +72,11 @@ async function clearCollection(
   collection:
     | typeof UsersCollection
     | typeof TeamsCollection
-    | typeof ProjectsCollection,
+    | typeof ProjectsCollection
+    | typeof DeploymentsCollection,
 ) {
   console.log(`Clearing ${collection.name} collection...`)
-  const keys = Array.from(collection.keys())
-  for (const key of keys) {
+  for (const key of collection.keys()) {
     await collection.delete(key)
   }
   console.log(`${collection.name} collection cleared.`)
@@ -84,6 +89,7 @@ async function seed() {
   await clearCollection(UsersCollection)
   await clearCollection(TeamsCollection)
   await clearCollection(ProjectsCollection)
+  await clearCollection(DeploymentsCollection)
 
   // Seed users
   console.log('Seeding users...')
@@ -101,8 +107,30 @@ async function seed() {
 
   // Seed projects
   console.log('Seeding projects...')
-  for (const project of projects) {
+  for (const [i, project] of projects.entries()) {
     await ProjectsCollection.insert(project)
+    const url = `${project.slug}.com`
+    const deployement = await DeploymentsCollection.insert({
+      projectId: project.slug,
+      databaseEnabled: false,
+      logsEnabled: true,
+      sqlEndpoint: undefined,
+      sqlToken: undefined,
+      url,
+      tokenSalt: crypto.randomUUID(),
+    })
+    const service_instance_id = crypto.randomUUID()
+    const now = Date.now() / 1000
+    insertLogs(deployement.url, [...Array(100).keys()].map(n => ({
+      attributes: { a: 'str', bool: true, num: n },
+      event_name: `test-log-${n}`,
+      severity_number: Math.floor(Math.random() * 24),
+      service_instance_id,
+      span_id: (now - n) + Math.random(),
+      trace_id: (now - n) + Math.random(),
+      service_version: 'v2',
+      timestamp: (now - n) * 1000,
+    })))
   }
   console.log('Projects seeded.')
 
