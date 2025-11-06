@@ -1,12 +1,39 @@
 import { X, Trash2, Copy, Check } from 'lucide-preact'
 import { api, ApiOutput } from '../lib/api.ts'
 import { effect } from '@preact/signals'
-import { url } from '../lib/router.tsx'
+import { A, url } from '../lib/router.tsx'
 
 type TableColumn = ApiOutput['GET/api/deployment/schema']['tables'][number]['columns'][number]
-// type Log = ApiOutput['']
+type Log = ApiOutput['POST/api/deployment/logs'][number]
 const schema = api['GET/api/deployment/schema'].signal()
 const tablesMap = new Map<string, TableColumn[]>([])
+
+type LogColumn = {
+    name: keyof Log;
+    type: string;
+    ordinal: number;
+}
+
+const logDef: LogColumn[] = [
+  { name: 'id', type: 'UUID', ordinal: 1 },
+  { name: 'timestamp', type: 'DateTime64(3, \'UTC\')', ordinal: 2 },
+  { name: 'trace_id', type: 'FixedString(16)', ordinal: 3 },
+  { name: 'span_id', type: 'FixedString(16)', ordinal: 4 },
+  { name: 'severity_number', type: 'UInt8', ordinal: 5 },
+  { name: 'severity_text', type: 'LowCardinality(String)', ordinal: 6 },
+  { name: 'body', type: 'Nullable(String)', ordinal: 7 },
+  { name: 'attributes', type: 'JSON', ordinal: 8 },
+  { name: 'event_name', type: 'LowCardinality(String)', ordinal: 9 },
+  { name: 'service_name', type: 'LowCardinality(String)', ordinal: 10 },
+  { name: 'service_version', type: 'LowCardinality(String)', ordinal: 11 },
+  { name: 'service_instance_id', type: 'String', ordinal: 12 }
+]
+
+effect(() => {
+  const dep = url.params.dep
+  if (!dep) return
+  schema.fetch({url: dep})
+})
 
 effect(() => {
   const tables = schema.data?.tables ?? []
@@ -16,12 +43,17 @@ effect(() => {
   }
 })
 
-const getFieldType = (value: unknown): string => {
-  if (value === null) return 'null'
+const getFieldType = (value: unknown,type: string): string => {
+  const typeLower = type.toLowerCase()
+  if (typeLower === 'json') return 'json'
+  if (typeLower.startsWith('int') || typeLower.startsWith('uint')) return 'number'
+  if (typeLower.startsWith('float') || typeLower.startsWith('double')) return 'float'
+  if (typeLower === 'boolean' || typeLower === 'bool') return 'checkbox'
+  if (value === null || value === undefined) return 'text'
   if (typeof value === 'number') {
-    return Number.isInteger(value) ? 'int8' : 'float'
+    return Number.isInteger(value) ? 'number' : 'float'
   }
-  if (typeof value === 'boolean') return 'boolean'
+  if (typeof value === 'boolean') return 'checkbox'
   if (typeof value === 'object') return 'json'
   return 'text'
 }
@@ -33,57 +65,25 @@ const data={
     attributes: { role: 'admin', active: true, age: 30 },
   }
 export const RowDetail = () => {
-const {tab,table} = url.params
+const {tab,table,view} = url.params
 
-  // const handleInputChange = (key: string, inputValue: string) => {
-  //   if (!onChange) return
-
-  //   const originalValue = data[key]
-  //   const fieldType = getFieldType(originalValue)
-
-  //   let parsedValue: any = inputValue
-
-  //   if (fieldType === 'int8') {
-  //     parsedValue = inputValue === '' ? 0 : parseInt(inputValue, 10)
-  //   } else if (fieldType === 'float') {
-  //     parsedValue = inputValue === '' ? 0 : parseFloat(inputValue)
-  //   } else if (fieldType === 'boolean') {
-  //     parsedValue = inputValue === 'true'
-  //   }
-
-  //   onChange(key, parsedValue)
-  // }
+const tableColumns = tab === 'logs' ? logDef : tablesMap.get(table || '') ?? []
 
   return (
     <div class='h-full flex flex-col bg-base-200'>
       <div class='flex items-center justify-between p-4 border-b border-base-300'>
         <div>
           <h3 class='text-lg font-semibold'>Edit row</h3>
-          {/* {tableName && (
-            <p class='text-sm text-base-content/70 mt-0.5'>
-              {tableName}
-            </p>
-          )} */}
         </div>
         <div class='flex items-center gap-2'>
-          {/* {onDelete && ( */}
+         {view && ( 
             <button
               class='btn btn-ghost btn-sm btn-square'
-              // onClick={onDelete}
               title='Delete row'
             >
               <Trash2 size={18} />
             </button>
-          {/* )} */}
-          {/* {onClose && ( */}
-            <button
-              class='btn btn-ghost btn-sm btn-square'
-              // onClick={onClose}
-              title='Close'
-            >
-              <X size={18} />
-            </button>
-          {/* )} */}
+          )} 
         </div>
       </div>
 
@@ -92,25 +92,24 @@ const {tab,table} = url.params
         <>
           <div class='flex-1 overflow-auto p-4'>
             <div class='space-y-4'>
-              {Object.entries(data).map(([key, value]) => {
-                const type = getFieldType(value)
+              {tableColumns.map(({ name, type }) => {
+                const value = data[name as keyof typeof data]
+                const fieldType = getFieldType(value, type)
                 return (
-                  <div key={key} class='space-y-1'>
+                  <div key={name} class='space-y-1'>
                   <label class='text-sm font-medium text-base-content/90'>
-                    {key}
+                    {name}
                   </label>
-                  {type === 'json' ? (
+                  {fieldType === 'json' ? (
                     <textarea
                       class='textarea textarea-bordered w-full h-32 font-mono text-sm'
                       value={JSON.stringify(value, null, 2)}
-                      // onChange={(e) => handleInputChange(key, e.currentTarget.value)}
                     />
                   ) : (
                    <input
-                    type={type === 'int8' || type === 'float' ? 'number' : 'text'}
+                    type={fieldType}
                     class='input input-bordered w-full bg-base-300 focus:bg-base-100'
                     value={value?.toString() ?? ''}
-                    // onInput={(e) => handleInputChange(key, e.currentTarget.value)}
                   />
                   )}
                   <span class='text-xs text-base-content/50'>
@@ -122,7 +121,6 @@ const {tab,table} = url.params
             </div>
           </div>
 
-          {/* Footer */}
           <div class='p-4 border-t border-base-300 flex gap-2'>
             <button class='btn btn-ghost'>
               Cancel
