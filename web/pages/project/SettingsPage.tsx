@@ -4,8 +4,8 @@ import { useSignal } from '@preact/signals'
 import { navigate, url } from '../../lib/router.tsx'
 import { JSX } from 'preact'
 import { api, ApiOutput } from '../../lib/api.ts'
-import { deployments } from '../ProjectPage.tsx'
 import { user } from '../../lib/session.ts'
+import { deployments, project } from '../../lib/shared.tsx'
 
 type Project = ApiOutput['GET/api/projects'][number]
 type Deployment = ApiOutput['GET/api/project/deployments'][number]
@@ -16,7 +16,7 @@ users.fetch()
 
 const team = api['GET/api/team'].signal()
 
-function ProjectInfoForm({ project }: { project: Project }) {
+function ProjectInfoForm() {
   const handleSubmit = (e: JSX.TargetedEvent<HTMLFormElement>) => {
     e.preventDefault()
   }
@@ -31,13 +31,13 @@ function ProjectInfoForm({ project }: { project: Project }) {
           <Input
             label='Project Name'
             name='projectName'
-            defaultValue={project.name}
+            defaultValue={project.data?.name}
             note='This is your project’s display name.'
           />
           <Input
             label='Repository URL'
             name='repositoryUrl'
-            defaultValue={project.repositoryUrl}
+            defaultValue={project.data?.repositoryUrl}
             note='The URL of the Git repository for your project.'
           />
         </div>
@@ -232,13 +232,14 @@ function UserManagement() {
   )
 }
 
-export const SettingsPage = ({ project }: { project: Project }) => {
+export const SettingsPage = () => {
   if (!user.data?.isAdmin) {
     navigate({ params: { nav: 'deployments' } })
   }
   const { view = 'info', action, id } = url.params
+  if (!project.data) return null
 
-  team.fetch({ teamId: project.teamId })
+  team.fetch({ teamId: project.data!.teamId })
 
   const content = view === 'deployments'
     ? (
@@ -254,13 +255,13 @@ export const SettingsPage = ({ project }: { project: Project }) => {
     )
     : view === 'users'
     ? <UserManagement />
-    : <ProjectInfoForm project={project} />
+    : <ProjectInfoForm />
 
   return (
     <>
       <PageHeader className='gap-4 bg-base-100'>
         <h1 class='text-xl sm:text-2xl font-semibold text-text'>
-          Project Settings: {project.name}
+          Project Settings: {project.data?.name}
         </h1>
         <div class='flex gap-2'>
           <Button

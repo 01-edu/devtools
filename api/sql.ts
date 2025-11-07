@@ -20,10 +20,8 @@ export async function runSQL(
     },
     body: JSON.stringify({ query, params }),
   })
-  if (!res.ok) throw Error(`sql endpoint error ${res.status}`)
-  const data = await res.json()
-
-  return data
+  if (!res.ok) throw Error(await res.text())
+  return await res.json()
 }
 
 // Dialect detection attempts (run first successful)
@@ -60,7 +58,9 @@ const INTROSPECTION: Record<string, string> = {
 
 async function fetchSchema(endpoint: string, token: string, dialect: string) {
   const sql = INTROSPECTION[dialect] ?? INTROSPECTION.unknown
-  return await runSQL(endpoint, token, sql)
+  try {
+    return await runSQL(endpoint, token, sql)
+  } catch { /* ignore */ }
 }
 
 export type ColumnInfo = { name: string; type: string; ordinal: number }

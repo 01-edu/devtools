@@ -1,13 +1,6 @@
 import { ChevronRight, Clock, Play, Search, Trash2 } from 'lucide-preact'
 import { A, navigate, url } from '../lib/router.tsx'
-import { onRun, queriesHistory } from '../pages/DeploymentPage.tsx'
-
-export type QueryHistoryItem = {
-  query: string
-  timestamp: string
-  columns?: number
-  rows?: number
-}
+import { onRun, queriesHistory } from '../lib/shared.tsx'
 
 const deleteQuery = (hash: string) => {
   const updatedHistory = { ...queriesHistory.value }

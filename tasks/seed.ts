@@ -1,11 +1,11 @@
 import { insertLogs } from '/api/clickhouse-client.ts'
 import {
-  type Project,
-  type Team,
-  type User,
   DeploymentsCollection,
+  type Project,
   ProjectsCollection,
+  type Team,
   TeamsCollection,
+  type User,
   UsersCollection,
 } from '/api/schema.ts'
 
@@ -28,14 +28,25 @@ const users: User[] = [
     userPicture: undefined,
     isAdmin: false,
   },
+  {
+    userEmail: 'clement@01talent.com',
+    userFullName: 'Clement',
+    userPicture: undefined,
+    isAdmin: true,
+  },
+  {
+    userEmail: 'abdou.top@01talent.com',
+    userFullName: 'Abdou Top',
+    userPicture: undefined,
+    isAdmin: true,
+  },
 ]
 
 const teams: Team[] = [
   {
     teamId: 'frontend-devs',
     teamName: 'Frontend Devs',
-    teamMembers: ['admin@example.com',
-      'member1@example.com'],
+    teamMembers: ['admin@example.com', 'member1@example.com'],
   },
   {
     teamId: 'backend-devs',
@@ -107,7 +118,7 @@ async function seed() {
 
   // Seed projects
   console.log('Seeding projects...')
-  for (const [i, project] of projects.entries()) {
+  for (const [_, project] of projects.entries()) {
     await ProjectsCollection.insert(project)
     const url = `${project.slug}.com`
     const deployement = await DeploymentsCollection.insert({
@@ -121,16 +132,19 @@ async function seed() {
     })
     const service_instance_id = crypto.randomUUID()
     const now = Date.now() / 1000
-    insertLogs(deployement.url, [...Array(100).keys()].map(n => ({
-      attributes: { a: 'str', bool: true, num: n },
-      event_name: `test-log-${n}`,
-      severity_number: Math.floor(Math.random() * 24),
-      service_instance_id,
-      span_id: (now - n) + Math.random(),
-      trace_id: (now - n) + Math.random(),
-      service_version: 'v2',
-      timestamp: (now - n) * 1000,
-    })))
+    insertLogs(
+      deployement.url,
+      [...Array(100).keys()].map((n) => ({
+        attributes: { a: 'str', bool: true, num: n },
+        event_name: `test-log-${n}`,
+        severity_number: Math.floor(Math.random() * 24),
+        service_instance_id,
+        span_id: (now - n) + Math.random(),
+        trace_id: (now - n) + Math.random(),
+        service_version: 'v2',
+        timestamp: (now - n) * 1000,
+      })),
+    )
   }
   console.log('Projects seeded.')
 

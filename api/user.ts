@@ -47,8 +47,8 @@ export async function decodeSession(sessionCode?: string) {
   try {
     const id = await decryptMessage(sessionCode)
     return UsersCollection.find(({ userEmail }) => userEmail === id)
-  } catch (err) {
-    console.log('unable to decode session', { sessionCode })
+  } catch {
+    // Invalid session code
   }
 }
 

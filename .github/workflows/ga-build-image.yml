@@ -5,7 +5,7 @@ name: '🐳 Build Docker Image'
 on:
   push:
     branches: ['master']
-  
+
 jobs:
   build-image:
     name: 🏗️ Build Image
