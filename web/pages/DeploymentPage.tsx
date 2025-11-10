@@ -10,7 +10,9 @@ import {
   Download,
   Eye,
   FileText,
+  Hash,
   Info,
+  Link2,
   MoreHorizontal,
   Play,
   Plus,
@@ -943,19 +945,22 @@ const logThreads = [
   'Attributes',
 ] as const
 
-const Hex128 = ({ hex }: { hex: string }) => {
+const Hex128 = ({ hex, type }: { hex: string; type: 'trace' | 'span' }) => {
   const { hue, short, value } = parseHex128(hex)
+  const Icon = type === 'trace' ? Link2 : Hash
+
   return (
-    <span
-      title={`${hex} (${value})`}
-      class='block truncate badge-sm badge badge-outline border-current/20 uppercase'
+    <div
+      class='badge badge-outline badge-sm border-current/20'
+      title={`${type}: ${hex} (${value})`}
       style={{
         color: `oklch(0.93 0.15 ${hue})`,
         backgroundColor: `oklch(0.25 0.01 ${hue})`,
       }}
     >
-      {short}
-    </span>
+      <Icon class='w-3 h-3 mr-1' />
+      <span class='uppercase truncate'>{short}</span>
+    </div>
   )
 }
 
@@ -1044,11 +1049,11 @@ function LogsViewer() {
                         )}
                       </div>
                     </td>
-                    <td class='p-0 font-mono text-xs text-base-content/50 max-w-[12rem] hidden md:table-cell'>
-                      <Hex128 hex={log.trace_id} />
+                    <td class='p-0 max-w-[12rem] hidden md:table-cell'>
+                      <Hex128 hex={log.trace_id} type='trace' />
                     </td>
-                    <td class='p-0 font-mono text-xs text-base-content/50 max-w-[12rem] hidden md:table-cell'>
-                      <Hex128 hex={log.span_id} />
+                    <td class='p-0 max-w-[12rem] hidden md:table-cell'>
+                      <Hex128 hex={log.span_id} type='span' />
                     </td>
                     <td class='p-0 text-xs text-base-content/60 hidden lg:table-cell min-w-[12rem] max-w-[16rem]'>
                       <code
