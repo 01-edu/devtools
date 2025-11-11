@@ -35,11 +35,10 @@ import { QueryHistory } from '../components/QueryHistory.tsx'
 import { JSX } from 'preact'
 import {
   deployments,
-  onRun,
   querier,
   queriesHistory,
+  runQuery,
   sidebarItems,
-  // tableData,
 } from '../lib/shared.tsx'
 
 type AnyRecord = Record<string, unknown>
@@ -125,8 +124,8 @@ const onDownload = () => {
   }
 }
 
-function LineNumbers({ content }: { content: string }) {
-  const lineCount = Math.max(1, (content.match(/\n/g)?.length ?? 0) + 1)
+const LineNumbers = () => {
+  const lineCount = Math.max(1, (url.params.q?.match(/\n/g)?.length ?? 0) + 1)
 
   return (
     <div class='absolute inset-y-0 left-0 w-11 select-none overflow-hidden border-r border-base-300 z-10'>
@@ -144,19 +143,15 @@ const handleInput = (e: Event) => {
 }
 
 const handleKeyDown = (e: KeyboardEvent) => {
-  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-    e.preventDefault()
-    const q = url.params.q
-    if (q) {
-      onRun(q)
-    }
-  }
+  if (!((e.ctrlKey || e.metaKey) && e.key === 'Enter')) return
+  e.preventDefault()
+  runQuery(url.params.q || '')
 }
 
 const SQLEditor = () => (
   <div class='resize-y min-h-[120px] max-h-[80vh] overflow-hidden border border-base-300 rounded-lg bg-base-100'>
     <div class='relative h-full bg-base-100 rounded-lg overflow-hidden focus-within:border-primary/50 transition-colors'>
-      <LineNumbers content={url.params.q || ''} />
+      <LineNumbers />
       <textarea
         value={url.params.q || ''}
         onInput={handleInput}
@@ -288,11 +283,9 @@ effect(() => {
   }
 })
 
-const RowNumberCell = (
-  { page, index, pageSize }: { page: number; index: number; pageSize: number },
-) => (
+const RowNumberCell = ({ index }: { index: number }) => (
   <td class='sticky left-0 bg-base-100 tabular-nums font-medium text-xs text-base-content/60 w-16 max-w-[4rem]'>
-    {(page - 1) * pageSize + index + 1}
+    {(Number(url.params.tpage) || 0) * pageSize + index + 1}
   </td>
 )
 
@@ -333,21 +326,11 @@ const EmptyRow = ({ colSpan }: { colSpan: number }) => (
   </tr>
 )
 
-const DataRow = ({
-  row,
-  columns,
-  index,
-  page,
-  pageSize,
-}: {
-  row: AnyRecord
-  columns: string[]
-  index: number
-  page: number
-  pageSize: number
-}) => (
+const DataRow = (
+  { row, columns, index }: { row: AnyRecord; columns: string[]; index: number },
+) => (
   <tr class='hover:bg-base-200/50'>
-    <RowNumberCell page={page} index={index} pageSize={pageSize} />
+    <RowNumberCell index={index} />
     {columns.map((key, i) => (
       <td key={i} class='align-top min-w-[8rem] max-w-[20rem]'>
         <TableCell value={row[key]} />
@@ -379,51 +362,37 @@ const TableHeader = ({ columns }: { columns: string[] }) => (
   </thead>
 )
 
-const PaginationControls = ({
-  tpage,
-  hasPrev,
-  hasNext,
-}: {
-  tpage: number
-  hasPrev: boolean
-  hasNext: boolean
-}) => (
-  <div class='join'>
-    <A
-      params={{ tpage: tpage - 1 }}
-      class={`join-item btn btn-sm ${hasPrev ? '' : 'btn-disabled'}`}
-      aria-label='Previous page'
-    >
-      ‹
-    </A>
-    <A
-      params={{ tpage: tpage + 1 }}
-      class={`join-item btn btn-sm ${hasNext ? '' : 'btn-disabled'}`}
-      aria-label='Next page'
-    >
-      ›
-    </A>
-  </div>
-)
+const PaginationControls = ({ totalPages }: { totalPages: number }) => {
+  const tpage = Number(url.params.tpage) || 0
+  const page = tpage + 1
+  const hasNext = page < totalPages
+  const hasPrev = page > 1
+  return (
+    <div class='join'>
+      <A
+        params={{ tpage: tpage - 1 }}
+        class={`join-item btn btn-sm ${hasPrev ? '' : 'btn-disabled'}`}
+        aria-label='Previous page'
+      >
+        ‹
+      </A>
+      <A
+        params={{ tpage: tpage + 1 }}
+        class={`join-item btn btn-sm ${hasNext ? '' : 'btn-disabled'}`}
+        aria-label='Next page'
+      >
+        ›
+      </A>
+    </div>
+  )
+}
 
-const TableFooter = ({
-  tab,
-  rows,
-  page,
-  totalPages,
-  tpage,
-  hasPrev,
-  hasNext,
-}: {
-  tab: string
-  rows: AnyRecord[]
-  page: number
-  totalPages: number
-  tpage: number
-  hasPrev: boolean
-  hasNext: boolean
-}) => {
-  if (tab !== 'tables') return null
+const TableFooter = ({ rows }: { rows: AnyRecord[] }) => {
+  const page = (Number(url.params.tpage) || 0) + 1
+  const totalPages = Math.max(
+    1,
+    Math.ceil((tableData.data?.totalRows || 0) / pageSize),
+  )
 
   return (
     <div class='bg-base-100 border-t border-base-300 px-4 sm:px-6 py-3 shrink-0'>
@@ -437,91 +406,52 @@ const TableFooter = ({
         </span>
         <div class='flex items-center gap-2'>
           <span class='hidden sm:inline'>Page {page} of {totalPages}</span>
-          <PaginationControls
-            tpage={tpage}
-            hasPrev={hasPrev}
-            hasNext={hasNext}
-          />
+          <PaginationControls totalPages={totalPages} />
         </div>
       </div>
     </div>
   )
 }
 
-const TableContent = ({
-  columns,
-  rows,
-  page,
-  pageSize,
-}: {
-  columns: string[]
-  rows: AnyRecord[]
-  page: number
-  pageSize: number
-}) => (
-  <table class='table table-zebra w-full'>
-    <TableHeader columns={columns} />
-    <tbody>
-      {rows.length === 0
-        ? <EmptyRow colSpan={Math.max(2, columns.length + 1)} />
-        : (
-          rows.map((row, index) => (
-            <DataRow
-              key={index}
-              row={row}
-              columns={columns}
-              index={index}
-              page={page}
-              pageSize={pageSize}
-            />
-          ))
-        )}
-    </tbody>
-  </table>
-)
-
+const TableContent = ({ rows }: { rows: AnyRecord[] }) => {
+  const columns = Object.keys(rows[0] || {})
+  return (
+    <table class='table table-zebra w-full'>
+      <TableHeader columns={columns} />
+      <tbody>
+        {rows.length === 0
+          ? <EmptyRow colSpan={Math.max(2, columns.length + 1)} />
+          : (
+            rows.map((row, index) => (
+              <DataRow
+                key={index}
+                row={row}
+                columns={columns}
+                index={index}
+              />
+            ))
+          )}
+      </tbody>
+    </table>
+  )
+}
 const DataTable = () => {
   const tab = url.params.tab
-  const tpage = Number(url.params.tpage) || 0
-  const page = tpage + 1
 
-  const data = tab === 'tables'
+  const rows = tab === 'tables'
     ? tableData.data?.rows || []
     : tab === 'queries'
     ? querier.data?.rows || []
     : []
 
-  const columns = Object.keys(data[0] || {})
-  const rows = data ?? []
-  const totalPages = Math.max(
-    1,
-    Math.ceil((tableData.data?.totalRows || 0) / pageSize),
-  )
-  const hasNext = page < totalPages
-  const hasPrev = page > 1
-
   return (
     <div class='flex flex-col h-full min-h-0 grow-1'>
       <div class='flex-1 min-h-0 overflow-hidden'>
         <div class='w-full overflow-x-auto overflow-y-auto h-full'>
-          <TableContent
-            columns={columns}
-            rows={rows}
-            page={page}
-            pageSize={pageSize}
-          />
+          <TableContent rows={rows} />
         </div>
       </div>
-
-      <TableFooter
-        tab={tab || ''}
-        rows={rows}
-        page={page}
-        totalPages={totalPages}
-        tpage={tpage}
-        hasPrev={hasPrev}
-        hasNext={hasNext}
-      />
+      <TableFooter rows={rows} />
     </div>
   )
 }
@@ -582,7 +512,6 @@ function Header() {
 function SchemaPanel() {
   const dep = url.params.dep
 
-  // Group tables by schema name
   const grouped: Record<
     string,
     NonNullable<NonNullable<typeof schema.data>['tables']>
@@ -671,7 +600,6 @@ function SchemaPanel() {
                         <A
                           params={{ expanded: isExpanded ? null : table.table }}
                           class='shrink-0 p-1 hover:bg-base-300 rounded transition-colors flex items-center justify-center'
-                          onClick={(e) => e.stopPropagation()}
                         >
                           {isExpanded
                             ? (
@@ -817,7 +745,7 @@ function TabNavigation({
             <A
               params={{ drawer: activeTab === 'tables' ? 'insert' : null }}
               onClick={activeTab === 'queries'
-                ? () => onRun(url.params.q || '')
+                ? () => runQuery(url.params.q || '')
                 : undefined}
               class='btn btn-primary btn-sm'
             >

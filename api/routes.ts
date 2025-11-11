@@ -24,7 +24,12 @@ import {
 } from './clickhouse-client.ts'
 import { decryptMessage, encryptMessage } from './user.ts'
 import { log } from './lib/log.ts'
-import { type ColumnInfo, fetchTablesData, runSQL } from './sql.ts'
+import {
+  type ColumnInfo,
+  fetchTablesData,
+  runSQL,
+  SQLQueryError,
+} from './sql.ts'
 
 const withUserSession = ({ user }: RequestContext) => {
   if (!user) throw Error('Missing user session')
@@ -550,9 +555,18 @@ const defs = {
           rows: data,
         }
       } catch (error) {
-        return respond.BadRequest(
-          { message: (error as Error).message },
-        )
+        if (error instanceof SQLQueryError) {
+          if (error.type === 'bad-query') {
+            throw new respond.BadRequestError({
+              message: `SQL Query Error: ${error.sqlMessage}`,
+            })
+          } else if (error.type === 'timeout') {
+            throw new respond.BadRequestError({
+              message: `SQL Query Timeout: ${error.sqlMessage}`,
+            })
+          }
+        }
+        throw respond.InternalServerError()
       }
     },
     input: OBJ({

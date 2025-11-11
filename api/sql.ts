@@ -6,6 +6,26 @@ import {
 import { DB_SCHEMA_REFRESH_MS } from './lib/env.ts'
 import { log } from './lib/log.ts'
 
+export class SQLQueryError extends Error {
+  constructor(message: string, body: string) {
+    super(message)
+    this.type = 'unexpected'
+    this.sqlMessage = 'unexpected error'
+    try {
+      const errorDetails = JSON.parse(body)
+      const errorTypes = ['service-error', 'bad-query', 'timeout']
+      if (errorTypes.includes(errorDetails.type)) this.type = errorDetails.type
+      if (typeof errorDetails.sqlMessage === 'string') {
+        this.sqlMessage = errorDetails.sqlMessage
+      }
+    } catch {
+      this.sqlMessage = body
+    }
+  }
+  type: 'service-error' | 'bad-query' | 'unexpected' | 'timeout'
+  sqlMessage: string
+}
+
 export async function runSQL(
   endpoint: string,
   token: string,
@@ -20,8 +40,9 @@ export async function runSQL(
     },
     body: JSON.stringify({ query, params }),
   })
-  if (!res.ok) throw Error(await res.text())
-  return await res.json()
+  const body = await res.text()
+  if (res.ok) return JSON.parse(body)
+  throw new SQLQueryError(`sql endpoint error ${res.status}`, body)
 }
 
 // Dialect detection attempts (run first successful)

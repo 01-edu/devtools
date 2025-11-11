@@ -32,7 +32,7 @@ export const deployments = api['GET/api/project/deployments'].signal()
 // API signal for current project
 export const project = api['GET/api/project'].signal()
 
-export const onRun = (query: string) => {
+export const runQuery = (query?: string) => {
   if (querier.pending) return
   const { dep, tab } = url.params
   if (dep && tab === 'queries' && query) {
