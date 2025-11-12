@@ -22,7 +22,7 @@ const LogSchema = OBJ({
 
 export const LogSchemaOutput = OBJ({
   id: STR('The unique ID of the log event'),
-  timestamp: NUM('The timestamp of the log event'),
+  timestamp: STR('The full date of the log event'),
   trace_id: STR('A float64 representation of the trace ID'),
   span_id: STR('A float64 representation of the span ID'),
   severity_number: NUM('The severity number of the log event'),

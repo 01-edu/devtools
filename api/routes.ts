@@ -21,10 +21,15 @@ import {
   insertLogs,
   LogSchemaOutput,
   LogsInputSchema,
-} from './click-house-client.ts'
+} from './clickhouse-client.ts'
 import { decryptMessage, encryptMessage } from './user.ts'
 import { log } from './lib/log.ts'
-import { type ColumnInfo, fetchTablesData, runSQL } from './sql.ts'
+import {
+  type ColumnInfo,
+  fetchTablesData,
+  runSQL,
+  SQLQueryError,
+} from './sql.ts'
 
 const withUserSession = ({ user }: RequestContext) => {
   if (!user) throw Error('Missing user session')
@@ -515,11 +520,11 @@ const defs = {
       const dep = DeploymentsCollection.get(deployment)
 
       if (!dep) {
-        throw respond.NotFound({ message: 'Deployment not found' })
+        throw new respond.NotFoundError({ message: 'Deployment not found' })
       }
 
       if (!dep?.databaseEnabled) {
-        throw respond.BadRequest({
+        throw new respond.BadRequestError({
           message: 'Database not enabled for deployment',
         })
       }
@@ -528,7 +533,7 @@ const defs = {
       if (!project) throw respond.NotFound({ message: 'Project not found' })
       if (!project.isPublic && !ctx.user?.isAdmin) {
         if (!userInTeam(project.teamId, ctx.user?.userEmail)) {
-          throw respond.Forbidden({
+          throw new respond.ForbiddenError({
             message: 'Access to project queries denied',
           })
         }
@@ -536,17 +541,32 @@ const defs = {
 
       const { sqlEndpoint, sqlToken } = dep
       if (!sqlEndpoint || !sqlToken) {
-        throw respond.BadRequest({
+        throw new respond.BadRequestError({
           message: 'SQL endpoint or token not configured for deployment',
         })
       }
 
-      const startTime = performance.now()
-      const data = await runSQL(sqlEndpoint, sqlToken, sql)
+      try {
+        const startTime = performance.now()
+        const data = await runSQL(sqlEndpoint, sqlToken, sql)
 
-      return {
-        duration: (performance.now() - startTime) / 1000, // in seconds
-        rows: data,
+        return {
+          duration: (performance.now() - startTime) / 1000, // in seconds
+          rows: data,
+        }
+      } catch (error) {
+        if (error instanceof SQLQueryError) {
+          if (error.type === 'bad-query') {
+            throw new respond.BadRequestError({
+              message: `SQL Query Error: ${error.sqlMessage}`,
+            })
+          } else if (error.type === 'timeout') {
+            throw new respond.BadRequestError({
+              message: `SQL Query Timeout: ${error.sqlMessage}`,
+            })
+          }
+        }
+        throw respond.InternalServerError()
       }
     },
     input: OBJ({

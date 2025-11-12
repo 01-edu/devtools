@@ -1,13 +1,6 @@
 import { ChevronRight, Clock, Play, Search, Trash2 } from 'lucide-preact'
 import { A, navigate, url } from '../lib/router.tsx'
-import { onRun, queriesHistory } from '../pages/DeploymentPage.tsx'
-
-export type QueryHistoryItem = {
-  query: string
-  timestamp: string
-  columns?: number
-  rows?: number
-}
+import { queriesHistory, runQuery } from '../lib/shared.tsx'
 
 const deleteQuery = (hash: string) => {
   const updatedHistory = { ...queriesHistory.value }
@@ -77,7 +70,7 @@ export const QueryHistory = () => {
                   params={{ q: item.query, tab: 'queries' }}
                   class='btn btn-xs btn-ghost'
                   title='Run query'
-                  onClick={() => onRun(item.query)}
+                  onClick={() => runQuery(item.query)}
                 >
                   <Play class='w-4 h-4' />
                 </A>
