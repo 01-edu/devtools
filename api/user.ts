@@ -1,7 +1,6 @@
-import { SECRET } from './lib/env.ts'
-import { UsersCollection } from './schema.ts'
-
-import { decodeBase64Url, encodeBase64Url } from 'jsr:@std/encoding/base64url'
+import { decodeBase64Url, encodeBase64Url } from '@std/encoding/base64url'
+import { SECRET } from '/api/lib/env.ts'
+import { UsersCollection } from '/api/schema.ts'
 
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()

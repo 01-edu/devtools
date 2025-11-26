@@ -1,5 +1,5 @@
 import { signal, useSignal } from '@preact/signals'
-import { A, navigate } from '../lib/router.tsx'
+import { A, navigate } from '@01edu/signal-router'
 import {
   AlertTriangle,
   ArrowRight,
@@ -12,7 +12,7 @@ import {
   Settings,
 } from 'lucide-preact'
 import { Dialog, DialogModal } from '../components/Dialog.tsx'
-import { url } from '../lib/router.tsx'
+import { url } from '@01edu/signal-router'
 import { JSX } from 'preact'
 import { user } from '../lib/session.ts'
 import { api, ApiOutput } from '../lib/api.ts'

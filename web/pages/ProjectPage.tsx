@@ -1,5 +1,5 @@
 import { effect } from '@preact/signals'
-import { navigate, url } from '../lib/router.tsx'
+import { navigate, url } from '@01edu/signal-router'
 import { Sidebar } from '../components/SideBar.tsx'
 import { user } from '../lib/session.ts'
 import { SettingsPage } from './project/SettingsPage.tsx'

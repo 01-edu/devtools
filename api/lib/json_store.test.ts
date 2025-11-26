@@ -1,13 +1,8 @@
 // db_test.ts
-import { afterEach, beforeEach, describe, it } from 'jsr:@std/testing/bdd'
-import {
-  assert,
-  assertEquals,
-  assertExists,
-  assertRejects,
-} from 'jsr:@std/assert'
+import { afterEach, beforeEach, describe, it } from '@std/testing/bdd'
+import { assert, assertEquals, assertExists, assertRejects } from '@std/assert'
 import { createCollection } from './json_store.ts'
-import { ensureDir } from 'jsr:@std/fs'
+import { ensureDir } from '@std/fs'
 
 type User = {
   id: number

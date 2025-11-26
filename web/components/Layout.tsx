@@ -11,8 +11,8 @@ export const PageLayout = (
 )
 
 export const PageHeader = (
-  { children, className }: {
-    className?: string
+  { children, class: className }: {
+    class?: string
     children: JSX.Element | JSX.Element[]
   },
 ) => (

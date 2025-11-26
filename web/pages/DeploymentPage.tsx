@@ -1,4 +1,4 @@
-import { A, navigate, url } from '../lib/router.tsx'
+import { A, navigate, url } from '@01edu/signal-router'
 import {
   AlertCircle,
   AlertTriangle,
@@ -1064,7 +1064,7 @@ const Drawer = () => (
     />
     <div class='drawer-side'>
       <label
-        htmlFor='drawer-right'
+        for='drawer-right'
         aria-label='close sidebar'
         class='drawer-overlay'
       >
