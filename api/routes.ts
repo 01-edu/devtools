@@ -41,18 +41,25 @@ const withAdminSession = ({ user }: RequestContext) => {
 
 const withDeploymentSession = async (ctx: RequestContext) => {
   const token = ctx.req.headers.get('Authorization')?.replace(/^Bearer /i, '')
+  console.log('Authorization token:', token)
   if (!token) throw respond.Unauthorized({ message: 'Missing token' })
   try {
     const message = await decryptMessage(token)
+    console.log('Decrypted token message:', message)
     if (!message) throw respond.Unauthorized({ message: 'Invalid token' })
     const data = JSON.parse(message)
+    console.log('Parsed token data:', data)
     const dep = DeploymentsCollection.get(data?.url)
+    console.log('Fetched deployment for token:', dep)
+    console.log("Correct Salt",dep.tokenSalt !== data?.tokenSalt);
+    
     if (!dep || dep.tokenSalt !== data?.tokenSalt) {
       throw respond.Unauthorized({ message: 'Invalid token' })
     }
     ctx.resource = dep?.url
   } catch (error) {
-    log.error('Error validating deployment token:', { error })
+    console.log('Error validating deployment token:', { error })
+    // log.error('Error validating deployment token:', { error })
     throw respond.Unauthorized({ message: 'Invalid token' })
   }
 }
