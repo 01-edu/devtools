@@ -5,7 +5,11 @@ import { log } from '/api/lib/log.ts'
 import { routeHandler } from '/api/routes.ts'
 
 const fetch = server({ log, routeHandler })
-export default { fetch }
+export default {
+  fetch(req: Request) {
+    return fetch(req, new URL(req.url))
+  },
+}
 
 if (APP_ENV === 'prod') {
   const indexHtml = await Deno.readFile(
