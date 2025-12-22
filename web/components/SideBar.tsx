@@ -6,7 +6,7 @@ import {
   Settings,
 } from 'lucide-preact'
 import { user } from '../lib/session.ts'
-import { A, url } from '../lib/router.tsx'
+import { A, url } from '@01edu/signal-router'
 
 export type SidebarItem = {
   label: string

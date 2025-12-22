@@ -1,7 +1,8 @@
 import { effect, signal } from '@preact/signals'
-import { Code, Github, LogOut, Moon, Sun } from 'lucide-preact'
+import { A, url } from '@01edu/signal-router'
+import { Code, LogOut, Moon, Sun } from 'lucide-preact'
+import { GitHub } from './components/BrandIcons.tsx'
 import { user } from './lib/session.ts'
-import { A, url } from './lib/router.tsx'
 
 const $theme = signal(localStorage.theme || 'dark')
 
@@ -61,7 +62,7 @@ export const Header = () => (
         href='/'
         class='btn btn-ghost text-xl gap-2 cursor-pointer'
       >
-        <Code className='w-8 h-8 text-primary' />
+        <Code class='w-8 h-8 text-primary' />
         <span class='font-bold'>DevTools</span>
       </a>
     </div>
@@ -74,7 +75,7 @@ export const Header = () => (
         class='btn btn-ghost btn-square'
         aria-label='GitHub repository'
       >
-        <Github className='w-5 h-5' />
+        <GitHub class='w-5 h-5' />
       </a>
       <SwitchTheme />
       {'/login' !== url.path && <UserInfo />}

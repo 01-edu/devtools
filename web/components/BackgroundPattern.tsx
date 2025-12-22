@@ -246,18 +246,18 @@ export const BackgroundPattern = () => {
   }
 
   return (
-    <div className='fixed inset-0 overflow-hidden pointer-events-none z-0'>
+    <div class='fixed inset-0 overflow-hidden pointer-events-none z-0'>
       <div
-        className='absolute inset-0 opacity-10'
+        class='absolute inset-0 opacity-10'
         style={{
-          background: `linear-gradient(${randomInRange(0, 360)}deg, 
+          background: `linear-gradient(${randomInRange(0, 360)}deg,
                 hsl(${randomInRange(200, 220)}, ${randomInRange(30, 50)}%, ${
             randomInRange(70, 90)
-          }%) 
-                0%, 
+          }%)
+                0%,
                 hsl(${randomInRange(210, 230)}, ${randomInRange(40, 60)}%, ${
             randomInRange(80, 95)
-          }%) 
+          }%)
                 100%)`,
         }}
       />
@@ -267,7 +267,7 @@ export const BackgroundPattern = () => {
         return (
           <div
             key={`grid-${i}`}
-            className='absolute flex items-center justify-center'
+            class='absolute flex items-center justify-center'
             style={{
               top: position.top,
               left: position.left,
@@ -276,10 +276,10 @@ export const BackgroundPattern = () => {
             }}
           >
             {el.type === 'icon' && el.component
-              ? <el.component size={el.size} className='text-primary' />
+              ? <el.component size={el.size} class='text-primary' />
               : (
                 <div
-                  className={`text-primary font-medium tracking-wide`}
+                  class={`text-primary font-medium tracking-wide`}
                   style={{ fontSize: `${el.size * 0.2}rem` }}
                 >
                   {el.content}
@@ -292,7 +292,7 @@ export const BackgroundPattern = () => {
       {borderElements.map((el, i) => (
         <div
           key={`border-${i}`}
-          className='absolute'
+          class='absolute'
           style={{
             top: el.top,
             left: el.left,
@@ -301,14 +301,14 @@ export const BackgroundPattern = () => {
             transform: `rotate(${el.rotation}deg)`,
           }}
         >
-          <el.component size={el.size} className='text-primary' />
+          <el.component size={el.size} class='text-primary' />
         </div>
       ))}
 
       {floatingElements.map((el, i) => (
         <div
           key={`float-${i}`}
-          className='absolute'
+          class='absolute'
           style={{
             top: el.top,
             left: el.left,
@@ -317,14 +317,14 @@ export const BackgroundPattern = () => {
             fontSize: `${el.size * 0.2}rem`,
           }}
         >
-          <el.component className='text-primary' />
+          <el.component class='text-primary' />
         </div>
       ))}
 
       {bands.map((band, i) => (
         <div
           key={`band-${i}`}
-          className='absolute w-[250%] left-[-75%] flex items-center justify-around gap-12'
+          class='absolute w-[250%] left-[-75%] flex items-center justify-around gap-12'
           style={{
             top: band.top,
             transform: `rotate(${band.angle}deg) translateY(-50%)`,
@@ -333,20 +333,20 @@ export const BackgroundPattern = () => {
           {band.items.map((item, j) => (
             <div
               key={`band-item-${i}-${j}`}
-              className='flex items-center gap-6'
+              class='flex items-center gap-6'
               style={{
                 opacity: `${item.opacity}%`,
               }}
             >
               <item.icon
-                className='text-primary'
+                class='text-primary'
                 style={{
                   width: `${item.size * 0.2}rem`,
                   height: `${item.size * 0.2}rem`,
                 }}
               />
               <span
-                className='text-primary font-medium tracking-wider'
+                class='text-primary font-medium tracking-wider'
                 style={{ fontSize: `${randomInRange(0.7, 1.1)}rem` }}
               >
                 {item.text}
@@ -359,7 +359,7 @@ export const BackgroundPattern = () => {
       {['top', 'right', 'bottom', 'left'].map((position) => (
         <div
           key={position}
-          className={`absolute text-xs text-primary opacity-25 font-mono`}
+          class={`absolute text-xs text-primary opacity-25 font-mono`}
           style={{
             [position]: '1rem',
             transform: `rotate(${randomInRange(-5, 5)}deg)`,

@@ -1,8 +1,8 @@
+import { useSignal } from '@preact/signals'
+import { navigate, url } from '@01edu/signal-router'
+import type { TargetedEvent } from 'preact'
 import { PageContent, PageHeader } from '../../components/Layout.tsx'
 import { Button, Card, Input, Switch } from '../../components/forms.tsx'
-import { useSignal } from '@preact/signals'
-import { navigate, url } from '../../lib/router.tsx'
-import { JSX } from 'preact'
 import { api, ApiOutput } from '../../lib/api.ts'
 import { user } from '../../lib/session.ts'
 import { deployments, project } from '../../lib/shared.tsx'
@@ -17,7 +17,7 @@ users.fetch()
 const team = api['GET/api/team'].signal()
 
 function ProjectInfoForm() {
-  const handleSubmit = (e: JSX.TargetedEvent<HTMLFormElement>) => {
+  const handleSubmit = (e: TargetedEvent<HTMLFormElement>) => {
     e.preventDefault()
   }
 
@@ -37,7 +37,7 @@ function ProjectInfoForm() {
           <Input
             label='Repository URL'
             name='repositoryUrl'
-            defaultValue={project.data?.repositoryUrl}
+            defaultValue={project.data?.repositoryUrl || ''}
             note='The URL of the Git repository for your project.'
           />
         </div>
@@ -51,7 +51,7 @@ function ProjectInfoForm() {
 
 function DeploymentForm({ deployment }: { deployment?: Deployment }) {
   const databaseEnabled = useSignal(deployment?.databaseEnabled || false)
-  const handleSubmit = (e: JSX.TargetedEvent<HTMLFormElement>) => {
+  const handleSubmit = (e: TargetedEvent<HTMLFormElement>) => {
     e.preventDefault()
   }
 
@@ -83,14 +83,14 @@ function DeploymentForm({ deployment }: { deployment?: Deployment }) {
               <Input
                 label='SQL Endpoint'
                 name='sqlEndpoint'
-                defaultValue={deployment?.sqlEndpoint}
+                defaultValue={deployment?.sqlEndpoint || ''}
                 note='The endpoint that can execute SQL queries.'
               />
               <Input
                 label='Security Token'
                 name='sqlToken'
                 type='password'
-                defaultValue={deployment?.sqlToken}
+                defaultValue={deployment?.sqlToken || ''}
                 note='A token to secure your SQL endpoint.'
               />
             </div>
@@ -174,7 +174,7 @@ function UserManagement() {
     users.data?.find((u) => u.userEmail === email)
   ).filter(Boolean) as User[]
 
-  const handleAddUser = (e: JSX.TargetedEvent<HTMLFormElement>) => {
+  const handleAddUser = (e: TargetedEvent<HTMLFormElement>) => {
     e.preventDefault()
   }
 
@@ -259,7 +259,7 @@ export const SettingsPage = () => {
 
   return (
     <>
-      <PageHeader className='gap-4 bg-base-100'>
+      <PageHeader class='gap-4 bg-base-100'>
         <h1 class='text-xl sm:text-2xl font-semibold text-text'>
           Project Settings: {project.data?.name}
         </h1>

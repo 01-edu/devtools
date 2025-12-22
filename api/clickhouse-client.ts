@@ -1,13 +1,20 @@
-import { createClient } from 'npm:@clickhouse/client'
+import { createClient } from '@clickhouse/client'
 import {
   CLICKHOUSE_HOST,
   CLICKHOUSE_PASSWORD,
   CLICKHOUSE_USER,
 } from './lib/env.ts'
-import { respond } from './lib/response.ts'
+import { respond } from '@01edu/api/response'
 import { log } from './lib/log.ts'
-import { ARR, NUM, OBJ, optional, STR, UNION } from './lib/validator.ts'
-import { Asserted } from './lib/router.ts'
+import {
+  ARR,
+  type Asserted,
+  NUM,
+  OBJ,
+  optional,
+  STR,
+  UNION,
+} from '@01edu/api/validator'
 
 const LogSchema = OBJ({
   timestamp: NUM('The timestamp of the log event'),

@@ -1,6 +1,13 @@
-import { ARR, BOOL, NUM, OBJ, optional, STR } from './lib/validator.ts'
-import { Asserted } from './lib/router.ts'
-import { createCollection } from './lib/json_store.ts'
+import {
+  ARR,
+  type Asserted,
+  BOOL,
+  NUM,
+  OBJ,
+  optional,
+  STR,
+} from '@01edu/api/validator'
+import { createCollection } from '/api/lib/json_store.ts'
 
 export const UserDef = OBJ({
   userEmail: STR('The user email address'),

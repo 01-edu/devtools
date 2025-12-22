@@ -1,7 +1,7 @@
 // zero-db.ts
-import { join } from 'jsr:@std/path'
-import { APP_ENV } from './env.ts'
-import { ensureDir } from 'jsr:@std/fs'
+import { join } from '@std/path'
+import { APP_ENV } from '@01edu/api/env'
+import { ensureDir } from '@std/fs'
 
 const DB_DIR = APP_ENV === 'test' ? './db_test' : './db'
 

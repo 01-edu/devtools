@@ -1,6 +1,7 @@
-import { makeRouter, route } from '/api/lib/router.ts'
-import type { RequestContext } from '/api/lib/context.ts'
-import { handleGoogleCallback, initiateGoogleAuth } from './auth.ts'
+import { makeRouter, route } from '@01edu/api/router'
+import type { RequestContext } from '@01edu/api/context'
+import { handleGoogleCallback, initiateGoogleAuth } from '/api/auth.ts'
+import { log } from '/api/lib/log.ts'
 import {
   DatabaseSchemasCollection,
   DeploymentDef,
@@ -8,53 +9,47 @@ import {
   ProjectsCollection,
   TeamDef,
   TeamsCollection,
-  User,
   UserDef,
   UsersCollection,
 } from './schema.ts'
-import { ARR, BOOL, LIST, NUM, OBJ, optional, STR } from './lib/validator.ts'
-import { respond } from './lib/response.ts'
-import { deleteCookie } from 'jsr:@std/http/cookie'
+import { ARR, BOOL, LIST, NUM, OBJ, optional, STR } from '@01edu/api/validator'
+import { respond } from '@01edu/api/response'
+import { deleteCookie } from '@std/http/cookie'
 import { getPicture } from '/api/picture.ts'
 import {
   getLogs,
   insertLogs,
   LogSchemaOutput,
   LogsInputSchema,
-} from './clickhouse-client.ts'
-import { decryptMessage, encryptMessage } from './user.ts'
-import { log } from './lib/log.ts'
+} from '/api/clickhouse-client.ts'
+import { decodeSession, decryptMessage, encryptMessage } from '/api/user.ts'
 import {
   type ColumnInfo,
   fetchTablesData,
   runSQL,
   SQLQueryError,
-} from './sql.ts'
+} from '/api/sql.ts'
 
-const withUserSession = ({ user }: RequestContext) => {
-  if (!user) throw Error('Missing user session')
+const withUserSession = async ({ cookies }: RequestContext) => {
+  const session = await decodeSession(cookies.session)
+  if (!session) throw Error('Missing user session')
+  return session
 }
 
-const withAdminSession = ({ user }: RequestContext) => {
-  if (!user || !user.isAdmin) throw Error('Admin access required')
+const withAdminSession = async (ctx: RequestContext) => {
+  const session = await withUserSession(ctx)
+  if (!session || !session.isAdmin) throw Error('Admin access required')
 }
 
 const withDeploymentSession = async (ctx: RequestContext) => {
   const token = ctx.req.headers.get('Authorization')?.replace(/^Bearer /i, '')
-  if (!token) throw respond.Unauthorized({ message: 'Missing token' })
-  try {
-    const message = await decryptMessage(token)
-    if (!message) throw respond.Unauthorized({ message: 'Invalid token' })
-    const data = JSON.parse(message)
-    const dep = DeploymentsCollection.get(data?.url)
-    if (!dep || dep.tokenSalt !== data?.tokenSalt) {
-      throw respond.Unauthorized({ message: 'Invalid token' })
-    }
-    ctx.resource = dep?.url
-  } catch (error) {
-    log.error('Error validating deployment token:', { error })
-    throw respond.Unauthorized({ message: 'Invalid token' })
-  }
+  if (!token) throw Error('Missing token')
+  const message = await decryptMessage(token)
+  if (!message) throw Error('Invalid token')
+  const data = JSON.parse(message)
+  const dep = DeploymentsCollection.get(data?.url)
+  if (!dep || dep.tokenSalt !== data?.tokenSalt) throw Error('Invalid token')
+  return dep
 }
 
 const userInTeam = (teamId: string, userEmail?: string) => {
@@ -99,7 +94,7 @@ const defs = {
   }),
   'GET/api/user/me': route({
     authorize: withUserSession,
-    fn: ({ user }) => user as User,
+    fn: ({ session }) => session,
     output: UserDef,
     description: 'Handle Google OAuth callback',
   }),
@@ -163,7 +158,11 @@ const defs = {
   }),
   'PUT/api/team': route({
     authorize: withAdminSession,
-    fn: (_ctx, input) => TeamsCollection.update(input.teamId, input),
+    fn: (_ctx, input) =>
+      TeamsCollection.update(input.teamId, {
+        teamName: input.teamName,
+        teamMembers: input.teamMembers || undefined,
+      }),
     input: OBJ({
       teamId: STR('The ID of the team'),
       teamName: STR('The name of the team'),
@@ -334,10 +333,7 @@ const defs = {
       const token = await encryptMessage(
         JSON.stringify({ url: deployment.url, tokenSalt }),
       )
-      return {
-        ...deployment,
-        token,
-      }
+      return { ...deployment, token }
     },
     input: OBJ({ url: STR('The URL of the deployment') }),
     output: deploymentOutput,
@@ -388,8 +384,8 @@ const defs = {
   'POST/api/logs': route({
     authorize: withDeploymentSession,
     fn: (ctx, logs) => {
-      if (!ctx.resource) throw respond.InternalServerError()
-      return insertLogs(ctx.resource, logs)
+      if (!ctx.session.url) throw respond.InternalServerError()
+      return insertLogs(ctx.session.url, logs)
     },
     input: LogsInputSchema,
     description: 'Insert logs into ClickHouse NB: a Bearer token is required',
@@ -408,8 +404,8 @@ const defs = {
       }
       const project = ProjectsCollection.get(deployment.projectId)
       if (!project) throw respond.NotFound({ message: 'Project not found' })
-      if (!project.isPublic && !ctx.user?.isAdmin) {
-        if (!userInTeam(project.teamId, ctx.user?.userEmail)) {
+      if (!project.isPublic && !ctx.session.isAdmin) {
+        if (!userInTeam(project.teamId, ctx.session.userEmail)) {
           throw respond.Forbidden({ message: 'Access to project logs denied' })
         }
       }
@@ -451,7 +447,7 @@ const defs = {
         throw respond.NotFound({ message: 'Deployment not found' })
       }
 
-      if (!dep?.databaseEnabled) {
+      if (!dep.databaseEnabled) {
         throw respond.BadRequest({
           message: 'Database not enabled for deployment',
         })
@@ -459,8 +455,8 @@ const defs = {
 
       const project = ProjectsCollection.get(dep.projectId)
       if (!project) throw respond.NotFound({ message: 'Project not found' })
-      if (!project.isPublic && !ctx.user?.isAdmin) {
-        if (!userInTeam(project.teamId, ctx.user?.userEmail)) {
+      if (!project.isPublic && !ctx.session.isAdmin) {
+        if (!userInTeam(project.teamId, ctx.session.userEmail)) {
           throw respond.Forbidden({
             message: 'Access to project tables denied',
           })
@@ -480,7 +476,7 @@ const defs = {
           tableDef.columnsMap as unknown as Map<string, ColumnInfo>,
         )
       } catch (err) {
-        console.error('fetchTablesData error', err)
+        log.error('fetchTablesData-error', { stack: (err as Error)?.stack })
         throw err
       }
     },
@@ -523,7 +519,7 @@ const defs = {
         throw new respond.NotFoundError({ message: 'Deployment not found' })
       }
 
-      if (!dep?.databaseEnabled) {
+      if (!dep.databaseEnabled) {
         throw new respond.BadRequestError({
           message: 'Database not enabled for deployment',
         })
@@ -531,8 +527,8 @@ const defs = {
 
       const project = ProjectsCollection.get(dep.projectId)
       if (!project) throw respond.NotFound({ message: 'Project not found' })
-      if (!project.isPublic && !ctx.user?.isAdmin) {
-        if (!userInTeam(project.teamId, ctx.user?.userEmail)) {
+      if (!project.isPublic && !ctx.session.isAdmin) {
+        if (!userInTeam(project.teamId, ctx.session.userEmail)) {
           throw new respond.ForbiddenError({
             message: 'Access to project queries denied',
           })
@@ -582,4 +578,4 @@ const defs = {
 } as const
 
 export type RouteDefinitions = typeof defs
-export const routeHandler = makeRouter(defs).handle
+export const routeHandler = makeRouter(log, defs)

@@ -2,9 +2,9 @@ import {
   DatabaseSchemasCollection,
   Deployment,
   DeploymentsCollection,
-} from './schema.ts'
-import { DB_SCHEMA_REFRESH_MS } from './lib/env.ts'
-import { log } from './lib/log.ts'
+} from '/api/schema.ts'
+import { DB_SCHEMA_REFRESH_MS } from '/api/lib/env.ts'
+import { log } from '/api/lib/log.ts'
 
 export class SQLQueryError extends Error {
   constructor(message: string, body: string) {

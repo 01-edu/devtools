@@ -1,6 +1,6 @@
 import { JSX } from 'preact'
 import { useId } from 'preact/hooks'
-import { A, LinkProps } from '../lib/router.tsx'
+import { A, LinkProps } from '@01edu/signal-router'
 
 // Card component
 export const Card = (

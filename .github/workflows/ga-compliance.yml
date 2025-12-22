@@ -1,20 +1,16 @@
 # Workflow for DevTools Compliance
-
 name: DevTools Compliance
-
 on:
   pull_request:
     types:
-      [
-        opened,
-        edited,
-        synchronize,
-        reopened,
-        labeled,
-        unlabeled,
-        assigned,
-        unassigned,
-      ]
+      - opened
+      - edited
+      - synchronize
+      - reopened
+      - labeled
+      - unlabeled
+      - assigned
+      - unassigned
 
 jobs:
   check-compliance:
@@ -23,9 +19,8 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+        uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
 
       - name: Show PR Labels and Assignees
         run: |
