@@ -1,5 +1,5 @@
 import { ChevronRight, Clock, Play, Search, Trash2 } from 'lucide-preact'
-import { A, navigate, url } from '../lib/router.tsx'
+import { A, navigate, url } from '@01edu/signal-router'
 import { queriesHistory, runQuery } from '../lib/shared.tsx'
 
 const deleteQuery = (hash: string) => {

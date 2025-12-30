@@ -1,46 +1,22 @@
-const env = Deno.env.toObject()
+import { ENV } from '@01edu/api/env'
 
-type AppEnvironments = 'dev' | 'test' | 'prod'
-
-export const APP_ENV = env.APP_ENV || 'dev' as AppEnvironments
-if (APP_ENV !== 'dev' && APP_ENV !== 'test' && APP_ENV !== 'prod') {
-  throw Error(`APP_ENV: "${env.APP_ENV}" must be "dev", "test" or "prod"`)
-}
-
-export const PORT = Number(env.PORT) || 2119
-export const Picture_Dir = env.PICTURE_DIR || './.picture'
-
-export const GOOGLE_CLIENT_ID = env.GOOGLE_CLIENT_ID
-if (!GOOGLE_CLIENT_ID) {
-  throw Error('GOOGLE_CLIENT_ID: field required in the env')
-}
-export const CLIENT_SECRET = env.CLIENT_SECRET
-if (!CLIENT_SECRET) {
-  throw Error('CLIENT_SECRET: field required in the env')
-}
-export const REDIRECT_URI = env.REDIRECT_URI
-if (!REDIRECT_URI) {
-  throw Error('REDIRECT_URI: field required in the env')
-}
+export const PORT = Number(ENV('PORT', '2119'))
+export const PICTURE_DIR = ENV('PICTURE_DIR', './.picture')
+export const GOOGLE_CLIENT_ID = ENV('GOOGLE_CLIENT_ID')
+export const CLIENT_SECRET = ENV('CLIENT_SECRET')
+export const REDIRECT_URI = ENV('REDIRECT_URI')
 export const ORIGIN = new URL(REDIRECT_URI).origin
+export const SECRET = ENV(
+  'SECRET',
+  'iUokBru8WPSMAuMspijlt7F-Cnpqyg84F36b1G681h0',
+)
 
-export const SECRET = env.SECRET ||
-  'iUokBru8WPSMAuMspijlt7F-Cnpqyg84F36b1G681h0'
-
-export const CLICKHOUSE_HOST = env.CLICKHOUSE_HOST
-if (!CLICKHOUSE_HOST) {
-  throw Error('CLICKHOUSE_HOST: field required in the env')
-}
-export const CLICKHOUSE_USER = env.CLICKHOUSE_USER
-if (!CLICKHOUSE_USER) {
-  throw Error('CLICKHOUSE_USER: field required in the env')
-}
-export const CLICKHOUSE_PASSWORD = env.CLICKHOUSE_PASSWORD
-if (!CLICKHOUSE_PASSWORD) {
-  throw Error('CLICKHOUSE_PASSWORD: field required in the env')
-}
+export const CLICKHOUSE_HOST = ENV('CLICKHOUSE_HOST')
+export const CLICKHOUSE_USER = ENV('CLICKHOUSE_USER')
+export const CLICKHOUSE_PASSWORD = ENV('CLICKHOUSE_PASSWORD')
 
 // Optional interval (ms) for refreshing external SQL database schemas
 // Defaults to 24 hours
-export const DB_SCHEMA_REFRESH_MS = Number(env.DB_SCHEMA_REFRESH_MS) ||
-  24 * 60 * 60 * 1000
+export const DB_SCHEMA_REFRESH_MS = Number(
+  ENV('DB_SCHEMA_REFRESH_MS', `${24 * 60 * 60 * 1000}`),
+)

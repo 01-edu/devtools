@@ -7,10 +7,10 @@ import {
   verifyGoogleToken,
   verifyState,
 } from '/api/lib/google-oauth.ts'
-import { respond } from '/api/lib/response.ts'
+import { respond } from '@01edu/api/response'
 import { authenticateOauthUser } from '/api/user.ts'
 import { savePicture } from '/api/picture.ts'
-import type { RequestContext } from '/api/lib/context.ts'
+import type { RequestContext } from '@01edu/api/context'
 
 interface GoogleTokens {
   access_token: string

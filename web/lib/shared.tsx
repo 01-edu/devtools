@@ -2,7 +2,7 @@ import { HardDrive, ListTodo } from 'lucide-preact'
 import { api } from './api.ts'
 import { DeploymentPage } from '../pages/DeploymentPage.tsx'
 import { SidebarItem } from '../components/SideBar.tsx'
-import { url } from './router.tsx'
+import { url } from '@01edu/signal-router'
 import { Signal } from '@preact/signals'
 
 // export

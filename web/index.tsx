@@ -4,7 +4,7 @@ import { ProjectsPage } from './pages/ProjectsPage.tsx'
 import { BackgroundPattern } from './components/BackgroundPattern.tsx'
 import { Header } from './layout.tsx'
 import { user } from './lib/session.ts'
-import { url } from './lib/router.tsx'
+import { url } from '@01edu/signal-router'
 import { ProjectPage } from './pages/ProjectPage.tsx'
 
 const renderPage = () => {
@@ -19,14 +19,14 @@ const renderPage = () => {
 }
 const App = () => {
   return (
-    <div className='h-screen flex flex-col bg-base-100 overflow-hidden'>
-      <div className='fixed inset-0'>
+    <div class='h-screen flex flex-col bg-base-100 overflow-hidden'>
+      <div class='fixed inset-0'>
         <BackgroundPattern />
       </div>
-      <header className='w-full shrink-0 z-0'>
+      <header class='w-full shrink-0 z-0'>
         <Header />
       </header>
-      <main className='w-full flex-1 relative'>
+      <main class='w-full flex-1 relative'>
         {renderPage()}
       </main>
     </div>

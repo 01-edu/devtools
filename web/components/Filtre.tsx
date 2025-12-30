@@ -1,5 +1,5 @@
 import { ArrowUpDown, Filter, Plus } from 'lucide-preact'
-import { navigate, url } from '../lib/router.tsx'
+import { navigate, url } from '@01edu/signal-router'
 
 type FilterRow = { idx: number; key: string; op: string; value: string }
 
@@ -15,7 +15,7 @@ const filterOperators = [
 ] as const
 
 export function parseFilters(prefix: string): FilterRow[] {
-  const data = url.getAll(`f${prefix}`)
+  const data = url.value.searchParams.getAll(`f${prefix}`)
   const rows: FilterRow[] = []
   for (let i = 0; i < data.length; i++) {
     const str = data[i]
@@ -74,7 +74,7 @@ function removeFilter(prefix: string, idx: number) {
 type SortRow = { idx: number; key: string; dir: 'asc' | 'desc' }
 
 export function parseSort(prefix: string): SortRow[] {
-  const data = url.getAll(`s${prefix}`)
+  const data = url.value.searchParams.getAll(`s${prefix}`)
   const rows: SortRow[] = []
   for (let i = 0; i < data.length; i++) {
     const str = data[i]
