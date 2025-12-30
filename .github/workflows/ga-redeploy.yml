@@ -45,10 +45,12 @@ jobs:
 
       - name: 🚀 Deploy new container
         run: |
+          echo "Deploying commit: ${{ github.sha }}"
           docker run -d \
             --name devtools-app \
             --network devtools-network \
             --env-file /root/devtools/.env.prod \
+            -e CI_COMMIT_SHA=${{ github.sha }} \
             -p 8877:3021 \
             -v /root/devtools/db:/app/db \
             -v devtools-pictures:/app/.picture \
