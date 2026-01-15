@@ -118,10 +118,10 @@ export async function refreshOneSchema(
     const tables = [...tableMap.values()].map((t) => ({
       ...t,
       columns: t.columns.sort((a, b) => a.ordinal - b.ordinal),
-      columnsMap: t.columns.reduce((map, col) => {
-        map.set(col.name, col)
-        return map
-      }, new Map<string, ColumnInfo>()),
+      columnsMap: t.columns.reduce((obj, col) => {
+        obj[col.name] = col
+        return obj
+      }, {} as Record<string, ColumnInfo>),
     }))
     const payload = {
       deploymentUrl: dep.url,

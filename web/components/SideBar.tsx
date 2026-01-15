@@ -23,7 +23,7 @@ export function Sidebar(
 ) {
   const sb = url.params.sb
   return (
-    <div class='drawer-side'>
+    <div class='drawer-side overflow-hidden'>
       <div
         class={`${
           sb ? 'w-64' : 'w-16'

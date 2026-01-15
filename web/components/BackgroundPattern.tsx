@@ -246,7 +246,7 @@ export const BackgroundPattern = () => {
   }
 
   return (
-    <div class='fixed inset-0 overflow-hidden pointer-events-none z-0'>
+    <div class='fixed inset-0 w-full h-full max-w-[100vw] overflow-hidden pointer-events-none z-0'>
       <div
         class='absolute inset-0 opacity-10'
         style={{

@@ -416,7 +416,7 @@ const TableFooter = ({ rows }: { rows: AnyRecord[] }) => {
 const TableContent = ({ rows }: { rows: AnyRecord[] }) => {
   const columns = Object.keys(rows[0] || {})
   return (
-    <table class='table table-zebra w-full'>
+    <table class='table table-zebra min-w-full'>
       <TableHeader columns={columns} />
       <tbody>
         {rows.length === 0

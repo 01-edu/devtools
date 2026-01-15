@@ -23,12 +23,7 @@ import {
   LogsInputSchema,
 } from '/api/clickhouse-client.ts'
 import { decodeSession, decryptMessage, encryptMessage } from '/api/user.ts'
-import {
-  type ColumnInfo,
-  fetchTablesData,
-  runSQL,
-  SQLQueryError,
-} from '/api/sql.ts'
+import { fetchTablesData, runSQL, SQLQueryError } from '/api/sql.ts'
 
 const withUserSession = async ({ cookies }: RequestContext) => {
   const session = await decodeSession(cookies.session)
@@ -471,9 +466,10 @@ const defs = {
       }
 
       try {
+        const columnsMap = new Map(tableDef.columns.map((c) => [c.name, c]))
         return fetchTablesData(
           { ...input, deployment: dep, table },
-          tableDef.columnsMap as unknown as Map<string, ColumnInfo>,
+          columnsMap,
         )
       } catch (err) {
         log.error('fetchTablesData-error', { stack: (err as Error)?.stack })
