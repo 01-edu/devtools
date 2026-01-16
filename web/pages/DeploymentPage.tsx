@@ -46,6 +46,7 @@ type AnyRecord = Record<string, unknown>
 const schema = api['GET/api/deployment/schema'].signal()
 // API signal for table data
 export const tableData = api['POST/api/deployment/table/data'].signal()
+export const rowDetailsData = api['POST/api/deployment/table/data'].signal()
 
 // Effect to fetch schema when deployment URL changes
 effect(() => {
@@ -328,16 +329,28 @@ const EmptyRow = ({ colSpan }: { colSpan: number }) => (
 
 const DataRow = (
   { row, columns, index }: { row: AnyRecord; columns: string[]; index: number },
-) => (
-  <tr class='hover:bg-base-200/50'>
-    <RowNumberCell index={index} />
-    {columns.map((key, i) => (
-      <td key={i} class='align-top min-w-[8rem] max-w-[20rem]'>
-        <TableCell value={row[key]} />
-      </td>
-    ))}
-  </tr>
-)
+) => {
+  const tableName = url.params.table || schema.data?.tables?.[0]?.table
+  const tableDef = schema.data?.tables?.find((t) => t.table === tableName)
+  const pk = tableDef?.columns?.[0]?.name
+  const rowId = pk ? String(row[pk]) : undefined
+
+  return (
+    <A
+      params={{ drawer: 'view-row', 'row-id': rowId }}
+      class='contents'
+    >
+      <tr class='hover:bg-base-200/50 cursor-pointer'>
+        <RowNumberCell index={index} />
+        {columns.map((key, i) => (
+          <td key={i} class='align-top min-w-[8rem] max-w-[20rem]'>
+            <TableCell value={row[key]} />
+          </td>
+        ))}
+      </tr>
+    </A>
+  )
+}
 
 const TableHeader = ({ columns }: { columns: string[] }) => (
   <thead class='sticky top-0 bg-base-100 shadow-sm'>
@@ -1043,48 +1056,6 @@ const ComingSoon = ({ title }: { title: string }) => (
   </div>
 )
 
-type DrawerTab = 'history' | 'insert'
-const drawerViews: Record<DrawerTab, JSX.Element> = {
-  history: <QueryHistory />,
-  insert: <ComingSoon title='Insert Row' />,
-} as const
-
-const Drawer = () => (
-  <div class='drawer drawer-end'>
-    <input
-      id='drawer-right'
-      type='checkbox'
-      class='drawer-toggle'
-      checked={url.params.drawer !== null}
-      onChange={(e) => {
-        if (!e.currentTarget.checked) {
-          navigate({ params: { drawer: null }, replace: true })
-        }
-      }}
-    />
-    <div class='drawer-side'>
-      <label
-        for='drawer-right'
-        aria-label='close sidebar'
-        class='drawer-overlay'
-      >
-      </label>
-      <div class='bg-base-200 text-base-content min-h-full w-96 flex flex-col'>
-        <div class='flex-1 overflow-hidden'>
-          <div class='drawer-view' data-view='history'>
-            {drawerViews[url.params.drawer as DrawerTab] || (
-              <div class='p-4'>
-                <h3 class='text-lg font-semibold mb-4'>No view selected</h3>
-                <p>Please select a view from the sidebar.</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-)
-
 const schemaPanel = <SchemaPanel />
 const TabViews = {
   tables: (
@@ -1100,7 +1071,152 @@ const TabViews = {
     </div>
   ),
   logs: <LogsViewer />,
+  // Add other tab views here as needed
 }
+
+effect(() => {
+  const rowId = url.params['row-id']
+  const dep = url.params.dep
+
+  if (dep && rowId) {
+    const tableName = url.params.table || schema.data?.tables?.[0]?.table
+    const tableDef = schema.data?.tables?.find((t) => t.table === tableName)
+    const pk = tableDef?.columns?.[0]?.name
+
+    if (tableName && pk) {
+      rowDetailsData.fetch({
+        deployment: dep,
+        table: tableName,
+        filter: [{
+          key: pk,
+          comparator: '=',
+          value: rowId,
+        }],
+        sort: [],
+        search: '',
+        limit: 1,
+        offset: 0,
+      })
+    }
+  }
+})
+
+const RowDetails = () => {
+  const row = rowDetailsData.data?.rows?.[0]
+
+  if (rowDetailsData.pending) {
+    return (
+      <div class='flex items-center justify-center p-8'>
+        <span class='loading loading-spinner loading-md'></span>
+      </div>
+    )
+  }
+
+  if (rowDetailsData.error) {
+    return (
+      <div class='p-4 text-error'>
+        Error loading row: {rowDetailsData.error.message}
+      </div>
+    )
+  }
+
+  if (!row) {
+    return (
+      <div class='p-4 text-base-content/60'>
+        Row not found
+      </div>
+    )
+  }
+
+  return (
+    <div class='flex flex-col h-full bg-base-100'>
+      <div class='p-4 border-b border-base-300 flex items-center justify-between sticky top-0 bg-base-100 z-10'>
+        <h3 class='font-semibold text-lg'>Row Details</h3>
+        <A
+          params={{ drawer: null, 'row-id': null }}
+          replace
+          class='btn btn-ghost btn-sm btn-circle'
+        >
+          <XCircle class='h-5 w-5' />
+        </A>
+      </div>
+      <div class='flex-1 overflow-y-auto p-4 space-y-4'>
+        {Object.entries(row).map(([key, value]) => (
+          <div key={key} class='group'>
+            <div class='text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-1 select-none'>
+              {key}
+            </div>
+            <div class='bg-base-200/50 rounded-lg p-3 font-mono text-sm break-all group-hover:bg-base-200 transition-colors'>
+              {typeof value === 'object' && value !== null
+                ? JSON.stringify(value, null, 2)
+                : String(value ?? 'null')}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+type DrawerTab = 'history' | 'insert' | 'view-row'
+const drawerViews: Record<DrawerTab, JSX.Element> = {
+  history: <QueryHistory />,
+  insert: <ComingSoon title='Insert Row' />,
+  'view-row': <RowDetails />,
+} as const
+
+const Drawer = ({ children }: { children: JSX.Element }) => (
+  <div class='drawer h-full relative' dir='rtl'>
+    <input
+      id='drawer-right'
+      type='checkbox'
+      class='drawer-toggle'
+      checked={url.params.drawer !== null}
+      onChange={(e) => {
+        if (!e.currentTarget.checked) {
+          navigate({ params: { drawer: null }, replace: true })
+        }
+      }}
+    />
+    <div class='drawer-content flex flex-col h-full overflow-hidden' dir='ltr'>
+      {children}
+    </div>
+    <div class='drawer-side z-50 absolute h-full w-full pointer-events-none'>
+      <label
+        for='drawer-right'
+        aria-label='close sidebar'
+        class='drawer-overlay absolute inset-0 pointer-events-auto'
+        dir='ltr'
+      >
+      </label>
+      <div
+        class='bg-base-200 text-base-content h-full flex flex-col resize-x overflow-auto pointer-events-auto'
+        style={{
+          direction: 'rtl',
+          width: '400px',
+          minWidth: '300px',
+          maxWidth: '80vw',
+        }}
+      >
+        <div
+          class='flex-1 flex flex-col h-full overflow-hidden'
+          style={{ direction: 'ltr' }}
+        >
+          <div class='flex-1 overflow-hidden'>
+            <div class='drawer-view h-full' data-view='history'>
+              {drawerViews[url.params.drawer as DrawerTab] || (
+                <div class='p-4'>
+                  <h3 class='text-lg font-semibold mb-4'>No view selected</h3>
+                  <p>Please select a view from the sidebar.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+)
 
 export const DeploymentPage = () => {
   const tab = (url.params.tab as 'tables' | 'queries' | 'logs') || 'tables'
@@ -1115,13 +1231,14 @@ export const DeploymentPage = () => {
         <main class='flex-1 flex flex-col h-full'>
           <TabNavigation activeTab={tab} />
           <section class='flex-1 h-full overflow-hidden'>
-            <div class='h-full bg-base-100 border border-base-300 overflow-hidden flex flex-col lg:flex'>
-              {view}
-            </div>
+            <Drawer>
+              <div class='h-full bg-base-100 border border-base-300 overflow-hidden flex flex-col lg:flex'>
+                {view}
+              </div>
+            </Drawer>
           </section>
         </main>
       </div>
-      <Drawer />
     </div>
   )
 }
