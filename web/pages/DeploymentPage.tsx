@@ -47,6 +47,7 @@ const schema = api['GET/api/deployment/schema'].signal()
 // API signal for table data
 export const tableData = api['POST/api/deployment/table/data'].signal()
 export const rowDetailsData = api['POST/api/deployment/table/data'].signal()
+export const logDetailsData = api['POST/api/deployment/logs'].signal()
 
 // Effect to fetch schema when deployment URL changes
 effect(() => {
@@ -218,7 +219,19 @@ function ResultsHeader() {
           <QueryStatus />
           <ErrorDisplay />
         </div>
-        <ExecutionTime />
+        <div class='flex items-center gap-3'>
+          <ExecutionTime />
+          <button
+            onClick={onDownload}
+            type='button'
+            disabled={!querier.data?.rows?.length}
+            class='btn btn-ghost btn-xs'
+            title='Download results as JSON'
+          >
+            <Download class='h-4 w-4' />
+            <span class='hidden sm:inline'>Download</span>
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -294,6 +307,14 @@ const TableCell = ({ value }: { value: unknown }) => {
   const isObj = typeof value === 'object' && value !== null
   const stringValue = isObj ? JSON.stringify(value) : String(value ?? '')
   const isTooLong = stringValue.length > 100
+
+  if (value === null || value === undefined || value === '') {
+    return (
+      <span class='text-xs text-base-content/30 italic select-none'>
+        null
+      </span>
+    )
+  }
 
   if (isObj) {
     return (
@@ -427,7 +448,20 @@ const TableFooter = ({ rows }: { rows: AnyRecord[] }) => {
 }
 
 const TableContent = ({ rows }: { rows: AnyRecord[] }) => {
-  const columns = Object.keys(rows[0] || {})
+  let columns = Object.keys(rows[0] || {})
+
+  // If in tables view, use schema columns first
+  if (url.params.tab === 'tables') {
+    const tableName = url.params.table || schema.data?.tables?.[0]?.table
+    const tableDef = schema.data?.tables?.find((t) => t.table === tableName)
+
+    if (tableDef?.columns) {
+      const schemaColumns = tableDef.columns.map((c) => c.name)
+      // Add any extra columns found in rows that aren't in schema (e.g. virtual columns)
+      const extraColumns = columns.filter((c) => !schemaColumns.includes(c))
+      columns = [...schemaColumns, ...extraColumns]
+    }
+  }
   return (
     <table class='table table-zebra min-w-full'>
       <TableHeader columns={columns} />
@@ -450,6 +484,7 @@ const TableContent = ({ rows }: { rows: AnyRecord[] }) => {
 }
 const DataTable = () => {
   const tab = url.params.tab
+  const isPending = tab === 'tables' ? tableData.pending : querier.pending
 
   const rows = tab === 'tables'
     ? tableData.data?.rows || []
@@ -458,9 +493,20 @@ const DataTable = () => {
     : []
 
   return (
-    <div class='flex flex-col h-full min-h-0 grow-1'>
+    <div class='flex flex-col h-full min-h-0 grow-1 relative'>
+      {isPending && (
+        <div class='absolute top-0 left-0 right-0 h-0.5 z-20 overflow-hidden bg-base-300'>
+          <div class='h-full bg-primary animate-progress origin-left'></div>
+        </div>
+      )}
       <div class='flex-1 min-h-0 overflow-hidden'>
-        <div class='w-full overflow-x-auto overflow-y-auto h-full'>
+        <div
+          class={`w-full overflow-x-auto overflow-y-auto h-full transition-all duration-300 ease-in-out ${
+            isPending
+              ? 'opacity-50 grayscale-[0.5] scale-[0.995]'
+              : 'opacity-100 scale-100'
+          }`}
+        >
           <TableContent rows={rows} />
         </div>
       </div>
@@ -787,14 +833,6 @@ function TabNavigation({
                 <Save class='h-4 w-4' />
                 <span class='hidden sm:inline'>Save</span>
               </button>
-              <button
-                onClick={onDownload}
-                type='button'
-                class='btn btn-outline btn-sm'
-              >
-                <Download class='h-4 w-4' />
-                <span class='hidden sm:inline'>Download</span>
-              </button>
             </>
           )}
         </div>
@@ -873,9 +911,190 @@ const dateFmtConfig = {
   fractionalSecondDigits: 3,
 } as const
 
-const safeFormatTimestamp = (timestamp: Date) =>
-  timestamp.toLocaleString('en-UK', dateFmtConfig)
+const safeFormatTimestamp = (timestamp: Date) => {
+  // If timestamp is close to epoch (1970), assume it's in seconds and convert to ms
+  const time = timestamp.getTime()
+  const correctTime = time < 1000000000000 ? time * 1000 : time // 1e12 ms is roughly year 2001, 1e10 sec is year 2286
+  return new Date(correctTime).toLocaleString('en-UK', dateFmtConfig)
     .split(', ').reverse().join(' ')
+}
+
+// Derive severity text from severity number (matches DB schema)
+const getSeverityText = (
+  severityNumber: number,
+  existingText?: string | null,
+): string => {
+  if (existingText) return existingText
+  if (severityNumber > 4 && severityNumber <= 8) return 'DEBUG'
+  if (severityNumber > 8 && severityNumber <= 12) return 'INFO'
+  if (severityNumber > 12 && severityNumber <= 16) return 'WARN'
+  if (severityNumber > 20 && severityNumber <= 24) return 'FATAL'
+  return 'ERROR'
+}
+
+// Reusable copy button with hover reveal
+const CopyButton = ({ text }: { text: string }) => (
+  <button
+    type='button'
+    class='btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity'
+    title='Copy'
+    onClick={() => navigator.clipboard.writeText(text)}
+  >
+    <Save class='h-3 w-3' />
+  </button>
+)
+
+// Reusable info block for key-value display
+const InfoBlock = (
+  { label, value, mono = false, copy = false }: {
+    label: string
+    value?: string | number | null
+    mono?: boolean
+    copy?: boolean
+  },
+) => {
+  const displayValue = value == null ? '-' : String(value)
+  return (
+    <div class='group bg-base-100 rounded-lg p-3 border border-base-200'>
+      <div class='text-[10px] font-bold text-base-content/40 uppercase tracking-wider mb-1'>
+        {label}
+      </div>
+      <div class='flex items-center justify-between gap-2 overflow-hidden'>
+        <div
+          class={`text-sm break-all ${
+            mono ? 'font-mono text-xs' : 'font-medium'
+          }`}
+          title={displayValue}
+        >
+          {displayValue}
+        </div>
+        {copy && displayValue !== '-' && <CopyButton text={displayValue} />}
+      </div>
+    </div>
+  )
+}
+
+// Recursive JSON value renderer with syntax highlighting
+const JsonValue = ({ value }: { value: unknown }): JSX.Element => {
+  if (typeof value === 'object' && value !== null) {
+    if (Object.keys(value).length === 0) {
+      return <span class='text-base-content/40 italic'>empty object</span>
+    }
+    return (
+      <div class='pl-3 border-l-2 border-base-300 space-y-1 my-1'>
+        {Object.entries(value).map(([k, v]) => (
+          <div key={k} class='text-sm'>
+            <span class='font-medium opacity-70 text-xs text-primary'>
+              {k}:
+            </span>
+            <JsonValue value={v} />
+          </div>
+        ))}
+      </div>
+    )
+  }
+  const valStr = String(value)
+  const isNumber = !isNaN(Number(value)) && value !== ''
+  const isBool = valStr === 'true' || valStr === 'false'
+  const colorClass = isNumber
+    ? 'text-blue-500'
+    : isBool
+    ? 'text-secondary'
+    : 'text-base-content'
+  return <span class={`font-mono break-all ${colorClass}`}>{valStr}</span>
+}
+
+// Hex128 ID block with oklch colors
+const Hex128Block = (
+  { hex, type }: { hex: string; type: 'trace' | 'span' },
+) => {
+  const { hue, value } = parseHex128(hex)
+  const Icon = type === 'trace' ? Link2 : Hash
+  const label = type === 'trace' ? 'Trace ID' : 'Span ID'
+
+  return (
+    <div
+      class='group rounded-lg p-3 border'
+      style={{
+        color: `oklch(0.93 0.15 ${hue})`,
+        backgroundColor: `oklch(0.25 0.01 ${hue})`,
+        borderColor: `oklch(0.4 0.05 ${hue})`,
+      }}
+    >
+      <div class='flex items-center gap-2 mb-2'>
+        <Icon class='w-3 h-3' />
+        <div class='text-[10px] font-bold uppercase tracking-wider'>
+          {label}
+        </div>
+      </div>
+      <div class='flex items-center justify-between gap-2 overflow-hidden'>
+        <div class='font-mono text-sm font-semibold break-all' title={hex}>
+          {hex}
+        </div>
+        <CopyButton text={hex} />
+      </div>
+      <div class='text-[9px] opacity-40 mt-1 font-mono'>raw: {value}</div>
+    </div>
+  )
+}
+
+// Severity block with icon and colors
+const SeverityBlock = (
+  { severityNumber, severityText }: {
+    severityNumber: number
+    severityText?: string | null
+  },
+) => {
+  const text = getSeverityText(severityNumber, severityText)
+  const config = severityConfig[text as keyof typeof severityConfig]
+  const Icon = config?.icon || Info
+
+  return (
+    <div
+      class={`group rounded-lg p-3 border ${config?.bg || 'bg-base-100'} ${
+        config?.color || ''
+      }`}
+    >
+      <div class='text-[10px] font-bold uppercase tracking-wider mb-2 opacity-60'>
+        Severity
+      </div>
+      <div class='flex items-center gap-3'>
+        <Icon class='w-5 h-5' />
+        <div>
+          <div class='font-bold text-lg'>{text}</div>
+          <div class='text-xs opacity-60 font-mono'>Level {severityNumber}</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Body block for log message
+const BodyBlock = ({ body }: { body: string }) => (
+  <div class='group bg-base-100 rounded-lg p-3 border border-base-200'>
+    <div class='flex items-center justify-between mb-2'>
+      <div class='text-[10px] font-bold text-base-content/40 uppercase tracking-wider flex items-center gap-1'>
+        <FileText class='h-3 w-3' /> Body
+      </div>
+      <CopyButton text={body} />
+    </div>
+    <pre class='text-sm font-mono whitespace-pre-wrap break-all bg-base-200/50 rounded p-2'>{body}</pre>
+  </div>
+)
+
+// Attributes block for JSON display
+const AttributesBlock = (
+  { attributes }: { attributes: Record<string, unknown> },
+) => (
+  <div class='group bg-base-100 rounded-lg p-3 border border-base-200'>
+    <div class='text-[10px] font-bold text-base-content/40 uppercase tracking-wider mb-2 flex items-center gap-1'>
+      <Hash class='h-3 w-3' /> Attributes
+    </div>
+    <div class='bg-base-200/30 rounded p-2 overflow-x-auto'>
+      <JsonValue value={attributes} />
+    </div>
+  </div>
+)
 
 const logThreads = [
   'Timestamp',
@@ -907,11 +1126,23 @@ const Hex128 = ({ hex, type }: { hex: string; type: 'trace' | 'span' }) => {
 
 function LogsViewer() {
   const filteredLogs = logData.data || []
+  const isPending = logData.pending
 
   return (
-    <div class='flex flex-col h-full min-h-0'>
+    <div class='flex flex-col h-full min-h-0 relative'>
+      {isPending && (
+        <div class='absolute top-0 left-0 right-0 h-0.5 z-20 overflow-hidden bg-base-300'>
+          <div class='h-full bg-primary animate-progress origin-left'></div>
+        </div>
+      )}
       <div class='flex-1 min-h-0 overflow-hidden'>
-        <div class='w-full overflow-x-auto overflow-y-auto h-full'>
+        <div
+          class={`w-full overflow-x-auto overflow-y-auto h-full transition-all duration-300 ease-in-out ${
+            isPending
+              ? 'opacity-50 grayscale-[0.5] scale-[0.995]'
+              : 'opacity-100 scale-100'
+          }`}
+        >
           <table class='table table-zebra w-full'>
             <thead class='sticky top-0 bg-base-100 shadow-sm'>
               <tr class='border-b border-base-300'>
@@ -930,15 +1161,10 @@ function LogsViewer() {
             <tbody>
               {filteredLogs.map((log) => {
                 const serverityNum = log.severity_number
-                const severity = (serverityNum < 9)
-                  ? 'DEBUG'
-                  : (serverityNum < 13)
-                  ? 'INFO'
-                  : (serverityNum < 17)
-                  ? 'WARN'
-                  : (serverityNum < 21)
-                  ? 'ERROR'
-                  : 'FATAL'
+                const severity = getSeverityText(
+                  serverityNum,
+                  log.severity_text,
+                )
                 const conf = severityConfig[
                   severity as keyof typeof severityConfig
                 ]
@@ -1006,13 +1232,13 @@ function LogsViewer() {
                     </td>
                     <td class='p-0 align-middle'>
                       <div class='flex items-center gap-1'>
-                        <button
-                          type='button'
+                        <A
+                          params={{ drawer: 'view-log', 'log-id': log.id }}
                           class='btn btn-ghost btn-xs'
-                          aria-label='Toggle details'
+                          aria-label='View details'
                         >
                           <Eye class='w-4 h-4' />
-                        </button>
+                        </A>
                         <button
                           type='button'
                           class='btn btn-ghost btn-xs'
@@ -1140,29 +1366,256 @@ const RowDetails = () => {
           <XCircle class='h-5 w-5' />
         </A>
       </div>
+
       <div class='flex-1 overflow-y-auto p-4 space-y-4'>
-        {Object.entries(row).map(([key, value]) => (
-          <div key={key} class='group'>
-            <div class='text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-1 select-none'>
-              {key}
+        {Object.entries(row).map(([key, value]) => {
+          // Find column definition
+          const tableName = url.params.table || schema.data?.tables?.[0]?.table
+          const tableDef = schema.data?.tables?.find((t) =>
+            t.table === tableName
+          )
+          const colDef = tableDef?.columns?.find((c) => c.name === key)
+          const type = colDef?.type || 'String'
+
+          const isObject = (type.includes('Map') || type.includes('Array') ||
+            type.includes('Tuple') || type.includes('Nested') ||
+            type.includes('JSON') || type.toLowerCase().includes('blob')) &&
+            (typeof value === 'object' || typeof value === 'string')
+          const isNumber = type.includes('Int') || type.includes('Float') ||
+            type.includes('Decimal')
+          const isBoolean = type.includes('Bool')
+          const isDate = type.includes('Date') || type.includes('Time') ||
+            (key.endsWith('At') &&
+              (typeof value === 'number' || !isNaN(Number(value))))
+
+          return (
+            <div key={key} class='form-control'>
+              <label class='label py-1'>
+                <span class='label-text text-xs font-semibold text-base-content/50 uppercase tracking-wider'>
+                  {key}
+                </span>
+                <span class='label-text-alt text-[10px] opacity-50'>
+                  {type}
+                </span>
+              </label>
+
+              {isObject
+                ? <ObjectInput value={value} />
+                : isBoolean
+                ? <BooleanInput value={Boolean(value)} />
+                : isDate
+                ? (
+                  <DateInput
+                    value={typeof value === 'number'
+                      ? new Date(value < 10000000000 ? value * 1000 : value)
+                        .toISOString()
+                      : String(value)}
+                  />
+                )
+                : isNumber
+                ? <NumberInput value={value as string | number} />
+                : <TextInput value={String(value ?? '')} />}
             </div>
-            <div class='bg-base-200/50 rounded-lg p-3 font-mono text-sm break-all group-hover:bg-base-200 transition-colors'>
-              {typeof value === 'object' && value !== null
-                ? JSON.stringify(value, null, 2)
-                : String(value ?? 'null')}
-            </div>
-          </div>
-        ))}
+          )
+        })}
+      </div>
+
+      <div class='p-4 border-t border-base-300 sticky bottom-0 bg-base-100'>
+        <button
+          type='button'
+          class='btn btn-primary w-full'
+          disabled
+        >
+          <Save class='h-4 w-4' />
+          Update Row
+        </button>
       </div>
     </div>
   )
 }
 
-type DrawerTab = 'history' | 'insert' | 'view-row'
+// Input components for RowDetails
+const ObjectInput = ({ value }: { value: unknown }) => (
+  <textarea
+    class='textarea textarea-bordered font-mono text-sm bg-base-200/50 min-h-32 resize-y'
+    value={JSON.stringify(value, null, 2)}
+    readOnly
+  />
+)
+
+const BooleanInput = ({ value }: { value: boolean }) => (
+  <div class='flex items-center gap-3 p-2'>
+    <input
+      type='checkbox'
+      class='toggle toggle-primary'
+      checked={value}
+      disabled
+    />
+    <span class='text-sm font-mono'>{String(value)}</span>
+  </div>
+)
+
+const NumberInput = ({ value }: { value: number | string }) => (
+  <input
+    type='number'
+    class='input input-bordered font-mono text-sm bg-base-200/50'
+    value={value}
+    readOnly
+  />
+)
+
+const DateInput = ({ value }: { value: string }) => (
+  <input
+    type='datetime-local'
+    class='input input-bordered font-mono text-sm bg-base-200/50'
+    value={String(value).slice(0, 16)}
+    readOnly
+  />
+)
+
+const TextInput = ({ value }: { value: string }) => (
+  <input
+    type='text'
+    class='input input-bordered font-mono text-sm bg-base-200/50'
+    value={value}
+    readOnly
+  />
+)
+
+// Effect to fetch log details when log-id changes
+effect(() => {
+  const { dep } = url.params
+  const logId = url.params['log-id']
+  if (dep && logId) {
+    logDetailsData.fetch({
+      deployment: dep,
+      filter: [{
+        key: 'id',
+        comparator: '=',
+        value: logId,
+      }],
+      sort: [],
+      search: '',
+      limit: 1,
+      offset: 0,
+    })
+  }
+})
+
+const LogDetails = () => {
+  const log = logDetailsData.data?.[0]
+
+  if (logDetailsData.pending) {
+    return (
+      <div class='flex items-center justify-center p-8 h-full'>
+        <span class='loading loading-spinner loading-md'></span>
+      </div>
+    )
+  }
+
+  if (logDetailsData.error) {
+    return (
+      <div class='p-4 text-error h-full flex items-center justify-center'>
+        <div class='flex flex-col items-center gap-2'>
+          <AlertTriangle class='h-6 w-6' />
+          <span>Error loading log: {logDetailsData.error.message}</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (!log) {
+    return (
+      <div class='p-4 text-base-content/60 h-full flex items-center justify-center'>
+        <div class='flex flex-col items-center gap-2'>
+          <Search class='h-6 w-6 opacity-50' />
+          <span>Log not found</span>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div class='flex flex-col h-full bg-base-100'>
+      <div class='px-4 py-3 border-b border-base-300 flex items-center justify-between sticky top-0 bg-base-100/95 backdrop-blur z-20'>
+        <div class='flex items-center gap-2'>
+          <div
+            class={`badge badge-sm ${
+              severityConfig[
+                getSeverityText(
+                  log.severity_number,
+                  log.severity_text,
+                ) as keyof typeof severityConfig
+              ]?.color || 'badge-ghost'
+            }`}
+          >
+            {getSeverityText(log.severity_number, log.severity_text)}
+          </div>
+          <h3 class='font-bold text-base'>{log.event_name}</h3>
+        </div>
+        <A
+          params={{ drawer: null, 'log-id': null }}
+          replace
+          class='btn btn-ghost btn-sm btn-circle'
+        >
+          <XCircle class='h-5 w-5' />
+        </A>
+      </div>
+
+      <div class='flex-1 overflow-y-auto p-4 space-y-4'>
+        <div class='grid grid-cols-2 gap-2'>
+          <Hex128Block hex={log.trace_id} type='trace' />
+          <Hex128Block hex={log.span_id} type='span' />
+        </div>
+
+        <InfoBlock label='Log ID' value={log.id} mono copy />
+
+        <div class='grid grid-cols-2 gap-2'>
+          <InfoBlock
+            label='Timestamp'
+            value={safeFormatTimestamp(new Date(log.timestamp))}
+            mono
+          />
+          <InfoBlock
+            label='Observed'
+            value={safeFormatTimestamp(
+              new Date(
+                (log as AnyRecord).observed_timestamp as string ||
+                  log.timestamp,
+              ),
+            )}
+            mono
+          />
+        </div>
+
+        <div class='grid grid-cols-3 gap-2'>
+          <InfoBlock label='Service' value={log.service_name} />
+          <InfoBlock label='Version' value={log.service_version} />
+          <InfoBlock
+            label='Instance'
+            value={log.service_instance_id}
+            mono
+            copy
+          />
+        </div>
+
+        <SeverityBlock
+          severityNumber={log.severity_number}
+          severityText={log.severity_text}
+        />
+        {log.body && <BodyBlock body={log.body} />}
+        <AttributesBlock attributes={log.attributes} />
+      </div>
+    </div>
+  )
+}
+
+type DrawerTab = 'history' | 'insert' | 'view-row' | 'view-log'
 const drawerViews: Record<DrawerTab, JSX.Element> = {
   history: <QueryHistory />,
   insert: <ComingSoon title='Insert Row' />,
   'view-row': <RowDetails />,
+  'view-log': <LogDetails />,
 } as const
 
 const Drawer = ({ children }: { children: JSX.Element }) => (
@@ -1174,7 +1627,10 @@ const Drawer = ({ children }: { children: JSX.Element }) => (
       checked={url.params.drawer !== null}
       onChange={(e) => {
         if (!e.currentTarget.checked) {
-          navigate({ params: { drawer: null }, replace: true })
+          navigate({
+            params: { drawer: null, 'row-id': null, 'log-id': null },
+            replace: true,
+          })
         }
       }}
     />
@@ -1193,7 +1649,7 @@ const Drawer = ({ children }: { children: JSX.Element }) => (
         class='bg-base-200 text-base-content h-full flex flex-col resize-x overflow-auto pointer-events-auto'
         style={{
           direction: 'rtl',
-          width: '400px',
+          width: url.params.drawer === 'view-log' ? '600px' : '400px',
           minWidth: '300px',
           maxWidth: '80vw',
         }}

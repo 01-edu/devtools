@@ -5,7 +5,6 @@ import {
   CLICKHOUSE_USER,
 } from './lib/env.ts'
 import { respond } from '@01edu/api/response'
-import { log } from './lib/log.ts'
 import {
   ARR,
   type Asserted,
@@ -100,13 +99,13 @@ async function insertLogs(
     }
   })
 
-  log.debug('Inserting logs into ClickHouse', { rows })
+  console.debug('Inserting logs into ClickHouse', { rows })
 
   try {
     await client.insert({ table: 'logs', values: rows, format: 'JSONEachRow' })
     return respond.OK()
   } catch (error) {
-    log.error('Error inserting logs into ClickHouse:', { error })
+    console.error('Error inserting logs into ClickHouse:', { error })
     throw respond.InternalServerError()
   }
 }
@@ -213,7 +212,7 @@ async function getLogs(dep: string, data: FetchTablesParams) {
     })
     return (await rs.json<Log>()).data
   } catch (e) {
-    log.error('ClickHouse query failed', { error: e, query, params })
+    console.error('ClickHouse query failed', { error: e, query, params })
     throw respond.InternalServerError()
   }
 }
