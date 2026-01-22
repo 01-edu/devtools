@@ -1,11 +1,11 @@
 import { serveDir } from '@std/http/file-server'
 import { APP_ENV } from '@01edu/api/env'
 import { server } from '@01edu/api/server'
-import { log } from '/api/lib/log.ts'
+import { Log } from '@01edu/api/log'
 import { routeHandler } from '/api/routes.ts'
 import { PORT } from './lib/env.ts'
 
-const fetch = server({ log, routeHandler })
+const fetch = server({ log: console as unknown as Log, routeHandler })
 export default {
   fetch(req: Request) {
     return fetch(req, new URL(req.url))
@@ -27,5 +27,5 @@ if (APP_ENV === 'prod') {
     return new Response(indexHtml, htmlContent)
   })
 } else {
-  log.info('server-start')
+  console.info('server-start')
 }

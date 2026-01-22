@@ -1,7 +1,6 @@
 import { makeRouter, route } from '@01edu/api/router'
 import type { RequestContext } from '@01edu/api/context'
 import { handleGoogleCallback, initiateGoogleAuth } from '/api/auth.ts'
-import { log } from '/api/lib/log.ts'
 import {
   DatabaseSchemasCollection,
   DeploymentDef,
@@ -24,6 +23,7 @@ import {
 } from '/api/clickhouse-client.ts'
 import { decodeSession, decryptMessage, encryptMessage } from '/api/user.ts'
 import { fetchTablesData, runSQL, SQLQueryError } from '/api/sql.ts'
+import { Log } from '@01edu/api/log'
 
 const withUserSession = async ({ cookies }: RequestContext) => {
   const session = await decodeSession(cookies.session)
@@ -472,7 +472,7 @@ const defs = {
           columnsMap,
         )
       } catch (err) {
-        log.error('fetchTablesData-error', { stack: (err as Error)?.stack })
+        console.error('fetchTablesData-error', { stack: (err as Error)?.stack })
         throw err
       }
     },
@@ -574,4 +574,4 @@ const defs = {
 } as const
 
 export type RouteDefinitions = typeof defs
-export const routeHandler = makeRouter(log, defs)
+export const routeHandler = makeRouter(console as unknown as Log, defs)

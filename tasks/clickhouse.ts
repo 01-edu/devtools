@@ -1,5 +1,4 @@
 import { client } from '/api/clickhouse-client.ts'
-import { log } from '/api/lib/log.ts'
 
 if (import.meta.main) {
   try {
@@ -39,9 +38,9 @@ if (import.meta.main) {
     `,
     })
 
-    log.info('logs table is ready')
+    console.log('logs table is ready')
   } catch (error) {
-    log.error('Error creating ClickHouse table:', { error })
+    console.error('Error creating ClickHouse table:', { error })
     Deno.exit(1)
   }
 }

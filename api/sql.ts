@@ -4,7 +4,6 @@ import {
   DeploymentsCollection,
 } from '/api/schema.ts'
 import { DB_SCHEMA_REFRESH_MS } from '/api/lib/env.ts'
-import { log } from '/api/lib/log.ts'
 
 export class SQLQueryError extends Error {
   constructor(message: string, body: string) {
@@ -58,7 +57,7 @@ async function detectDialect(endpoint: string, token: string): Promise<string> {
   for (const d of DETECTION_QUERIES) {
     try {
       const rows = await runSQL(endpoint, token, d.sql)
-      log.debug('dialect-detection', { dialect: d.name, rows })
+      console.debug('dialect-detection', { dialect: d.name, rows })
       if (rows.length) {
         const text = JSON.stringify(rows[0])
         if (d.matcher.test(text)) return d.name
@@ -135,13 +134,13 @@ export async function refreshOneSchema(
     } else {
       await DatabaseSchemasCollection.insert(payload)
     }
-    log.info('schema-refreshed', {
+    console.info('schema-refreshed', {
       deployment: dep.url,
       dialect,
       tables: tables.length,
     })
   } catch (err) {
-    log.error('schema-refresh-failed', { deployment: dep.url, err })
+    console.error('schema-refresh-failed', { deployment: dep.url, err })
   }
 }
 
@@ -159,7 +158,7 @@ export function startSchemaRefreshLoop() {
   intervalHandle = setInterval(() => {
     refreshAllSchemas()
   }, DB_SCHEMA_REFRESH_MS) as unknown as number
-  log.info('schema-refresh-loop-started', { everyMs: DB_SCHEMA_REFRESH_MS })
+  console.info('schema-refresh-loop-started', { everyMs: DB_SCHEMA_REFRESH_MS })
 }
 
 type FetchTablesParams = {

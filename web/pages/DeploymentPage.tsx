@@ -8,12 +8,10 @@ import {
   Clock,
   Columns,
   Download,
-  Eye,
   FileText,
   Hash,
   Info,
   Link2,
-  MoreHorizontal,
   Play,
   Plus,
   RefreshCw,
@@ -1110,9 +1108,10 @@ const Hex128 = ({ hex, type }: { hex: string; type: 'trace' | 'span' }) => {
   const Icon = type === 'trace' ? Link2 : Hash
 
   return (
-    <div
+    <A
       class='badge badge-outline badge-sm border-current/20'
       title={`${type}: ${hex} (${value})`}
+      params={{ fl: `${type}_id,eq,${hex}` }}
       style={{
         color: `oklch(0.93 0.15 ${hue})`,
         backgroundColor: `oklch(0.25 0.01 ${hue})`,
@@ -1120,7 +1119,7 @@ const Hex128 = ({ hex, type }: { hex: string; type: 'trace' | 'span' }) => {
     >
       <Icon class='w-3 h-3 mr-1' />
       <span class='uppercase truncate'>{short}</span>
-    </div>
+    </A>
   )
 }
 
@@ -1137,7 +1136,7 @@ function LogsViewer() {
       )}
       <div class='flex-1 min-h-0 overflow-hidden'>
         <div
-          class={`w-full overflow-x-auto overflow-y-auto h-full transition-all duration-300 ease-in-out ${
+          class={`w-full overflow-x-auto overflow-y-auto h-full transition-all duration-300 ease-in-out p-4 ${
             isPending
               ? 'opacity-50 grayscale-[0.5] scale-[0.995]'
               : 'opacity-100 scale-100'
@@ -1154,8 +1153,6 @@ function LogsViewer() {
                     {header}
                   </th>
                 ))}
-                <th class='text-left font-semibold text-base-content/70 w-20 max-w-[5rem]'>
-                </th>
               </tr>
             </thead>
             <tbody>
@@ -1174,81 +1171,68 @@ function LogsViewer() {
                 const timestamp = new Date(log.timestamp)
 
                 return (
-                  <tr
-                    key={log.id}
-                    class='hover:bg-base-200/50 border-b border-base-300/50'
+                  <A
+                    params={{ drawer: 'view-log', 'log-id': log.id }}
+                    class='contents'
                   >
-                    <td class='p-0 pl-1 font-mono text-xs text-base-content/70 tabular-nums max-w-[12rem]'>
-                      <div class='flex items-center gap-2'>
-                        <Clock class='w-3 h-3 shrink-0' />
-                        <span
-                          class='truncate block'
-                          title={String(timestamp.getTime())}
-                        >
-                          {safeFormatTimestamp(timestamp)}
-                        </span>
-                      </div>
-                    </td>
-                    <td class='p-0 max-w-[10rem]'>
-                      <div
-                        class={`badge badge-outline badge-sm ${severityColor} ${severityBg} border-current/20`}
-                        title={`severity: ${serverityNum}`}
-                      >
-                        <SeverityIcon class='w-3 h-3 mr-1' />
-                        {severity}
-                      </div>
-                    </td>
-                    <td class='p-0 min-w-[12rem] max-w-[20rem]'>
-                      <div class='flex flex-col gap-1'>
-                        <span
-                          class='text-sm text-base-content font-medium truncate'
-                          title={log.event_name}
-                        >
-                          {log.event_name}
-                        </span>
-                        {log.body && (
+                    <tr
+                      key={log.id}
+                      class='hover:bg-base-200/50 border-b border-base-300/50 cursor-pointer'
+                    >
+                      <td class='p-0 pl-1 font-mono text-xs text-base-content/70 tabular-nums max-w-[12rem]'>
+                        <div class='flex items-center gap-2'>
+                          <Clock class='w-3 h-3 shrink-0' />
                           <span
-                            class='text-xs text-base-content/50 truncate'
-                            title={log.body}
+                            class='truncate block'
+                            title={String(timestamp.getTime())}
                           >
-                            {log.body}
+                            {safeFormatTimestamp(timestamp)}
                           </span>
-                        )}
-                      </div>
-                    </td>
-                    <td class='p-0 max-w-[12rem] hidden md:table-cell'>
-                      <Hex128 hex={log.trace_id} type='trace' />
-                    </td>
-                    <td class='p-0 max-w-[12rem] hidden md:table-cell'>
-                      <Hex128 hex={log.span_id} type='span' />
-                    </td>
-                    <td class='p-0 text-xs text-base-content/60 hidden lg:table-cell min-w-[12rem] max-w-[16rem]'>
-                      <code
-                        class='font-mono block overflow-hidden text-ellipsis whitespace-nowrap'
-                        title={JSON.stringify(log.attributes ?? {})}
-                      >
-                        {JSON.stringify(log.attributes ?? {})}
-                      </code>
-                    </td>
-                    <td class='p-0 align-middle'>
-                      <div class='flex items-center gap-1'>
-                        <A
-                          params={{ drawer: 'view-log', 'log-id': log.id }}
-                          class='btn btn-ghost btn-xs'
-                          aria-label='View details'
+                        </div>
+                      </td>
+                      <td class='p-0 max-w-[10rem] text-left'>
+                        <div
+                          class={`badge badge-outline badge-sm ${severityColor} ${severityBg} border-current/20`}
+                          title={`severity: ${serverityNum}`}
                         >
-                          <Eye class='w-4 h-4' />
-                        </A>
-                        <button
-                          type='button'
-                          class='btn btn-ghost btn-xs'
-                          aria-label='More actions'
+                          <SeverityIcon class='w-3 h-3 mr-1' />
+                          {severity}
+                        </div>
+                      </td>
+                      <td class='p-0 min-w-[12rem] max-w-[20rem] text-left'>
+                        <div class='flex flex-col gap-1'>
+                          <span
+                            class='text-sm text-base-content font-medium truncate'
+                            title={log.event_name}
+                          >
+                            {log.event_name}
+                          </span>
+                          {log.body && (
+                            <span
+                              class='text-xs text-base-content/50 truncate'
+                              title={log.body}
+                            >
+                              {log.body}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td class='p-0 max-w-[12rem] hidden md:table-cell text-left'>
+                        <Hex128 hex={log.trace_id} type='trace' />
+                      </td>
+                      <td class='p-0 max-w-[12rem] hidden md:table-cell text-left'>
+                        <Hex128 hex={log.span_id} type='span' />
+                      </td>
+                      <td class='p-0 text-xs text-base-content/60 hidden lg:table-cell min-w-[12rem] max-w-[16rem] text-left'>
+                        <code
+                          class='font-mono block overflow-hidden text-ellipsis whitespace-nowrap'
+                          title={JSON.stringify(log.attributes ?? {})}
                         >
-                          <MoreHorizontal class='w-4 h-4' />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                          {JSON.stringify(log.attributes ?? {})}
+                        </code>
+                      </td>
+                    </tr>
+                  </A>
                 )
               })}
             </tbody>
