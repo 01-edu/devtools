@@ -2,7 +2,7 @@ import { effect } from '@preact/signals'
 import { navigate, url } from '@01edu/signal-router'
 import { Sidebar } from '../components/SideBar.tsx'
 import { user } from '../lib/session.ts'
-import { SettingsPage } from './project/SettingsPage.tsx'
+import { SettingsPage } from './SettingsPage.tsx'
 import { deployments, project, sidebarItems } from '../lib/shared.tsx'
 
 effect(() => {
@@ -31,7 +31,7 @@ export function ProjectPage() {
   return (
     <div class='drawer lg:drawer-open'>
       <input id='drawer-toggle' type='checkbox' class='drawer-toggle' />
-      <div class='drawer-content flex flex-col'>
+      <div class='drawer-content flex flex-col h-full overflow-hidden'>
         <Component />
       </div>
       <Sidebar

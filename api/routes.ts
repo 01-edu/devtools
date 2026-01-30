@@ -91,7 +91,7 @@ const defs = {
     authorize: withUserSession,
     fn: ({ session }) => session,
     output: UserDef,
-    description: 'Handle Google OAuth callback',
+    description: 'Get current authenticated user information',
   }),
   'GET/api/picture': route({
     fn: (_ctx, { hash }) => getPicture(hash),
@@ -316,7 +316,7 @@ const defs = {
     output: deploymentOutput,
     description: 'Update a deployment by ID',
   }),
-  'GET/api/deployment/token/regenerate': route({
+  'POST/api/deployment/token/regenerate': route({
     authorize: withAdminSession,
     fn: async (_ctx, { url }) => {
       const dep = DeploymentsCollection.get(url)
