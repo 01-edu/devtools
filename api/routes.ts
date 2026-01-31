@@ -262,7 +262,7 @@ const defs = {
   }),
   'GET/api/deployment': route({
     authorize: withAdminSession,
-    fn: async (_ctx, url) => {
+    fn: async (_ctx, { url }) => {
       const dep = DeploymentsCollection.get(url)
       if (!dep) throw respond.NotFound()
       const { tokenSalt, ...deployment } = dep
@@ -274,7 +274,7 @@ const defs = {
         token,
       }
     },
-    input: STR(),
+    input: OBJ({ url: STR('Deployment URL') }),
     output: deploymentOutput,
     description: 'Get a deployment by ID',
   }),

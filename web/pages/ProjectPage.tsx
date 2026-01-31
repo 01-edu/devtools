@@ -29,9 +29,9 @@ export function ProjectPage() {
   }
 
   return (
-    <div class='drawer lg:drawer-open'>
+    <div class='drawer lg:drawer-open flex-1 min-h-0'>
       <input id='drawer-toggle' type='checkbox' class='drawer-toggle' />
-      <div class='drawer-content flex flex-col h-full overflow-hidden'>
+      <div class='drawer-content flex flex-col overflow-hidden h-full min-h-0'>
         <Component />
       </div>
       <Sidebar

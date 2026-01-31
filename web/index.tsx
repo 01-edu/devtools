@@ -26,7 +26,7 @@ const App = () => {
       <header class='w-full shrink-0 z-0'>
         <Header />
       </header>
-      <main class='w-full flex-1 relative'>
+      <main class='w-full flex-1 flex flex-col relative min-h-0 overflow-hidden'>
         {renderPage()}
       </main>
     </div>
