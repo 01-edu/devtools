@@ -91,7 +91,7 @@ const defs = {
     authorize: withUserSession,
     fn: ({ session }) => session,
     output: UserDef,
-    description: 'Handle Google OAuth callback',
+    description: 'Get current authenticated user information',
   }),
   'GET/api/picture': route({
     fn: (_ctx, { hash }) => getPicture(hash),
@@ -262,7 +262,7 @@ const defs = {
   }),
   'GET/api/deployment': route({
     authorize: withAdminSession,
-    fn: async (_ctx, url) => {
+    fn: async (_ctx, { url }) => {
       const dep = DeploymentsCollection.get(url)
       if (!dep) throw respond.NotFound()
       const { tokenSalt, ...deployment } = dep
@@ -274,7 +274,7 @@ const defs = {
         token,
       }
     },
-    input: STR(),
+    input: OBJ({ url: STR('Deployment URL') }),
     output: deploymentOutput,
     description: 'Get a deployment by ID',
   }),
@@ -316,7 +316,7 @@ const defs = {
     output: deploymentOutput,
     description: 'Update a deployment by ID',
   }),
-  'GET/api/deployment/token/regenerate': route({
+  'POST/api/deployment/token/regenerate': route({
     authorize: withAdminSession,
     fn: async (_ctx, { url }) => {
       const dep = DeploymentsCollection.get(url)
