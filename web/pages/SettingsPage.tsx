@@ -1,124 +1,146 @@
-import { useState } from 'preact/hooks'
 import { A, navigate, url } from '@01edu/signal-router'
+
 import { api } from '../lib/api.ts'
 import { deployments, project } from '../lib/shared.tsx'
-import { Check, ChevronRight, Cloud, Eye, EyeOff, Loader2, Pencil, Plus, RefreshCw, Settings, Users, X } from 'lucide-preact'
+import {
+  Check,
+  ChevronRight,
+  Cloud,
+  Eye,
+  EyeOff,
+  Loader2,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Settings,
+  Users,
+  X,
+} from 'lucide-preact'
 import { DialogModal } from '../components/Dialog.tsx'
 import type { TargetedEvent } from 'preact'
+import { effect, signal } from '@preact/signals'
 
-// type Deployment = ApiOutput['GET/api/project/deployments'][number]
-// type User = ApiOutput['GET/api/users'][number]
+// API Signals
+const updateProject = api['PUT/api/project'].signal()
+const updateDeployment = api['PUT/api/deployment'].signal()
+const createDeployment = api['POST/api/deployment'].signal()
+const getDeployment = api['GET/api/deployment'].signal()
+const regenToken = api['POST/api/deployment/token/regenerate'].signal()
 
-// const users = api['GET/api/users'].signal()
-// users.fetch()
-
-// const teams = api['GET/api/teams'].signal()
-// teams.fetch()
-
-// const team = api['GET/api/team'].signal()
+effect(() => {
+  if (url.params.dep) {
+    getDeployment.fetch({ url: url.params.dep })
+  }
+})
 
 const navItems = [
   { id: 'project', label: 'Project', icon: Settings },
   { id: 'deployments', label: 'Deployments', icon: Cloud },
   { id: 'team', label: 'Team Members', icon: Users },
 ]
+const formatDate = (d?: number | null) =>
+  d ? new Date(d).toLocaleDateString() : undefined
+const isEditing = (key: string) => url.params.editing === key
 
-type NavItem = (typeof navItems)[number]
-
-const SidebarHeader = () => (
-  <div class='p-4 border-b border-base-300'>
-    <h2 class='text-sm font-semibold text-base-content/60 uppercase tracking-wider'>
-      Settings
-    </h2>
-    <p class='text-xs text-base-content/40 mt-1 truncate'>
-      {project.data?.name}
-    </p>
-  </div>
-)
-
-const SidebarNavItem = (
-  { item, isActive }: { item: NavItem; isActive: boolean },
-) => (
-  <li>
-    <A
-      params={{ view: item.id }}
-      replace
-      class={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150 group ${
-        isActive
-          ? 'bg-primary text-primary-content shadow-sm'
-          : 'hover:bg-base-300 text-base-content'
-      }`}
-    >
-      <item.icon
-        class={`w-4 h-4 flex-shrink-0 ${
-          isActive ? '' : 'text-base-content/60'
-        }`}
-      />
-      <span class='flex-1 font-medium'>{item.label}</span>
-      <ChevronRight
-        class={`w-4 h-4 transition-opacity ${
-          isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-        }`}
-      />
-    </A>
-  </li>
-)
-
-const SidebarNav = () => (
-  <nav class='flex-1 p-2 overflow-y-auto'>
-    <ul class='space-y-2'>
-      {navItems.map((item) => (
-        <SidebarNavItem
-          key={item.id}
-          item={item}
-          isActive={(url.params.view || 'project') === item.id}
-        />
-      ))}
-    </ul>
-  </nav>
-)
-
-const SidebarFooter = () => (
-  <div class='p-4 border-t border-base-300 flex-shrink-0'>
-    <div class='flex items-center gap-2 text-xs text-base-content/40'>
-      <div class='w-2 h-2 rounded-full bg-success' />
-      <span>Connected</span>
-    </div>
-  </div>
-)
+const rowClass =
+  'flex justify-between items-center py-2 border-b border-base-300 last:border-0'
+const inputXs =
+  'input input-xs input-bordered w-full text-[11px] bg-base-100/50 h-7'
+const btnXs = 'btn btn-xs btn-square join-item h-7 min-h-0'
 
 const SettingsSidebar = () => (
   <aside class='w-64 h-[calc(100vh-64px)] bg-base-200 border-r border-base-300 flex flex-col'>
-    <SidebarHeader />
-    <SidebarNav />
-    <SidebarFooter />
+    <div class='p-4 border-b border-base-300'>
+      <h2 class='text-sm font-semibold text-base-content/60 uppercase tracking-wider'>
+        Settings
+      </h2>
+      <p class='text-xs text-base-content/40 mt-1 truncate'>
+        {project.data?.name}
+      </p>
+    </div>
+    <nav class='flex-1 p-2 overflow-y-auto'>
+      <ul class='space-y-2'>
+        {navItems.map((item) => {
+          const active = (url.params.view || 'project') === item.id
+          return (
+            <li key={item.id}>
+              <A
+                params={{ view: item.id }}
+                replace
+                class={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150 group ${
+                  active
+                    ? 'bg-primary text-primary-content shadow-sm'
+                    : 'hover:bg-base-300 text-base-content'
+                }`}
+              >
+                <item.icon
+                  class={`w-4 h-4 flex-shrink-0 ${
+                    active ? '' : 'text-base-content/60'
+                  }`}
+                />
+                <span class='flex-1 font-medium'>{item.label}</span>
+                <ChevronRight
+                  class={`w-4 h-4 transition-opacity ${
+                    active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                  }`}
+                />
+              </A>
+            </li>
+          )
+        })}
+      </ul>
+    </nav>
+    <div class='p-4 border-t border-base-300 flex-shrink-0'>
+      <div class='flex items-center gap-2 text-xs text-base-content/40'>
+        <div class='w-2 h-2 rounded-full bg-success' />
+        <span>Connected</span>
+      </div>
+    </div>
   </aside>
 )
 
-const PageHeader = (
-  { title, description, children }: {
+const Layout = ({
+  title,
+  desc,
+  actions,
+  error,
+  children,
+}: {
+  title: string
+  desc: string
+  actions?: preact.ComponentChildren
+  error?: string | null
+  children: preact.ComponentChildren
+}) => (
+  <div class='flex flex-col h-full min-h-0 pb-16'>
+    <div class='border-b border-base-300 bg-base-100 px-8 py-6 flex items-center justify-between gap-4'>
+      <div>
+        <h1 class='text-xl font-semibold text-base-content'>{title}</h1>
+        <p class='text-sm text-base-content/60 mt-1'>{desc}</p>
+      </div>
+      {actions}
+    </div>
+    <div class='flex-1 overflow-y-auto p-8 min-h-0'>
+      <div class='max-w-2xl mx-auto space-y-6'>
+        {error && (
+          <div class='alert alert-error text-sm'>
+            <X class='w-4 h-4' />
+            <span>{error}</span>
+          </div>
+        )}
+        {children}
+      </div>
+    </div>
+  </div>
+)
+
+const Card = (
+  { title, action, children }: {
     title: string
-    description: string
-    children?: preact.ComponentChildren
+    action?: preact.ComponentChildren
+    children: preact.ComponentChildren
   },
 ) => (
-  <div class='border-b border-base-300 bg-base-100 px-8 py-6 flex flex-row items-center justify-between gap-4'>
-    <div>
-      <h1 class='text-xl font-semibold text-base-content'>{title}</h1>
-      <p class='text-sm text-base-content/60 mt-1'>{description}</p>
-    </div>
-    {children}
-  </div>
-)
-
-const InfoRow = ({ label, value }: { label: string; value: string | number | undefined | null }) => (
-  <div class='flex justify-between py-2 border-b border-base-300 last:border-0'>
-    <span class='text-base-content/60 text-sm'>{label}</span>
-    <span class='text-sm font-medium'>{value ?? '–'}</span>
-  </div>
-)
-
-const Card = ({ title, action, children }: { title: string; action?: preact.ComponentChildren; children: preact.ComponentChildren }) => (
   <div class='bg-base-200 rounded-lg border border-base-300'>
     <div class='px-4 py-3 border-b border-base-300 flex justify-between items-center'>
       <h3 class='font-semibold text-sm'>{title}</h3>
@@ -128,502 +150,592 @@ const Card = ({ title, action, children }: { title: string; action?: preact.Comp
   </div>
 )
 
-const EditableRow = (
-  { label, name, value, editing }: { label: string; name: string; value: string; editing: boolean },
+const EditCard = (
+  { title, editKey, saving, children }: {
+    title: string
+    editKey: string
+    saving?: boolean
+    children: preact.ComponentChildren
+  },
 ) => (
-  <div class='flex justify-between items-center py-2 border-b border-base-300 last:border-0'>
-    <span class='text-base-content/60 text-sm'>{label}</span>
-    {editing ? (
-      <input
-        type='text'
-        name={name}
-        defaultValue={value}
-        class='input input-sm input-bordered w-48 text-sm'
-      />
-    ) : (
-      <span class='text-sm font-medium'>{value || '–'}</span>
-    )}
+  <div class='bg-base-200 rounded-lg border border-base-300'>
+    <div class='px-4 py-3 border-b border-base-300 flex justify-between items-center'>
+      <h3 class='font-semibold text-sm'>{title}</h3>
+      {isEditing(editKey)
+        ? (
+          <div class='flex gap-2'>
+            <A params={{ editing: null }} replace class='btn btn-ghost btn-xs'>
+              <X class='w-3 h-3' />
+            </A>
+            <button
+              type='submit'
+              class='btn btn-primary btn-xs gap-1'
+              disabled={saving}
+            >
+              {saving
+                ? <Loader2 class='w-3 h-3 animate-spin' />
+                : <Check class='w-3 h-3' />} Save
+            </button>
+          </div>
+        )
+        : (
+          <A
+            params={{ editing: editKey }}
+            replace
+            class='btn btn-ghost btn-xs gap-1'
+          >
+            <Pencil class='w-3 h-3' /> Edit
+          </A>
+        )}
+    </div>
+    <div class='p-4'>{children}</div>
   </div>
 )
 
-function AddDeploymentDialog({ projectId }: { projectId: string }) {
-  const { dialog } = url.params
-  if (dialog !== 'add-deployment') return null
+const Row = (
+  { label, value }: { label: string; value?: string | number | null },
+) => (
+  <div class={rowClass}>
+    <span class='text-base-content/60 text-sm'>{label}</span>
+    <span class='text-sm font-medium'>{value ?? '–'}</span>
+  </div>
+)
 
-  const handleSubmit = async (e: TargetedEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    const formData = new FormData(e.currentTarget)
-    let deploymentUrl = formData.get('url') as string
-    
-    // Sanitize input to get domain only
-    try {
-      const url = new URL(deploymentUrl.match(/^https?:\/\//) ? deploymentUrl : `https://${deploymentUrl}`)
-      deploymentUrl = url.host
-    } catch {
-      deploymentUrl = deploymentUrl.replace(/^https?:\/\//, '').split('/')[0]
-    }
-    
-    try {
-      await api['POST/api/deployment'].fetch({
-        url: deploymentUrl,
-        projectId: projectId,
-        logsEnabled: false,
-        databaseEnabled: false,
-        sqlEndpoint: null,
-        sqlToken:null
-      })
-      navigate({ params: { dialog: null, view: 'deployments', url: deploymentUrl }, replace: true })
-      deployments.fetch({ project: projectId })
-    } catch (err) {
-      console.error(err)
-      // Ideally show toast here
-    }
-  }
-
-  return (
-    <DialogModal id='add-deployment'>
-      <div class='flex justify-between items-center mb-4'>
-        <h3 class='text-lg font-bold'>Add Deployment</h3>
-      </div>
-      <form onSubmit={handleSubmit} class='space-y-4'>
-        <div class='form-control w-full'>
-          <label class='label'>
-            <span class='label-text'>Deployment</span>
-            <span class='label-text-alt text-base-content/60'>Domain only (e.g. my-app.deno.dev)</span>
-          </label>
-          <input
-            type='text'
-            name='url'
-            required
-            placeholder='my-app.deno.dev'
-            class='input input-bordered w-full'
-          />
-        </div>
-        <div class='modal-action'>
-          <A params={{ dialog: null }} class='btn btn-ghost'>Cancel</A>
-          <button type='submit' class='btn btn-primary'>Add Deployment</button>
-        </div>
-      </form>
-    </DialogModal>
-  )
-}
-
-function LogsTokenSection({ deploymentUrl }: { deploymentUrl: string }) {
-  const [token, setToken] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [visible, setVisible] = useState(false)
-
-  const fetchToken = async () => {
-    setLoading(true)
-    try {
-      const dep = await api['GET/api/deployment'].fetch({ url: deploymentUrl })
-      if (dep.token) setToken(dep.token)
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const regenerateToken = async () => {
-    if (!confirm('Are you sure? This will invalidate the existing token.')) return
-    setLoading(true)
-    try {
-      const dep = await api['POST/api/deployment/token/regenerate'].fetch({ url: deploymentUrl })
-      if (dep.token) setToken(dep.token)
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const toggleVisibility = () => {
-    if (!visible && !token) {
-      fetchToken()
-    }
-    setVisible(!visible)
-  }
-
-  return (
-    <div class='form-control w-full'>
-      <label class='label'>
-        <span class='label-text'>Logs Token</span>
-        <span class='label-text-alt text-base-content/60'>
-          Token for authentication with the logs service
-        </span>
-      </label>
-      <div class='join w-full'>
+const TextRow = (
+  { label, name, value, editKey }: {
+    label: string
+    name: string
+    value: string
+    editKey: string
+  },
+) => (
+  <div class={rowClass}>
+    <span class='text-base-content/60 text-sm'>{label}</span>
+    {isEditing(editKey)
+      ? (
         <input
           type='text'
-          readOnly
-          value={visible ? (token || 'Loading...') : '••••••••••••••••••••••••••••••••'}
-          class='input input-bordered join-item w-full font-mono text-sm'
+          name={name}
+          defaultValue={value}
+          class='input input-sm input-bordered w-48 text-sm'
         />
-        <button
-          type='button'
-          class='btn btn-square join-item'
-          onClick={toggleVisibility}
-          disabled={loading}
-        >
-          {visible ? <EyeOff class='w-4 h-4' /> : <Eye class='w-4 h-4' />}
-        </button>
-        <button
-          type='button'
-          class='btn join-item'
-          onClick={regenerateToken}
-          disabled={loading}
-          title='Regenerate Token'
-        >
-          <RefreshCw class={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-        </button>
-      </div>
-    </div>
-  )
-}
+      )
+      : <span class='text-sm font-medium'>{value || '–'}</span>}
+  </div>
+)
 
-const ProjectSettingsPage = () => {
-  const p = project.data
-  const deps = deployments.data ?? []
-  const { editing, saving } = url.params
-  const isEditing = editing === 'project'
-  const isSaving = saving === 'true'
+const ToggleRow = (
+  { label, name, value, editKey }: {
+    label: string
+    name?: string
+    value: boolean
+    editKey: string
+  },
+) => (
+  <div class={rowClass}>
+    <span class='text-base-content/60 text-sm'>{label}</span>
+    {isEditing(editKey)
+      ? (
+        <input
+          type='checkbox'
+          name={name}
+          defaultChecked={value}
+          class='toggle toggle-sm toggle-primary'
+        />
+      )
+      : <span class='text-sm font-medium'>{value ? 'Yes' : 'No'}</span>}
+  </div>
+)
 
-  const handleSubmit = async (e: TargetedEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    if (!p) return
+const Label = ({ text, desc }: { text: string; desc: string }) => (
+  <div class='flex items-center gap-1.5'>
+    <span class='text-xs text-base-content/60'>{text}</span>
+    <span class='text-[10px] text-base-content/40'>• {desc}</span>
+  </div>
+)
 
-    navigate({ params: { saving: 'true' }, replace: true })
-    const formData = new FormData(e.currentTarget)
-    const name = formData.get('name') as string
-    const repositoryUrl = formData.get('repositoryUrl') as string
-    const isPublic = formData.get('isPublic') === 'on'
-
-    try {
-      await api['PUT/api/project'].fetch({
-        ...p,
-        name,
-        repositoryUrl: repositoryUrl || undefined,
-        isPublic,
-      })
-      project.fetch({ slug: p.slug })
-      navigate({ params: { editing: null, saving: null }, replace: true })
-    } catch (err) {
-      console.error(err)
-      navigate({ params: { saving: null }, replace: true })
-    }
-  }
-
+const Input = (
+  { name, value, editKey, placeholder, secret, visKey, mono }: {
+    name: string
+    value: string
+    editKey: string
+    placeholder?: string
+    secret?: boolean
+    visKey?: string
+    mono?: boolean
+  },
+) => {
+  const visible = visKey ? url.params[visKey] === 'true' : !secret
   return (
-    <div class='flex flex-col h-full pb-16'>
-      <PageHeader
-        title='Project Settings'
-        description='Overview of project configuration and resources.'
+    <div class={secret ? 'join w-full' : ''}>
+      <input
+        type={secret && !visible ? 'password' : 'text'}
+        name={name}
+        defaultValue={value}
+        readOnly={!isEditing(editKey)}
+        class={`${inputXs} ${secret ? 'join-item' : ''} ${
+          mono ? 'font-mono' : ''
+        }`}
+        placeholder={placeholder || (secret ? '••••••' : '')}
       />
-      <div class='flex-1 overflow-y-auto p-8'>
-        <div class='max-w-2xl mx-auto space-y-6'>
-          <form onSubmit={handleSubmit}>
-            <div class='bg-base-200 rounded-lg border border-base-300'>
-              <div class='px-4 py-3 border-b border-base-300 flex justify-between items-center'>
-                <h3 class='font-semibold text-sm'>Project Information</h3>
-                {isEditing ? (
-                  <div class='flex gap-2'>
-                    <A
-                      params={{ editing: null }}
-                      replace
-                      class='btn btn-ghost btn-xs'
-                    >
-                      <X class='w-3 h-3' />
-                    </A>
-                    <button
-                      type='submit'
-                      class='btn btn-primary btn-xs gap-1'
-                      disabled={isSaving}
-                    >
-                      {isSaving ? <Loader2 class='w-3 h-3 animate-spin' /> : <Check class='w-3 h-3' />}
-                      Save
-                    </button>
-                  </div>
-                ) : (
-                  <A params={{ editing: 'project' }} replace class='btn btn-ghost btn-xs gap-1'>
-                    <Pencil class='w-3 h-3' /> Edit
-                  </A>
-                )}
-              </div>
-              <div class='p-4'>
-                <EditableRow label='Name' name='name' value={p?.name || ''} editing={isEditing} />
-                <EditableRow label='Repository' name='repositoryUrl' value={p?.repositoryUrl || ''} editing={isEditing} />
-                <InfoRow label='Slug' value={p?.slug} />
-                <div class='flex justify-between items-center py-2 border-b border-base-300'>
-                  <span class='text-base-content/60 text-sm'>Visibility</span>
-                  {isEditing ? (
-                    <label class='flex items-center gap-2 cursor-pointer'>
-                      <span class='text-sm'>{p?.isPublic ? 'Public' : 'Private'}</span>
-                      <input
-                        type='checkbox'
-                        name='isPublic'
-                        defaultChecked={p?.isPublic}
-                        class='toggle toggle-sm toggle-primary'
-                      />
-                    </label>
-                  ) : (
-                    <span class='text-sm font-medium'>{p?.isPublic ? 'Public' : 'Private'}</span>
-                  )}
-                </div>
-                <InfoRow label='Created' value={p?.createdAt ? new Date(p.createdAt).toLocaleDateString() : undefined} />
-                <InfoRow label='Updated' value={p?.updatedAt ? new Date(p.updatedAt).toLocaleDateString() : undefined} />
-              </div>
-            </div>
-          </form>
-
-          <Card title='Team'>
-            <InfoRow label='Team ID' value={p?.teamId} />
-          </Card>
-
-          <Card
-            title={`Deployments (${deps.length})`}
-            action={
-              <A params={{ dialog: 'add-deployment' }} class='btn btn-ghost btn-xs gap-1'>
-                <Plus class='w-4 h-4' /> Add
-              </A>
-            }
-          >
-            {deps.length === 0 ? (
-              <p class='text-sm text-base-content/40'>No deployments configured.</p>
-            ) : (
-              <div class='space-y-2'>
-                {deps.map((dep) => (
-                  <A
-                    key={dep.url}
-                    params={{ view: 'deployments', url: dep.url }}
-                    replace
-                    class='flex items-center justify-between py-2 border-b border-base-300 last:border-0 hover:bg-base-300 rounded px-2 -mx-2 cursor-pointer transition-colors'
-                  >
-                    <span class='text-sm font-mono truncate max-w-xs'>{dep.url}</span>
-                    <div class='flex gap-2'>
-                      {dep.logsEnabled && <span class='badge badge-sm badge-success'>Logs</span>}
-                      {dep.databaseEnabled && <span class='badge badge-sm badge-info'>DB</span>}
-                    </div>
-                  </A>
-                ))}
-              </div>
-            )}
-          </Card>
-        </div>
-      </div>
+      {secret && visKey && (
+        <A
+          params={{ [visKey]: visible ? null : 'true' }}
+          replace
+          class={btnXs}
+          title={visible ? 'Hide' : 'Show'}
+        >
+          {visible ? <EyeOff class='w-3 h-3' /> : <Eye class='w-3 h-3' />}
+        </A>
+      )}
     </div>
   )
 }
 
-const DeploymentsSettingsPage = () => {
-  const deps = deployments.data ?? []
-  const { url: selectedUrl, editing, saving } = url.params
-  const selectedDep = deps.find((d) => d.url === selectedUrl)
-  const isEditing = editing === 'deployment'
-  const isSaving = saving === 'true'
+const Accordion = ({
+  label,
+  name,
+  value,
+  editKey,
+  urlKey,
+  hideOnEdit,
+  children,
+}: {
+  label: string
+  name: string
+  value: boolean
+  editKey: string
+  urlKey: string
+  hideOnEdit?: boolean
+  children: preact.ComponentChildren
+}) => {
+  const param = url.params[urlKey]
+  const enabled = param != null ? param === 'true' : value
+  const editing = isEditing(editKey)
+  const showChildren = enabled && !(hideOnEdit && editing)
+  const onChange = (v: boolean) =>
+    navigate({ params: { [urlKey]: String(v) }, replace: true })
+  return (
+    <div
+      class={`border-b border-base-300 transition-all duration-200 ${
+        enabled ? 'bg-base-300/50 rounded-lg -mx-2 px-2 my-1' : ''
+      }`}
+    >
+      <div class='flex justify-between items-center py-2'>
+        <span class='text-base-content/60 text-sm'>{label}</span>
+        {editing
+          ? (
+            <input
+              type='checkbox'
+              name={name}
+              checked={enabled}
+              onChange={(e) => onChange(e.currentTarget.checked)}
+              class='toggle toggle-sm toggle-primary'
+            />
+          )
+          : <span class='text-sm font-medium'>{enabled ? 'Yes' : 'No'}</span>}
+      </div>
+      {showChildren && (
+        <div class='pb-2 pt-2 px-3 mb-2 bg-base-300/60 rounded-md animate-in fade-in slide-in-from-top-1 duration-200'>
+          {children}
+        </div>
+      )}
+    </div>
+  )
+}
 
-  const handleSubmit = async (e: TargetedEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    if (!selectedDep || !project.data) return
+const ToolCard = (
+  { title, desc, empty }: { title: string; desc: string; empty: string },
+) => (
+  <div class='p-3 bg-base-300 rounded-lg'>
+    <h4 class='text-sm font-medium mb-2'>{title}</h4>
+    <p class='text-xs text-base-content/60 mb-3'>{desc}</p>
+    <div class='text-xs text-base-content/40 italic'>{empty}</div>
+    <A
+      params={{ tool: title.toLowerCase().replace(/\s/g, '-') }}
+      class='btn btn-sm btn-outline mt-3 gap-1'
+    >
+      <Settings class='w-3 h-3' /> Add {title.split(' ').pop()}
+    </A>
+  </div>
+)
 
-    navigate({ params: { saving: 'true' }, replace: true })
-    const formData = new FormData(e.currentTarget)
-    const logsEnabled = formData.get('logsEnabled') === 'on'
-    const databaseEnabled = formData.get('databaseEnabled') === 'on'
-    const sqlEndpoint = formData.get('sqlEndpoint') as string
-    const sqlToken = formData.get('sqlToken') as string
+const addDeploymentError = signal<string | null>(null)
+const handleSubmit = async (e: TargetedEvent<HTMLFormElement>) => {
+  e.preventDefault()
+  const fd = new FormData(e.currentTarget)
+  const projectId = project.data?.slug
+  if (!projectId) return
+  try {
+    const depUrl = new URL(fd.get('url') as string).host
+    await createDeployment.fetch({
+      url: depUrl,
+      projectId,
+      logsEnabled: false,
+      databaseEnabled: false,
+      sqlEndpoint: null,
+      sqlToken: null,
+    })
+    deployments.fetch({ project: projectId })
+    navigate({
+      params: { dialog: null },
+      replace: true,
+    })
+  } catch (e) {
+    addDeploymentError.value = e instanceof Error ? e.message : 'Unknown error'
+  }
+}
+const AddDeploymentDialog = () => (
+  <DialogModal id='add-deployment'>
+    <h3 class='text-lg font-bold mb-4'>Add Deployment</h3>
+    <form onSubmit={handleSubmit} class='space-y-4'>
+      <div class='form-control w-full'>
+        <label class='label'>
+          <span class='label-text'>Deployment URL</span>
+        </label>
+        <input
+          type='text'
+          name='url'
+          required
+          placeholder='https://my-app.deno.dev'
+          class='input input-bordered w-full'
+        />
+      </div>
+      {(createDeployment.error || addDeploymentError.value) && (
+        <div class='text-error text-xs px-1'>
+          {createDeployment.error || addDeploymentError.value}
+        </div>
+      )}
+      <div class='modal-action'>
+        <A params={{ dialog: null }} class='btn btn-ghost'>Cancel</A>
+        <button
+          type='submit'
+          class='btn btn-primary'
+          disabled={!!createDeployment.pending}
+        >
+          {createDeployment.pending
+            ? <Loader2 class='w-4 h-4 animate-spin' />
+            : 'Add Deployment'}
+        </button>
+      </div>
+    </form>
+  </DialogModal>
+)
 
-    try {
-      await api['PUT/api/deployment'].fetch({
-        url: selectedDep.url,
-        projectId: project.data.slug,
-        logsEnabled,
-        databaseEnabled,
-        sqlEndpoint: sqlEndpoint || undefined,
-        sqlToken: sqlToken || undefined,
-      })
-      deployments.fetch({ project: project.data.slug })
-      navigate({ params: { editing: null, saving: null }, replace: true })
-    } catch (err) {
-      console.error(err)
-      navigate({ params: { saving: null }, replace: true })
-    }
+function LogsTokenSection({ deploymentUrl }: { deploymentUrl: string }) {
+  const visible = url.params['token-vis'] === 'true'
+  const loading = getDeployment.pending || regenToken.pending
+
+  const regenerate = async () => {
+    if (!confirm('Regenerate token?')) return
+    await regenToken.fetch({ url: deploymentUrl })
+    getDeployment.fetch({ url: deploymentUrl })
   }
 
   return (
-    <div class='flex flex-col h-full min-h-0 pb-16'>
-      <PageHeader
-        title='Deployments'
-        description='Manage deployment configurations and tools.'
+    <div class='space-y-1.5'>
+      <Label text='Token' desc='auth for logs service' />
+      <div class='join w-full'>
+        <input
+          type={visible ? 'text' : 'password'}
+          readOnly
+          value={getDeployment.data?.token || ''}
+          class={`${inputXs} join-item font-mono`}
+        />
+        <A
+          params={{ 'token-vis': visible ? null : 'true' }}
+          replace
+          class={`${btnXs} ${loading ? 'btn-disabled' : ''}`}
+          title={visible ? 'Hide' : 'Show'}
+        >
+          {visible ? <EyeOff class='w-3 h-3' /> : <Eye class='w-3 h-3' />}
+        </A>
+        <button
+          type='button'
+          class={`${btnXs} ${loading ? 'btn-disabled' : ''}`}
+          title='Regenerate'
+          onClick={regenerate}
+        >
+          <RefreshCw class={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
+      {(getDeployment.error || regenToken.error) && (
+        <div class='text-error text-xs'>
+          {(getDeployment.error || regenToken.error)?.message}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Pages
+const handleProjectSubmit = async (e: TargetedEvent<HTMLFormElement>) => {
+  e.preventDefault()
+  if (!project.data) return
+  const fd = new FormData(e.currentTarget)
+  try {
+    await updateProject.fetch({
+      ...project.data,
+      name: fd.get('name') as string,
+      repositoryUrl: (fd.get('repositoryUrl') as string) || undefined,
+      isPublic: fd.get('isPublic') === 'on',
+    })
+    project.fetch({ slug: project.data.slug })
+    navigate({ params: { editing: null }, replace: true })
+  } catch (e) {
+    console.error(e)
+  }
+}
+const ProjectSettingsPage = () => {
+  const p = project.data, deps = deployments.data ?? []
+  return (
+    <Layout
+      title='Project Settings'
+      desc='Overview of project configuration and resources.'
+      error={updateProject.error?.message}
+    >
+      <form onSubmit={handleProjectSubmit}>
+        <EditCard
+          title='Project Information'
+          editKey='project'
+          saving={!!updateProject.pending}
+        >
+          <TextRow
+            label='Name'
+            name='name'
+            value={p?.name || ''}
+            editKey='project'
+          />
+          <TextRow
+            label='Repository'
+            name='repositoryUrl'
+            value={p?.repositoryUrl || ''}
+            editKey='project'
+          />
+          <Row label='Slug' value={p?.slug} />
+          <ToggleRow
+            label='Public'
+            name='isPublic'
+            value={p?.isPublic ?? false}
+            editKey='project'
+          />
+          <Row label='Created' value={formatDate(p?.createdAt)} />
+          <Row label='Updated' value={formatDate(p?.updatedAt)} />
+        </EditCard>
+      </form>
+      <Card title='Team'>
+        <Row label='Team ID' value={p?.teamId} />
+      </Card>
+      <Card
+        title={`Deployments (${deps.length})`}
+        action={
+          <A
+            params={{ dialog: 'add-deployment' }}
+            class='btn btn-ghost btn-xs gap-1'
+          >
+            <Plus class='w-4 h-4' /> Add
+          </A>
+        }
       >
+        {deps.length === 0
+          ? (
+            <p class='text-sm text-base-content/40'>
+              No deployments configured.
+            </p>
+          )
+          : (
+            <div class='space-y-2'>
+              {deps.map((dep) => (
+                <A
+                  key={dep.url}
+                  params={{ view: 'deployments', dep: dep.url }}
+                  replace
+                  class='flex items-center justify-between py-2 border-b border-base-300 last:border-0 hover:bg-base-300 rounded px-2 -mx-2 cursor-pointer transition-colors'
+                >
+                  <span class='text-sm font-mono truncate max-w-xs'>
+                    {dep.url}
+                  </span>
+                  <div class='flex gap-2'>
+                    {dep.logsEnabled && (
+                      <span class='badge badge-sm badge-success'>Logs</span>
+                    )}
+                    {dep.databaseEnabled && (
+                      <span class='badge badge-sm badge-info'>DB</span>
+                    )}
+                  </div>
+                </A>
+              ))}
+            </div>
+          )}
+      </Card>
+    </Layout>
+  )
+}
+
+const handleDeploymentSubmit = async (e: TargetedEvent<HTMLFormElement>) => {
+  e.preventDefault()
+  const dep = getDeployment.data
+  if (!dep) return
+  const { logs, db } = url.params
+  const logsEnabled = logs != null
+    ? logs === 'true'
+    : (dep?.logsEnabled ?? false)
+  const databaseEnabled = db != null
+    ? db === 'true'
+    : (dep?.databaseEnabled ?? false)
+  const fd = new FormData(e.currentTarget)
+  try {
+    await updateDeployment.fetch({
+      url: dep.url,
+      projectId: project.data!.slug,
+      logsEnabled,
+      databaseEnabled,
+      sqlEndpoint: (fd.get('sql-endpoint') as string) || undefined,
+      sqlToken: (fd.get('sql-token') as string) || undefined,
+    })
+    getDeployment.fetch({ url: dep.url })
+    navigate({
+      params: { editing: null, logs: null, db: null },
+      replace: true,
+    })
+  } catch (e) {
+    console.error(e)
+  }
+}
+const DeploymentsSettingsPage = () => {
+  const deps = deployments.data ?? [],
+    dep = getDeployment.data,
+    selectedUrl = url.params.dep
+
+  if (!selectedUrl && deps.length > 0) {
+    navigate({ params: { dep: deps[0].url }, replace: true })
+    return null
+  }
+
+  return (
+    <Layout
+      title='Deployments'
+      desc='Manage deployment configurations and tools.'
+      error={updateDeployment.error?.message}
+      actions={
         <div class='flex items-center gap-2'>
-          <A params={{ dialog: 'add-deployment' }} class='btn btn-sm btn-primary gap-1'>
+          <A
+            params={{ dialog: 'add-deployment' }}
+            class='btn btn-sm btn-primary gap-1'
+          >
             <Plus class='w-4 h-4' /> New
           </A>
-        {deps.length > 0 && (
-          <select
-            class='select select-bordered select-sm w-full max-w-xs'
-            value={selectedUrl || ''}
-            onChange={(e) =>
-              navigate({
-                params: { url: e.currentTarget.value, editing: null },
-                replace: true,
-              })}
+          {deps.length > 0 && (
+            <select
+              class='select select-bordered select-sm w-full max-w-xs'
+              value={selectedUrl || ''}
+              defaultValue={selectedUrl || ''}
+              onChange={(e) => {
+                navigate({
+                  params: {
+                    dep: e.currentTarget.value,
+                    editing: null,
+                  },
+                  replace: true,
+                })
+              }}
+            >
+              <option disabled value=''>Select deployment</option>
+              {deps.map((d) => (
+                <option key={d.url} value={d.url}>{d.url}</option>
+              ))}
+            </select>
+          )}
+        </div>
+      }
+    >
+      {dep && (
+        <form onSubmit={handleDeploymentSubmit}>
+          <EditCard
+            title='Deployment Configuration'
+            editKey='deployment'
+            saving={!!updateDeployment.pending}
           >
-            <option disabled value=''>Select deployment</option>
-            {deps.map((dep) => <option key={dep.url} value={dep.url}>{dep.url}</option>)}
-          </select>
-        )}
-        </div>
-      </PageHeader>
-      <div class='flex-1 overflow-y-auto p-8 min-h-0 '>
-        <div class='max-w-2xl mx-auto space-y-6'>
-          {selectedDep && (
-            <form onSubmit={handleSubmit}>
-              <div class='bg-base-200 rounded-lg border border-base-300'>
-                <div class='px-4 py-3 border-b border-base-300 flex justify-between items-center'>
-                  <h3 class='font-semibold text-sm'>Deployment Configuration</h3>
-                  {isEditing ? (
-                    <div class='flex gap-2'>
-                      <A params={{ editing: null }} replace class='btn btn-ghost btn-xs'>
-                        <X class='w-3 h-3' />
-                      </A>
-                      <button type='submit' class='btn btn-primary btn-xs gap-1' disabled={isSaving}>
-                        {isSaving ? <Loader2 class='w-3 h-3 animate-spin' /> : <Check class='w-3 h-3' />}
-                        Save
-                      </button>
-                    </div>
-                  ) : (
-                    <A params={{ editing: 'deployment' }} replace class='btn btn-ghost btn-xs gap-1'>
-                      <Pencil class='w-3 h-3' /> Edit
-                    </A>
-                  )}
+            <div class='space-y-3'>
+              <Row label='URL' value={dep.url} />
+              <Accordion
+                label='Logs Enabled'
+                name='logsEnabled'
+                value={dep.logsEnabled}
+                editKey='deployment'
+                urlKey='logs'
+                hideOnEdit
+              >
+                <LogsTokenSection deploymentUrl={dep.url} />
+              </Accordion>
+              <Accordion
+                label='Database Enabled'
+                name='databaseEnabled'
+                value={dep.databaseEnabled}
+                editKey='deployment'
+                urlKey='db'
+              >
+                <div class='space-y-2'>
+                  <Label text='SQL Endpoint' desc='database connection URL' />
+                  <Input
+                    name='sql-endpoint'
+                    value={dep.sqlEndpoint || ''}
+                    editKey='deployment'
+                    placeholder='https://...'
+                    mono
+                  />
+                  <Label text='SQL Token' desc='auth token for database' />
+                  <Input
+                    name='sql-token'
+                    value={dep.sqlToken || ''}
+                    editKey='deployment'
+                    secret
+                    visKey='sql-vis'
+                  />
                 </div>
-                <div class='p-4 space-y-3'>
-                  <InfoRow label='URL' value={selectedDep.url} />
-                  
-                  <div class='flex justify-between items-center py-2 border-b border-base-300'>
-                    <span class='text-base-content/60 text-sm'>Logs Enabled</span>
-                    {isEditing ? (
-                      <input
-                        type='checkbox'
-                        name='logsEnabled'
-                        defaultChecked={selectedDep.logsEnabled}
-                        class='toggle toggle-sm toggle-primary'
-                      />
-                    ) : (
-                      <span class='text-sm font-medium'>{selectedDep.logsEnabled ? 'Yes' : 'No'}</span>
-                    )}
-                  </div>
-
-                  <div class='flex justify-between items-center py-2 border-b border-base-300'>
-                    <span class='text-base-content/60 text-sm'>Database Enabled</span>
-                    {isEditing ? (
-                      <input
-                        type='checkbox'
-                        name='databaseEnabled'
-                        defaultChecked={selectedDep.databaseEnabled}
-                        class='toggle toggle-sm toggle-primary'
-                      />
-                    ) : (
-                      <span class='text-sm font-medium'>{selectedDep.databaseEnabled ? 'Yes' : 'No'}</span>
-                    )}
-                  </div>
-
-                  {isEditing && (
-                    <>
-                      <div class='flex justify-between items-center py-2 border-b border-base-300'>
-                        <span class='text-base-content/60 text-sm'>SQL Endpoint</span>
-                        <input
-                          type='text'
-                          name='sqlEndpoint'
-                          defaultValue={selectedDep.sqlEndpoint || ''}
-                          class='input input-sm input-bordered w-48 text-sm font-mono'
-                          placeholder='https://...'
-                        />
-                      </div>
-                      <div class='flex justify-between items-center py-2 border-b border-base-300'>
-                        <span class='text-base-content/60 text-sm'>SQL Token</span>
-                        <input
-                          type='password'
-                          name='sqlToken'
-                          defaultValue={selectedDep.sqlToken || ''}
-                          class='input input-sm input-bordered w-48 text-sm'
-                          placeholder='••••••'
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  {selectedDep.logsEnabled && (
-                    <LogsTokenSection deploymentUrl={selectedDep.url} />
-                  )}
-
-                  <InfoRow label='Created' value={selectedDep.createdAt ? new Date(selectedDep.createdAt).toLocaleDateString() : undefined} />
-                  <InfoRow label='Updated' value={selectedDep.updatedAt ? new Date(selectedDep.updatedAt).toLocaleDateString() : undefined} />
-                </div>
-              </div>
-            </form>
-          )}
-
-          {/* Tools Section */}
-          {selectedDep && (
-            <Card title='Tools'>
-              <div class='space-y-4'>
-                <div class='p-3 bg-base-300 rounded-lg'>
-                  <h4 class='text-sm font-medium mb-2'>Column Encryptors</h4>
-                  <p class='text-xs text-base-content/60 mb-3'>
-                    Add JS encryptors to encrypt specific columns in your database tables.
-                  </p>
-                  <div class='text-xs text-base-content/40 italic'>
-                    No encryptors configured. Click to add one.
-                  </div>
-                  <button type='button' class='btn btn-sm btn-outline mt-3 gap-1'>
-                    <Settings class='w-3 h-3' /> Add Encryptor
-                  </button>
-                </div>
-
-                <div class='p-3 bg-base-300 rounded-lg'>
-                  <h4 class='text-sm font-medium mb-2'>Data Transformers</h4>
-                  <p class='text-xs text-base-content/60 mb-3'>
-                    Transform data before displaying or exporting.
-                  </p>
-                  <div class='text-xs text-base-content/40 italic'>
-                    No transformers configured.
-                  </div>
-                  <button type='button' class='btn btn-sm btn-outline mt-3 gap-1'>
-                    <Settings class='w-3 h-3' /> Add Transformer
-                  </button>
-                </div>
-              </div>
-            </Card>
-          )}
-
-          {!selectedDep && deps.length > 0 && (
-            <div class='text-center py-8 text-base-content/40'>
-              Select a deployment to view its configuration.
+              </Accordion>
+              <Row label='Created' value={formatDate(dep.createdAt)} />
+              <Row label='Updated' value={formatDate(dep.updatedAt)} />
             </div>
-          )}
+          </EditCard>
+        </form>
+      )}
+      {dep && (
+        <Card title='Tools'>
+          <div class='space-y-4'>
+            <ToolCard
+              title='Column Encryptors'
+              desc='Add JS encryptors to encrypt specific columns.'
+              empty='No encryptors configured.'
+            />
+            <ToolCard
+              title='Data Transformers'
+              desc='Transform data before displaying or exporting.'
+              empty='No transformers configured.'
+            />
+          </div>
+        </Card>
+      )}
+      {!dep && deps.length > 0 && (
+        <div class='text-center py-8 text-base-content/40'>
+          Select a deployment to view its configuration.
         </div>
-      </div>
-    </div>
+      )}
+      {getDeployment.pending && (
+        <div class='text-center py-8 text-base-content/40'>
+          Loading deployment...
+        </div>
+      )}
+    </Layout>
   )
 }
 
 const TeamSettingsPage = () => (
-  <div class='flex flex-col h-full'>
-    <PageHeader
-      title='Team Members'
-      description='Manage team access and permissions.'
-    />
-    <div class='flex-1 overflow-y-auto p-8'>
-      <div class='max-w-2xl'>
-        <div class='text-base-content/40 text-sm'>
-          Team settings content will go here.
-        </div>
-      </div>
+  <Layout title='Team Members' desc='Manage team access and permissions.'>
+    <div class='text-base-content/40 text-sm'>
+      Team settings content will go here.
     </div>
-  </div>
+  </Layout>
 )
 
 const views = {
@@ -641,7 +753,6 @@ export const SettingsPage = () => {
       </div>
     )
   }
-
   const Content = views[view as keyof typeof views] ?? views.project
   return (
     <div class='flex h-full overflow-hidden bg-base-100'>
@@ -649,7 +760,7 @@ export const SettingsPage = () => {
       <div class='flex-1 flex flex-col overflow-hidden'>
         <Content />
       </div>
-      {project.data && <AddDeploymentDialog projectId={project.data.slug} />}
+      {project.data && <AddDeploymentDialog />}
     </div>
   )
 }
