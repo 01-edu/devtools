@@ -841,8 +841,8 @@ function TabNavigation({
 
 const logData = api['POST/api/deployment/logs'].signal()
 effect(() => {
-  const { dep, lq } = url.params
-  if (dep) {
+  const { dep, lq, sbi } = url.params
+  if (dep && sbi === 'deployment') {
     const filterRows = parseFilters('l').filter((r) =>
       r.key !== 'key' && r.value
     ).map((r) => ({
