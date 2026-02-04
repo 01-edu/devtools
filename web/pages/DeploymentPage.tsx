@@ -1664,6 +1664,9 @@ export const DeploymentPage = () => {
   if (!view) {
     navigate({ params: { tab: 'tables' }, replace: true })
   }
+  if (!url.params.sbi) {
+    navigate({ params: { sbi: 'deployment' }, replace: true })
+  }
   return (
     <div class='h-screen flex flex-col'>
       <Header />
