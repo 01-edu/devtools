@@ -1,7 +1,4 @@
-import { HardDrive, ListTodo } from 'lucide-preact'
 import { api } from './api.ts'
-import { DeploymentPage } from '../pages/DeploymentPage.tsx'
-import { SidebarItem } from '../components/SideBar.tsx'
 import { url } from '@01edu/signal-router'
 import { Signal } from '@preact/signals'
 
@@ -12,16 +9,6 @@ export type QueryHistoryItem = {
   columns?: number
   rows?: number
 }
-
-// Sidebar items for project page
-export const sidebarItems: Record<string, SidebarItem> = {
-  'deployment': {
-    icon: HardDrive,
-    label: 'Deployment',
-    component: DeploymentPage,
-  },
-  'tasks': { icon: ListTodo, label: 'Tasks', component: DeploymentPage },
-} as const
 
 // API signal for deployment queries
 export const querier = api['GET/api/deployment/query'].signal()

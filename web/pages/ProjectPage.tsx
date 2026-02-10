@@ -3,7 +3,8 @@ import { navigate, url } from '@01edu/signal-router'
 import { Sidebar } from '../components/SideBar.tsx'
 import { user } from '../lib/session.ts'
 import { SettingsPage } from './SettingsPage.tsx'
-import { deployments, project, sidebarItems } from '../lib/shared.tsx'
+import { deployments, project } from '../lib/shared.tsx'
+import { sidebarItems } from '../lib/navigation.tsx'
 
 effect(() => {
   const path = url.path

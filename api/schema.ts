@@ -2,6 +2,7 @@ import {
   ARR,
   type Asserted,
   BOOL,
+  LIST,
   NUM,
   OBJ,
   optional,
@@ -92,3 +93,20 @@ export const DatabaseSchemasCollection = await createCollection<
   DatabaseSchema,
   'deploymentUrl'
 >({ name: 'db_schemas', primaryKey: 'deploymentUrl' })
+
+export const SQLToolDef = OBJ({
+  toolId: STR('The unique identifier for the tool'),
+  projectId: STR('The ID of the project this tool belongs to'),
+  name: STR('The name of the tool'),
+  targetTables: ARR(STR('Target table names or *'), 'List of target tables'),
+  targetColumns: ARR(STR('Target column names or *'), 'List of target columns'),
+  triggerEvent: LIST(['BEFORE', 'AFTER'], 'Trigger event: BEFORE or AFTER'),
+  code: STR('The JS function body'),
+  enabled: BOOL('Is the tool enabled?'),
+}, 'The SQL tool definition')
+export type SQLTool = Asserted<typeof SQLToolDef>
+
+export const SQLToolsCollection = await createCollection<SQLTool, 'toolId'>({
+  name: 'sql_tools',
+  primaryKey: 'toolId',
+})
