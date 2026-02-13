@@ -1,8 +1,7 @@
 // db_test.ts
-import { afterEach, beforeEach, describe, it } from '@std/testing/bdd'
+import { afterEach, describe, it } from '@std/testing/bdd'
 import { assert, assertEquals, assertExists, assertRejects } from '@std/assert'
 import { createCollection } from './json_store.ts'
-import { ensureDir } from '@std/fs'
 
 type User = {
   id: number
@@ -11,12 +10,8 @@ type User = {
   age?: number | null
 }
 
-let dbDir: string
-
-beforeEach(async () => {
-  dbDir = './db_test'
-  await ensureDir(dbDir)
-})
+const TEST_COLLECTION = 'users_test'
+const dbDir = './db_test/' + TEST_COLLECTION
 
 afterEach(async () => {
   try {
@@ -29,7 +24,7 @@ afterEach(async () => {
 describe('createCollection', () => {
   it('inserts a record with an auto-generated numeric id', async () => {
     const users = await createCollection<User, 'email'>({
-      name: 'users',
+      name: TEST_COLLECTION,
       primaryKey: 'email',
     })
 
@@ -47,7 +42,7 @@ describe('createCollection', () => {
 
   it('finds a record by id', async () => {
     const users = await createCollection<User, 'email'>({
-      name: 'users',
+      name: TEST_COLLECTION,
       primaryKey: 'email',
     })
 
@@ -63,7 +58,7 @@ describe('createCollection', () => {
 
   it('returns null when record not found by id', async () => {
     const users = await createCollection<User, 'id'>({
-      name: 'users',
+      name: TEST_COLLECTION,
       primaryKey: 'id',
     })
 
@@ -73,7 +68,7 @@ describe('createCollection', () => {
 
   it('updates a record', async () => {
     const users = await createCollection<User, 'id'>({
-      name: 'users',
+      name: TEST_COLLECTION,
       primaryKey: 'id',
     })
 
@@ -91,7 +86,7 @@ describe('createCollection', () => {
 
   it('deletes a record', async () => {
     const users = await createCollection<User, 'id'>({
-      name: 'users',
+      name: TEST_COLLECTION,
       primaryKey: 'id',
     })
 
@@ -109,7 +104,7 @@ describe('createCollection', () => {
 
   it('finds records using predicate', async () => {
     const users = await createCollection<User, 'id'>({
-      name: 'users',
+      name: TEST_COLLECTION,
       primaryKey: 'id',
     })
 
@@ -138,7 +133,7 @@ describe('createCollection', () => {
 
   it('enforces unique key constraint on insert', async () => {
     const users = await createCollection<User, 'email'>({
-      name: 'users',
+      name: TEST_COLLECTION,
       primaryKey: 'email',
     })
 
@@ -158,7 +153,7 @@ describe('createCollection', () => {
 
   it('returns null/false for update/delete on non-existent id', async () => {
     const users = await createCollection<User, 'id'>({
-      name: 'users',
+      name: TEST_COLLECTION,
       primaryKey: 'id',
     })
 
@@ -177,7 +172,7 @@ describe('createCollection', () => {
 
   it('handles null/undefined unique fields gracefully', async () => {
     const users = await createCollection<User, 'id'>({
-      name: 'users',
+      name: TEST_COLLECTION,
       primaryKey: 'id',
     })
 
@@ -199,7 +194,7 @@ describe('createCollection', () => {
 
   it('evicts LRU cache when cacheSize exceeded', async () => {
     const users = await createCollection<User, 'id'>({
-      name: 'users',
+      name: TEST_COLLECTION,
       primaryKey: 'id',
     })
 

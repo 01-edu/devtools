@@ -6,8 +6,6 @@ import {
   DeploymentDef,
   DeploymentsCollection,
   ProjectsCollection,
-  SQLToolDef,
-  SQLToolsCollection,
   TeamDef,
   TeamsCollection,
   UserDef,
@@ -239,54 +237,6 @@ const defs = {
     input: OBJ({ slug: STR('The slug of the project') }),
     output: BOOL('Indicates if the project was deleted'),
     description: 'Delete a project by ID',
-  }),
-  'GET/api/project/tools': route({
-    authorize: withUserSession,
-    fn: (_ctx, { project }) => {
-      const tools = SQLToolsCollection.filter((t) => t.projectId === project)
-      return tools
-    },
-    input: OBJ({ project: STR('The ID of the project') }),
-    output: ARR(SQLToolDef, 'List of SQL tools'),
-    description: 'Get SQL tools for a project',
-  }),
-  'POST/api/project/tool': route({
-    authorize: withAdminSession,
-    fn: (_ctx, input) => {
-      const toolId = crypto.randomUUID()
-      const tool = { ...input, toolId }
-      SQLToolsCollection.insert(tool)
-      return tool
-    },
-    input: OBJ({
-      projectId: STR('The ID of the project'),
-      name: STR('The name of the tool'),
-      targetTables: ARR(
-        STR('Target table names or *'),
-        'List of target tables',
-      ),
-      targetColumns: ARR(
-        STR('Target column names or *'),
-        'List of target columns',
-      ),
-      triggerEvent: LIST(['BEFORE', 'AFTER'], 'Trigger event: BEFORE or AFTER'),
-      code: STR('The JS function body'),
-      enabled: BOOL('Is the tool enabled?'),
-    }),
-    output: SQLToolDef,
-    description: 'Create a new SQL tool',
-  }),
-  'DELETE/api/project/tool': route({
-    authorize: withAdminSession,
-    fn: (_ctx, { id }) => {
-      const tool = SQLToolsCollection.get(id)
-      if (!tool) throw respond.NotFound({ message: 'Tool not found' })
-      SQLToolsCollection.delete(id)
-      return true
-    },
-    input: OBJ({ id: STR('The ID of the tool') }),
-    output: BOOL('Indicates if the tool was deleted'),
-    description: 'Delete a SQL tool',
   }),
   'GET/api/project/deployments': route({
     authorize: withUserSession,

@@ -4,6 +4,9 @@ import { server } from '@01edu/api/server'
 import { Log } from '@01edu/api/log'
 import { routeHandler } from '/api/routes.ts'
 import { PORT } from './lib/env.ts'
+import { init } from '/api/lib/functions.ts'
+
+await init()
 
 const fetch = server({ log: console as unknown as Log, routeHandler })
 export default {
