@@ -94,9 +94,9 @@ export const DatabaseSchemasCollection = await createCollection<
 >({ name: 'db_schemas', primaryKey: 'deploymentUrl' })
 
 export const DeploymentFunctionDef = OBJ({
-  id: STR('Unique ID: deploymentUrl + functionName'),
+  id: STR('Unique ID: deploymentUrl + name'),
   deploymentUrl: STR('Link to deployment'),
-  functionName: STR('Filename of the function'),
+  name: STR('Filename of the function'),
   variables: optional(OBJ({}, 'Configuration variables')),
   enabled: BOOL('Is the function enabled?'),
 }, 'Deployment function configuration')

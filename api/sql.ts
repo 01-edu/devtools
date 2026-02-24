@@ -232,7 +232,7 @@ export const fetchTablesData = async (
   const configs = DeploymentFunctionsCollection.filter((c) =>
     c.deploymentUrl === params.deployment.url && c.enabled
   )
-  const configMap = new Map(configs.map((c) => [c.functionName, c]))
+  const configMap = new Map(configs.map((c) => [c.name, c]))
 
   const whereClause = constructWhereClause(params, columnsMap)
   const orderByClause = constructOrderByClause(params, columnsMap)

@@ -4,6 +4,9 @@ import { handleGoogleCallback, initiateGoogleAuth } from '/api/auth.ts'
 import {
   DatabaseSchemasCollection,
   DeploymentDef,
+  DeploymentFunction,
+  DeploymentFunctionDef,
+  DeploymentFunctionsCollection,
   DeploymentsCollection,
   ProjectsCollection,
   TeamDef,
@@ -24,6 +27,7 @@ import {
 import { decodeSession, decryptMessage, encryptMessage } from '/api/user.ts'
 import { fetchTablesData, runSQL, SQLQueryError } from '/api/sql.ts'
 import { Log } from '@01edu/api/log'
+import { getProjectFunctions } from './lib/functions.ts'
 
 const withUserSession = async ({ cookies }: RequestContext) => {
   const session = await decodeSession(cookies.session)
@@ -570,6 +574,95 @@ const defs = {
       rows: ARR(OBJ({}, 'A row of the result set'), 'The result set rows'),
     }),
     description: 'Run a SQL query against the deployment database',
+  }),
+  'GET/api/project/functions': route({
+    authorize: withUserSession,
+    fn: (_ctx, { slug }) => {
+      const project = ProjectsCollection.get(slug)
+      if (!project) throw respond.NotFound({ message: 'Project not found' })
+
+      const loaded = getProjectFunctions(slug) || []
+      return loaded.map((f) => ({ name: f.name }))
+    },
+    input: OBJ({ slug: STR('The unique identifier for the project') }),
+    output: ARR(
+      OBJ({ name: STR('The name of the function') }),
+      'List of available functions for the project',
+    ),
+    description: 'Get all available functions for a project',
+  }),
+  'GET/api/deployment/functions': route({
+    authorize: withUserSession,
+    fn: (_ctx, { url }) => {
+      const dep = DeploymentsCollection.get(url)
+      if (!dep) throw respond.NotFound({ message: 'Deployment not found' })
+
+      const configs = DeploymentFunctionsCollection.filter((c) =>
+        c.deploymentUrl === url
+      )
+
+      return configs.map((c) => ({
+        id: c.id,
+        name: c.name,
+        enabled: c.enabled,
+        variables: c.variables || {},
+      }))
+    },
+    input: OBJ({ url: STR('The URL of the deployment') }),
+    output: ARR(
+      OBJ({
+        id: STR('Unique ID: deploymentUrl + functionName'),
+        name: STR('The name of the function'),
+        enabled: BOOL('Is the function enabled?'),
+        variables: optional(OBJ({}, 'Configuration variables')),
+      }),
+      'List of functions with their deployment configuration',
+    ),
+    description: 'Get all functions for a deployment with their configuration',
+  }),
+  'POST/api/deployment/function': route({
+    authorize: withAdminSession,
+    fn: (_ctx, input) => {
+      const id = input.deploymentUrl + input.name
+      return DeploymentFunctionsCollection.insert({
+        ...input,
+        id,
+        enabled: false,
+        variables: {},
+      })
+    },
+    input: OBJ({
+      deploymentUrl: STR('Link to deployment'),
+      name: STR('Filename of the function'),
+    }),
+    output: DeploymentFunctionDef,
+    description: 'Add a function to a deployment',
+  }),
+  'PUT/api/deployment/function': route({
+    authorize: withAdminSession,
+    fn: (_ctx, input) => {
+      const { id, enabled, variables } = input
+      const updates: Partial<DeploymentFunction> = {}
+      if (enabled != null) updates.enabled = enabled
+      if (variables != null) updates.variables = variables
+      return DeploymentFunctionsCollection.update(id, updates)
+    },
+    input: OBJ({
+      id: STR('The ID of the function'),
+      enabled: optional(BOOL('Is the function enabled?')),
+      variables: optional(OBJ({}, 'Configuration variables')),
+    }),
+    output: DeploymentFunctionDef,
+    description: 'Update a deployment function configuration',
+  }),
+  'DELETE/api/deployment/function': route({
+    authorize: withAdminSession,
+    fn: (_ctx, { id }) => DeploymentFunctionsCollection.delete(id),
+    input: OBJ({
+      id: STR('The ID of the function'),
+    }),
+    output: BOOL('Indicates if the function was deleted'),
+    description: 'Delete a function from a deployment',
   }),
 } as const
 

@@ -143,7 +143,10 @@ vite.config.ts.timestamp-*
 # Vite cache directory
 .vite
 
-db/
+db/*
+!db/functions/*
+!db/functions
+db/functions/test-*
 db_test/
 .vscode
 

@@ -66,7 +66,7 @@ Deno.test('Functions Module - Pipeline & Config', async () => {
   await DeploymentFunctionsCollection.insert({
     id: deploymentUrl + ':01-first.js',
     deploymentUrl,
-    functionName: '01-first.js',
+    name: '01-first.js',
     enabled: true,
     variables: { var1: 'secret-value' },
   })
@@ -75,7 +75,7 @@ Deno.test('Functions Module - Pipeline & Config', async () => {
   await DeploymentFunctionsCollection.insert({
     id: deploymentUrl + ':02-second.js',
     deploymentUrl,
-    functionName: '02-second.js',
+    name: '02-second.js',
     enabled: false,
     variables: {},
   })
@@ -88,7 +88,7 @@ Deno.test('Functions Module - Pipeline & Config', async () => {
   const configs = DeploymentFunctionsCollection.filter((c) =>
     c.deploymentUrl === deploymentUrl && c.enabled
   )
-  const configMap = new Map(configs.map((c) => [c.functionName, c]))
+  const configMap = new Map(configs.map((c) => [c.name, c]))
 
   for (const { name, module } of loaded) {
     const config = configMap.get(name)
@@ -117,7 +117,7 @@ Deno.test('Functions Module - Pipeline & Config', async () => {
   const configs2 = DeploymentFunctionsCollection.filter((c) =>
     c.deploymentUrl === deploymentUrl && c.enabled
   )
-  const configMap2 = new Map(configs2.map((c) => [c.functionName, c]))
+  const configMap2 = new Map(configs2.map((c) => [c.name, c]))
 
   for (const { name, module } of loaded) {
     const config = configMap2.get(name)
