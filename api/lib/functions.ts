@@ -11,12 +11,20 @@ export type FunctionContext = {
 }
 
 export type ReadTransformer<T = unknown> = (
-  row: T,
+  data: T,
+  ctx: FunctionContext,
+) => T | Promise<T>
+
+export type WriteTransformer<T = unknown> = (
+  table: string,
+  data: T,
+  query: string | undefined,
   ctx: FunctionContext,
 ) => T | Promise<T>
 
 export type ProjectFunctionModule = {
   read?: ReadTransformer
+  write?: WriteTransformer
   config?: {
     targets?: string[]
     events?: string[]
@@ -96,17 +104,16 @@ function startWatcher() {
   watcher = Deno.watchFs(functionsDir, { recursive: true }) // Process events
   ;(async () => {
     for await (const event of watcher!) {
-      if (['modify', 'create', 'remove'].includes(event.kind)) {
-        for (const path of event.paths) {
-          if (path.endsWith('.js')) {
-            const parts = path.split('/')
-            const fileName = parts.pop()
-            const slug = parts.pop()
-            if (fileName && slug) {
-              await reloadProjectFunctions(slug)
-            }
-          }
-        }
+      if (!['modify', 'create', 'remove', 'rename'].includes(event.kind)) {
+        continue
+      }
+      for (const path of event.paths) {
+        if (!path.endsWith('.js')) continue
+        const parts = path.split('/')
+        const fileName = parts.pop()
+        const slug = parts.pop()
+        if (!fileName || !slug) continue
+        await reloadProjectFunctions(slug)
       }
     }
   })()
@@ -155,6 +162,46 @@ export async function applyReadTransformers<T>(
     }
 
     currentData = await module.read(currentData, ctx) as T
+  }
+
+  return currentData
+}
+
+export async function applyWriteTransformers<T>(
+  data: T,
+  projectId: string,
+  deploymentUrl: string,
+  tableName: string,
+  projectFunctions?: LoadedFunction[],
+  configMap?: Map<string, DeploymentFunction>,
+): Promise<T> {
+  if (!projectFunctions || projectFunctions.length === 0) {
+    return data
+  }
+  let currentData = data
+  for (const { name, module } of projectFunctions) {
+    if (!module.write) continue
+    const config = configMap?.get(name)
+    if (!config) continue
+    if (module.config?.targets && !module.config.targets.includes(tableName)) {
+      continue
+    }
+    if (module.config?.events && !module.config.events.includes('write')) {
+      continue
+    }
+
+    const ctx: FunctionContext = {
+      deploymentUrl,
+      projectId,
+      variables: config.variables || {},
+    }
+
+    currentData = await module.write(
+      tableName,
+      currentData,
+      undefined,
+      ctx,
+    ) as T
   }
 
   return currentData

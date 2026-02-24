@@ -19,7 +19,6 @@ import {
 import { DialogModal } from '../components/Dialog.tsx'
 import type { TargetedEvent } from 'preact'
 import { effect, signal } from '@preact/signals'
-import { useEffect, useState } from 'preact/hooks'
 
 // API Signals
 const updateProject = api['PUT/api/project'].signal()
