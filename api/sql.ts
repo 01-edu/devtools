@@ -268,6 +268,45 @@ export const fetchTablesData = async (
   }
 }
 
+export const insertTableData = async (
+  deployment: Deployment,
+  table: string,
+  data: Record<string, unknown>,
+) => {
+  const { sqlEndpoint, sqlToken } = deployment
+  if (!sqlToken || !sqlEndpoint) {
+    throw Error('Missing SQL endpoint or token')
+  }
+  const projectFunctions = getProjectFunctions(deployment.projectId)
+
+  const transformedData = await applyWriteTransformers(
+    data,
+    deployment.projectId,
+    deployment.url,
+    table,
+    projectFunctions,
+  )
+
+  const columns = Object.keys(transformedData)
+  const values = Object.values(transformedData).map((v) => {
+    if (v === null) return 'NULL'
+    if (typeof v === 'string') return `'${v.replace(/'/g, "''")}'`
+    return String(v)
+  })
+  const query =
+    `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${values.join(', ')})`
+  const rows = await runSQL(sqlEndpoint, sqlToken, query)
+
+  // Apply read transformer pipeline
+  return await applyReadTransformers(
+    rows,
+    deployment.projectId,
+    deployment.url,
+    table,
+    projectFunctions,
+  )
+}
+
 export const updateTableData = async (
   deployment: Deployment,
   table: string,
@@ -275,7 +314,6 @@ export const updateTableData = async (
   data: Record<string, unknown>,
 ) => {
   const { sqlEndpoint, sqlToken } = deployment
-
   if (!sqlToken || !sqlEndpoint) {
     throw Error('Missing SQL endpoint or token')
   }
@@ -297,7 +335,6 @@ export const updateTableData = async (
       : String(v)
     return `${k} = ${val}`
   })
-
   const pkVal = typeof pk.value === 'string'
     ? `'${String(pk.value).replace(/'/g, "''")}'`
     : String(pk.value)
