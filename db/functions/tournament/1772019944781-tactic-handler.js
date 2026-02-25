@@ -11,9 +11,9 @@ const decompress = (data) => new Uint8Array(brotliDecompressSync(data))
 
 async function transformRowRead(row) {
   if (!row || typeof row !== 'object') return row
-  const transformed = { ...row }
+  const transformed = {}
 
-  for (const [key, value] of Object.entries(transformed)) {
+  for (const [key, value] of Object.entries(row)) {
     if (value instanceof Uint8Array) {
       if (key === 'tacticContent') {
         try {
@@ -25,6 +25,8 @@ async function transformRowRead(row) {
       } else {
         transformed[key] = encodeBase64Url(value)
       }
+    } else {
+      transformed[key] = value
     }
   }
   return transformed
@@ -65,6 +67,5 @@ export default {
   },
   config: {
     targets: ['tactic'],
-    events: ['read', 'write'],
   },
 }

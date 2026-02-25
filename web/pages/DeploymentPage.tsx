@@ -36,8 +36,8 @@ import {
   querier,
   queriesHistory,
   runQuery,
+  sidebarItems,
 } from '../lib/shared.tsx'
-import { sidebarItems } from '../lib/navigation.tsx'
 
 type AnyRecord = Record<string, unknown>
 // API signals for schema and table data

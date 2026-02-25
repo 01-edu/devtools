@@ -44,12 +44,10 @@ export const Dialog = ({
   )
 }
 
-export const DialogModal = (
-  { children, boxClass, ...props }: DialogProps & { boxClass?: string },
-) => {
+export const DialogModal = ({ children, ...props }: DialogProps) => {
   return (
     <Dialog class='modal' {...props}>
-      <div class={`modal-box ${boxClass || 'w-auto'}`}>
+      <div class='modal-box w-auto'>
         <form method='dialog'>
           <button
             type='submit'

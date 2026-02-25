@@ -2,7 +2,6 @@ import { assertEquals } from '@std/assert'
 import * as functions from './functions.ts'
 import { join } from '@std/path'
 import { ensureDir } from '@std/fs'
-import { DeploymentFunctionsCollection } from '../schema.ts'
 
 Deno.test('Functions Module - Pipeline & Config', async () => {
   const testSlug = 'test-project-' + Date.now()
@@ -35,7 +34,7 @@ Deno.test('Functions Module - Pipeline & Config', async () => {
   const code1 = `
     export default {
         read: (row, ctx) => {
-            return { ...row, step1: true, var1: ctx.variables.var1 }
+            return { ...row, step1: true, var1: 'secret-value' }
         }
     }
     `
@@ -62,42 +61,18 @@ Deno.test('Functions Module - Pipeline & Config', async () => {
   // 3. Mock Deployment Config
   const deploymentUrl = 'test-pipeline-' + Date.now() + '.com'
 
-  // Config for 01-first.js (Enabled with variables)
-  await DeploymentFunctionsCollection.insert({
-    id: deploymentUrl + ':01-first.js',
-    deploymentUrl,
-    name: '01-first.js',
-    enabled: true,
-    variables: { var1: 'secret-value' },
-  })
-
-  // Config for 02-second.js (Disabled)
-  await DeploymentFunctionsCollection.insert({
-    id: deploymentUrl + ':02-second.js',
-    deploymentUrl,
-    name: '02-second.js',
-    enabled: false,
-    variables: {},
-  })
-
   // 4. Simulate Pipeline Execution (Manually, echoing sql.ts logic)
   // We can't import sql.ts functions easily here without mocking runSQL,
   // so we re-implement the pipeline logic to verify the components work.
 
   let row: TestRow = { id: 1 }
-  const configs = DeploymentFunctionsCollection.filter((c) =>
-    c.deploymentUrl === deploymentUrl && c.enabled
-  )
-  const configMap = new Map(configs.map((c) => [c.name, c]))
 
-  for (const { name, module } of loaded) {
-    const config = configMap.get(name)
-    if (!config || !module.read) continue
+  for (const { module } of loaded) {
+    if (!module.read) continue
 
     const ctx = {
       deploymentUrl,
       projectId: testSlug,
-      variables: config.variables || undefined,
     }
     row = await module.read(row, ctx) as TestRow
   }
@@ -105,27 +80,15 @@ Deno.test('Functions Module - Pipeline & Config', async () => {
   const result = row
   assertEquals(result.step1, true)
   assertEquals(result.var1, 'secret-value')
-  assertEquals(result.step2, undefined) // Should be skipped
-
-  // 5. Enable second function
-  await DeploymentFunctionsCollection.update(deploymentUrl + ':02-second.js', {
-    enabled: true,
-  })
 
   // Rerun pipeline
   row = { id: 1 }
-  const configs2 = DeploymentFunctionsCollection.filter((c) =>
-    c.deploymentUrl === deploymentUrl && c.enabled
-  )
-  const configMap2 = new Map(configs2.map((c) => [c.name, c]))
 
-  for (const { name, module } of loaded) {
-    const config = configMap2.get(name)
-    if (!config || !module.read) continue
+  for (const { module } of loaded) {
+    if (!module.read) continue
     const ctx = {
       deploymentUrl,
       projectId: testSlug,
-      variables: config.variables || undefined,
     }
     row = await module.read(row, ctx) as TestRow
   }

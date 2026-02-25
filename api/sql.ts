@@ -1,7 +1,6 @@
 import {
   DatabaseSchemasCollection,
   Deployment,
-  DeploymentFunctionsCollection,
   DeploymentsCollection,
 } from '/api/schema.ts'
 import { DB_SCHEMA_REFRESH_MS } from '/api/lib/env.ts'
@@ -229,10 +228,6 @@ export const fetchTablesData = async (
     throw Error('Missing SQL endpoint or token')
   }
   const projectFunctions = getProjectFunctions(params.deployment.projectId)
-  const configs = DeploymentFunctionsCollection.filter((c) =>
-    c.deploymentUrl === params.deployment.url && c.enabled
-  )
-  const configMap = new Map(configs.map((c) => [c.name, c]))
 
   const whereClause = constructWhereClause(params, columnsMap)
   const orderByClause = constructOrderByClause(params, columnsMap)
@@ -262,7 +257,6 @@ export const fetchTablesData = async (
     params.deployment.url,
     params.table,
     projectFunctions,
-    configMap,
   )
 
   return {

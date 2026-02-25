@@ -1,13 +1,11 @@
 import { batch } from '/api/lib/json_store.ts'
 import { join } from '@std/path'
 import { ensureDir } from '@std/fs'
-import { DeploymentFunction } from '/api/schema.ts'
 
 // Define the function signatures
 export type FunctionContext = {
   deploymentUrl: string
   projectId: string
-  variables?: Record<string, unknown>
 }
 
 export type ReadTransformer<T = unknown> = (
@@ -27,7 +25,6 @@ export type ProjectFunctionModule = {
   write?: WriteTransformer
   config?: {
     targets?: string[]
-    events?: string[]
   }
 }
 
@@ -138,27 +135,20 @@ export async function applyReadTransformers<T>(
   deploymentUrl: string,
   tableName: string,
   projectFunctions?: LoadedFunction[],
-  configMap?: Map<string, DeploymentFunction>,
 ): Promise<T> {
   if (!projectFunctions || projectFunctions.length === 0) {
     return data
   }
   let currentData = data
-  for (const { name, module } of projectFunctions) {
+  for (const { module } of projectFunctions) {
     if (!module.read) continue
-    const config = configMap?.get(name)
-    if (!config) continue
     if (module.config?.targets && !module.config.targets.includes(tableName)) {
-      continue
-    }
-    if (module.config?.events && !module.config.events.includes('read')) {
       continue
     }
 
     const ctx: FunctionContext = {
       deploymentUrl,
       projectId,
-      variables: config.variables || {},
     }
 
     currentData = await module.read(currentData, ctx) as T
@@ -173,27 +163,20 @@ export async function applyWriteTransformers<T>(
   deploymentUrl: string,
   tableName: string,
   projectFunctions?: LoadedFunction[],
-  configMap?: Map<string, DeploymentFunction>,
 ): Promise<T> {
   if (!projectFunctions || projectFunctions.length === 0) {
     return data
   }
   let currentData = data
-  for (const { name, module } of projectFunctions) {
+  for (const { module } of projectFunctions) {
     if (!module.write) continue
-    const config = configMap?.get(name)
-    if (!config) continue
     if (module.config?.targets && !module.config.targets.includes(tableName)) {
-      continue
-    }
-    if (module.config?.events && !module.config.events.includes('write')) {
       continue
     }
 
     const ctx: FunctionContext = {
       deploymentUrl,
       projectId,
-      variables: config.variables || {},
     }
 
     currentData = await module.write(
