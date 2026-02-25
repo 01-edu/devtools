@@ -8,6 +8,7 @@ import {
   ProjectsCollection,
   TeamDef,
   TeamsCollection,
+  User,
   UserDef,
   UsersCollection,
 } from './schema.ts'
@@ -22,7 +23,13 @@ import {
   LogsInputSchema,
 } from '/api/clickhouse-client.ts'
 import { decodeSession, decryptMessage, encryptMessage } from '/api/user.ts'
-import { fetchTablesData, runSQL, SQLQueryError } from '/api/sql.ts'
+import {
+  fetchTablesData,
+  insertTableData,
+  runSQL,
+  SQLQueryError,
+  updateTableData,
+} from '/api/sql.ts'
 import { Log } from '@01edu/api/log'
 
 const withUserSession = async ({ cookies }: RequestContext) => {
@@ -50,6 +57,31 @@ const withDeploymentSession = async (ctx: RequestContext) => {
 const userInTeam = (teamId: string, userEmail?: string) => {
   if (!userEmail) return false
   return TeamsCollection.get(teamId)?.teamMembers.includes(userEmail)
+}
+
+const withDeploymentTableAccess = (
+  ctx: RequestContext & { session: User },
+  deployment: string,
+) => {
+  const dep = DeploymentsCollection.get(deployment)
+  if (!dep) throw respond.NotFound({ message: 'Deployment not found' })
+
+  if (!dep.databaseEnabled) {
+    throw respond.BadRequest({
+      message: 'Database not enabled for deployment',
+    })
+  }
+
+  const project = ProjectsCollection.get(dep.projectId)
+  if (!project) throw respond.NotFound({ message: 'Project not found' })
+  if (!project.isPublic && !ctx.session.isAdmin) {
+    if (!userInTeam(project.teamId, ctx.session.userEmail)) {
+      throw respond.Forbidden({
+        message: 'Access to project tables denied',
+      })
+    }
+  }
+  return dep
 }
 
 const deploymentOutput = OBJ({
@@ -437,26 +469,7 @@ const defs = {
   'POST/api/deployment/table/data': route({
     authorize: withUserSession,
     fn: (ctx, { deployment, table, ...input }) => {
-      const dep = DeploymentsCollection.get(deployment)
-      if (!dep) {
-        throw respond.NotFound({ message: 'Deployment not found' })
-      }
-
-      if (!dep.databaseEnabled) {
-        throw respond.BadRequest({
-          message: 'Database not enabled for deployment',
-        })
-      }
-
-      const project = ProjectsCollection.get(dep.projectId)
-      if (!project) throw respond.NotFound({ message: 'Project not found' })
-      if (!project.isPublic && !ctx.session.isAdmin) {
-        if (!userInTeam(project.teamId, ctx.session.userEmail)) {
-          throw respond.Forbidden({
-            message: 'Access to project tables denied',
-          })
-        }
-      }
+      const dep = withDeploymentTableAccess(ctx, deployment)
 
       const schema = DatabaseSchemasCollection.get(deployment)
       if (!schema) throw respond.NotFound({ message: 'Schema not cached yet' })
@@ -505,6 +518,36 @@ const defs = {
       totalRows: NUM('The total number of rows matching the criteria'),
       rows: ARR(OBJ({}, 'A row of the result set'), 'The result set rows'),
     }),
+  }),
+  'POST/api/deployment/table/insert': route({
+    authorize: withUserSession,
+    fn: (ctx, { deployment, table, data }) => {
+      const dep = withDeploymentTableAccess(ctx, deployment)
+      return insertTableData(dep, table, data)
+    },
+    input: OBJ({
+      deployment: STR("The deployment's URL"),
+      table: STR('The table name'),
+      data: OBJ({}, 'The row data to insert'),
+    }),
+    output: OBJ({}, 'The result of the insert'),
+  }),
+  'POST/api/deployment/table/update': route({
+    authorize: withUserSession,
+    fn: (ctx, { deployment, table, pk, data }) => {
+      const dep = withDeploymentTableAccess(ctx, deployment)
+      return updateTableData(dep, table, pk, data)
+    },
+    input: OBJ({
+      deployment: STR("The deployment's URL"),
+      table: STR('The table name'),
+      pk: OBJ({
+        key: STR('The primary key column name'),
+        value: OBJ({}, 'The primary key value'),
+      }),
+      data: OBJ({}, 'The row data to update'),
+    }),
+    output: OBJ({}, 'The result of the update'),
   }),
   'GET/api/deployment/query': route({
     authorize: withUserSession,

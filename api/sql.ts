@@ -266,3 +266,48 @@ export const fetchTablesData = async (
       : rows.length,
   }
 }
+
+export const insertTableData = async (
+  deployment: Deployment,
+  table: string,
+  data: Record<string, unknown>,
+) => {
+  const { sqlEndpoint, sqlToken } = deployment
+  if (!sqlToken || !sqlEndpoint) {
+    throw Error('Missing SQL endpoint or token')
+  }
+  const columns = Object.keys(data)
+  const values = Object.values(data).map((v) => {
+    if (v === null) return 'NULL'
+    if (typeof v === 'string') return `'${v.replace(/'/g, "''")}'`
+    return String(v)
+  })
+  const query =
+    `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${values.join(', ')})`
+  return await runSQL(sqlEndpoint, sqlToken, query)
+}
+
+export const updateTableData = async (
+  deployment: Deployment,
+  table: string,
+  pk: { key: string; value: unknown },
+  data: Record<string, unknown>,
+) => {
+  const { sqlEndpoint, sqlToken } = deployment
+  if (!sqlToken || !sqlEndpoint) {
+    throw Error('Missing SQL endpoint or token')
+  }
+  const sets = Object.entries(data).map(([k, v]) => {
+    const val = v === null
+      ? 'NULL'
+      : typeof v === 'string'
+      ? `'${v.replace(/'/g, "''")}'`
+      : String(v)
+    return `${k} = ${val}`
+  })
+  const pkVal = typeof pk.value === 'string'
+    ? `'${String(pk.value).replace(/'/g, "''")}'`
+    : String(pk.value)
+  const query = `UPDATE ${table} SET ${sets.join(', ')} WHERE ${pk.key} = ${pkVal}`
+  return await runSQL(sqlEndpoint, sqlToken, query)
+}
