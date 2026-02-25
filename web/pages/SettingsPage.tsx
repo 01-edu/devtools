@@ -25,20 +25,11 @@ const updateProject = api['PUT/api/project'].signal()
 const updateDeployment = api['PUT/api/deployment'].signal()
 const createDeployment = api['POST/api/deployment'].signal()
 const getDeployment = api['GET/api/deployment'].signal()
-const getDeploymentFunctions = api['GET/api/deployment/functions'].signal()
-const createDeploymentFunction = api['POST/api/deployment/function'].signal()
-const deleteDeploymentFunction = api['DELETE/api/deployment/function'].signal()
-const getProjectFunctions = api['GET/api/project/functions'].signal()
-const updateDeploymentFunction = api['PUT/api/deployment/function'].signal()
 const regenToken = api['POST/api/deployment/token/regenerate'].signal()
 
 effect(() => {
   if (url.params.dep) {
     getDeployment.fetch({ url: url.params.dep })
-    getDeploymentFunctions.fetch({ url: url.params.dep })
-  }
-  if (project.data?.slug) {
-    getProjectFunctions.fetch({ slug: project.data.slug })
   }
 })
 
@@ -415,231 +406,6 @@ const AddDeploymentDialog = () => (
   </DialogModal>
 )
 
-const FunctionItem = ({
-  fn,
-  deploymentUrl,
-  updating,
-}: {
-  fn: { id: string; name: string; enabled: boolean }
-  deploymentUrl: string
-  updating: boolean
-}) => (
-  <div class='flex items-center justify-between p-3 bg-base-100/30 rounded-lg border border-base-300/30 hover:border-base-300/60 transition-colors'>
-    <div class='flex flex-col gap-0.5'>
-      <h4 class='text-sm font-medium font-mono'>{fn.name}</h4>
-      <div class='flex items-center gap-2'>
-        <div
-          class={`w-1.5 h-1.5 rounded-full ${
-            fn.enabled ? 'bg-success' : 'bg-base-content/20'
-          }`}
-        />
-        <span class='text-[10px] uppercase font-bold tracking-wider text-base-content/40'>
-          {fn.enabled ? 'Active' : 'Inactive'}
-        </span>
-      </div>
-    </div>
-    <div class='flex items-center gap-3'>
-      <input
-        type='checkbox'
-        checked={fn.enabled}
-        class='toggle toggle-primary toggle-sm scale-90'
-        disabled={updating}
-        onChange={async (e) => {
-          await updateDeploymentFunction.fetch({
-            id: fn.id,
-            enabled: e.currentTarget.checked,
-            variables: undefined,
-          })
-          getDeploymentFunctions.fetch({ url: deploymentUrl })
-        }}
-      />
-      <div class='flex gap-1'>
-        <A
-          params={{ dialog: 'fn-config', 'fn-id': fn.id }}
-          replace
-          class='btn btn-ghost btn-xs'
-          title='Configure'
-        >
-          <Settings class='w-3.5 h-3.5' />
-        </A>
-        <button
-          type='button'
-          class='btn btn-ghost btn-xs text-error/60 hover:text-error'
-          title='Remove'
-          onClick={async () => {
-            if (!confirm(`Remove ${fn.name} from this deployment?`)) return
-            await deleteDeploymentFunction.fetch({ id: fn.id })
-            getDeploymentFunctions.fetch({ url: deploymentUrl })
-          }}
-        >
-          <X class='w-3.5 h-3.5' />
-        </button>
-      </div>
-    </div>
-  </div>
-)
-
-const FunctionsSettingsSection = (
-  { deploymentUrl }: { deploymentUrl: string },
-) => {
-  const fns = getDeploymentFunctions.data ?? []
-  const loading = getDeploymentFunctions.pending
-  const updating = !!updateDeploymentFunction.pending
-
-  return (
-    <Card
-      title='Functions'
-      action={
-        <A
-          params={{ dialog: 'add-function' }}
-          class='btn btn-ghost btn-xs gap-1'
-        >
-          <Plus class='w-4 h-4' /> Add
-        </A>
-      }
-    >
-      <div class='space-y-2'>
-        {!fns.length && !loading && (
-          <p class='text-xs text-base-content/40 italic p-2 text-center'>
-            No functions configured for this deployment.
-          </p>
-        )}
-        {fns.map((fn) => (
-          <FunctionItem
-            key={fn.id}
-            fn={fn}
-            deploymentUrl={deploymentUrl}
-            updating={updating}
-          />
-        ))}
-      </div>
-    </Card>
-  )
-}
-
-const AddFunctionDialog = () => {
-  const dep = getDeployment.data
-  const projectFns = getProjectFunctions.data ?? []
-  const existingFns = getDeploymentFunctions.data ?? []
-  const availableFns = projectFns.filter(
-    (pf) => !existingFns.find((ef) => ef.name === pf.name),
-  )
-
-  const handleAdd = async (fnName: string) => {
-    if (!dep) return
-    try {
-      await createDeploymentFunction.fetch({
-        deploymentUrl: dep.url,
-        name: fnName,
-      })
-      getDeploymentFunctions.fetch({ url: dep.url })
-      navigate({ params: { dialog: null }, replace: true })
-    } catch (e) {
-      console.error(e)
-    }
-  }
-
-  return (
-    <DialogModal id='add-function'>
-      <h3 class='text-lg font-bold mb-4'>Add Function</h3>
-      <div class='space-y-2 max-h-[60vh] overflow-y-auto px-1'>
-        {availableFns.length === 0
-          ? (
-            <p class='text-sm text-base-content/40 italic py-8 text-center bg-base-300/30 rounded-lg'>
-              All project functions are already added.
-            </p>
-          )
-          : (
-            availableFns.map((fn) => (
-              <div
-                key={fn.name}
-                class='flex items-center justify-between p-3 bg-base-100/30 rounded-lg border border-base-300/30 group hover:border-base-300/60 transition-colors'
-              >
-                <span class='text-sm font-medium font-mono'>{fn.name}</span>
-                <button
-                  type='button'
-                  onClick={() => handleAdd(fn.name)}
-                  class='btn btn-primary btn-xs px-4 shadow-sm'
-                  disabled={!!createDeploymentFunction.pending}
-                >
-                  {createDeploymentFunction.pending
-                    ? <Loader2 class='w-3 h-3 animate-spin' />
-                    : 'Add'}
-                </button>
-              </div>
-            ))
-          )}
-      </div>
-      <div class='modal-action'>
-        <A params={{ dialog: null }} class='btn btn-ghost'>Close</A>
-      </div>
-    </DialogModal>
-  )
-}
-const FunctionConfigDialog = () => {
-  const fnId = url.params['fn-id']
-  const dep = getDeployment.data
-  const fn = getDeploymentFunctions.data?.find((f) => f.id === fnId)
-
-  const handleSave = async (e: TargetedEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    if (!fn) return
-    const json =
-      (e.currentTarget.elements.namedItem('json') as HTMLTextAreaElement).value
-    try {
-      const variables = JSON.parse(json)
-      await updateDeploymentFunction.fetch({
-        id: fn.id,
-        enabled: fn.enabled,
-        variables,
-      })
-      getDeploymentFunctions.fetch({ url: dep!.url })
-      navigate({ params: { dialog: null, 'fn-id': null }, replace: true })
-    } catch (e) {
-      alert('Invalid JSON: ' + (e as Error).message)
-    }
-  }
-
-  if (!fn) return null
-
-  return (
-    <DialogModal id='fn-config'>
-      <h3 class='text-lg font-bold mb-1'>Configure {fn.name}</h3>
-      <p class='text-xs text-base-content/40 mb-4 font-mono truncate'>
-        {fn.id}
-      </p>
-
-      <form onSubmit={handleSave} class='space-y-4'>
-        <div class='space-y-2'>
-          <Label text='Configuration Variables' desc='JSON format' />
-          <textarea
-            class='textarea textarea-bordered font-mono text-xs h-48 w-full bg-base-100/50 focus:bg-base-100 transition-colors'
-            name='json'
-            spellcheck={false}
-            placeholder='{ "key": "value" }'
-            defaultValue={JSON.stringify(fn.variables || {}, null, 2)}
-          />
-        </div>
-
-        <div class='modal-action'>
-          <A params={{ dialog: null, fnId: null }} class='btn btn-ghost'>
-            Cancel
-          </A>
-          <button
-            type='submit'
-            class='btn btn-primary'
-            disabled={!!updateDeploymentFunction.pending}
-          >
-            {updateDeploymentFunction.pending
-              ? <Loader2 class='w-4 h-4 animate-spin' />
-              : 'Save Configuration'}
-          </button>
-        </div>
-      </form>
-    </DialogModal>
-  )
-}
-
 function LogsTokenSection({ deploymentUrl }: { deploymentUrl: string }) {
   const visible = url.params['token-vis'] === 'true'
   const loading = getDeployment.pending || regenToken.pending
@@ -918,7 +684,6 @@ const DeploymentsSettingsPage = () => {
           </EditCard>
         </form>
       )}
-      {dep && <FunctionsSettingsSection deploymentUrl={dep.url} />}
       {!dep && deps.length > 0 && (
         <div class='text-center py-8 text-base-content/40'>
           Select a deployment to view its configuration.
@@ -964,8 +729,6 @@ export const SettingsPage = () => {
         <Content />
       </div>
       {project.data && <AddDeploymentDialog />}
-      {project.data && <AddFunctionDialog />}
-      {project.data && <FunctionConfigDialog />}
     </div>
   )
 }

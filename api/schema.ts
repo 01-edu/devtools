@@ -92,17 +92,3 @@ export const DatabaseSchemasCollection = await createCollection<
   DatabaseSchema,
   'deploymentUrl'
 >({ name: 'db_schemas', primaryKey: 'deploymentUrl' })
-
-export const DeploymentFunctionDef = OBJ({
-  id: STR('Unique ID: deploymentUrl + name'),
-  deploymentUrl: STR('Link to deployment'),
-  name: STR('Filename of the function'),
-  variables: optional(OBJ({}, 'Configuration variables')),
-  enabled: BOOL('Is the function enabled?'),
-}, 'Deployment function configuration')
-export type DeploymentFunction = Asserted<typeof DeploymentFunctionDef>
-
-export const DeploymentFunctionsCollection = await createCollection<
-  DeploymentFunction,
-  'id'
->({ name: 'deployment_functions', primaryKey: 'id' })
