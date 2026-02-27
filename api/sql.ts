@@ -4,6 +4,10 @@ import {
   DeploymentsCollection,
 } from '/api/schema.ts'
 import { DB_SCHEMA_REFRESH_MS } from '/api/lib/env.ts'
+import {
+  applyReadTransformers,
+  getProjectFunctions,
+} from '/api/lib/functions.ts'
 
 export class SQLQueryError extends Error {
   constructor(message: string, body: string) {
@@ -223,6 +227,8 @@ export const fetchTablesData = async (
   if (!sqlToken || !sqlEndpoint) {
     throw Error('Missing SQL endpoint or token')
   }
+  const projectFunctions = getProjectFunctions(params.deployment.projectId)
+
   const whereClause = constructWhereClause(params, columnsMap)
   const orderByClause = constructOrderByClause(params, columnsMap)
 
@@ -244,8 +250,17 @@ export const fetchTablesData = async (
     `SELECT COUNT(*) as count FROM ${params.table} ${whereClause}`
   const rows = await runSQL(sqlEndpoint, sqlToken, query)
 
-  return {
+  // Apply read transformer pipeline
+  const transformedRows = await applyReadTransformers(
     rows,
+    params.deployment.projectId,
+    params.deployment.url,
+    params.table,
+    projectFunctions,
+  )
+
+  return {
+    rows: transformedRows,
     totalRows: limit > 0
       ? ((await runSQL(sqlEndpoint, sqlToken, countQuery))[0].count) as number
       : rows.length,

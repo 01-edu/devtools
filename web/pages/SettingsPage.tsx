@@ -344,22 +344,6 @@ const Accordion = ({
   )
 }
 
-const ToolCard = (
-  { title, desc, empty }: { title: string; desc: string; empty: string },
-) => (
-  <div class='p-3 bg-base-300 rounded-lg'>
-    <h4 class='text-sm font-medium mb-2'>{title}</h4>
-    <p class='text-xs text-base-content/60 mb-3'>{desc}</p>
-    <div class='text-xs text-base-content/40 italic'>{empty}</div>
-    <A
-      params={{ tool: title.toLowerCase().replace(/\s/g, '-') }}
-      class='btn btn-sm btn-outline mt-3 gap-1'
-    >
-      <Settings class='w-3 h-3' /> Add {title.split(' ').pop()}
-    </A>
-  </div>
-)
-
 const addDeploymentError = signal<string | null>(null)
 const handleSubmit = async (e: TargetedEvent<HTMLFormElement>) => {
   e.preventDefault()
@@ -699,22 +683,6 @@ const DeploymentsSettingsPage = () => {
             </div>
           </EditCard>
         </form>
-      )}
-      {dep && (
-        <Card title='Tools'>
-          <div class='space-y-4'>
-            <ToolCard
-              title='Column Encryptors'
-              desc='Add JS encryptors to encrypt specific columns.'
-              empty='No encryptors configured.'
-            />
-            <ToolCard
-              title='Data Transformers'
-              desc='Transform data before displaying or exporting.'
-              empty='No transformers configured.'
-            />
-          </div>
-        </Card>
       )}
       {!dep && deps.length > 0 && (
         <div class='text-center py-8 text-base-content/40'>

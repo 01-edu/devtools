@@ -15,7 +15,7 @@ async function atomicWrite(filePath: string, content: string): Promise<void> {
   await Deno.rename(tmp, filePath)
 }
 
-const batch = async <T>(
+export const batch = async <T>(
   concurrency: number,
   source: AsyncIterable<T>,
   handler: (item: T) => Promise<unknown>,
