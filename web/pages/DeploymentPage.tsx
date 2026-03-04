@@ -1286,13 +1286,6 @@ function LogsViewer() {
   )
 }
 
-const ComingSoon = ({ title }: { title: string }) => (
-  <div class='p-4'>
-    <h3 class='text-lg font-semibold mb-4'>{title}</h3>
-    <p>This feature is coming soon! 🚀</p>
-  </div>
-)
-
 const schemaPanel = <SchemaPanel />
 const TabViews = {
   tables: (
@@ -1339,7 +1332,7 @@ effect(() => {
 })
 
 const RowDetails = () => {
-  const row = rowDetailsData.data?.rows?.[0]
+  const row = rowDetailsData.data?.rows?.[0] as AnyRecord | undefined
 
   if (rowDetailsData.pending) {
     return (
@@ -1367,7 +1360,7 @@ const RowDetails = () => {
 
   const onUpdateRow = async (e: Event) => {
     e.preventDefault()
-    const row = rowDetailsData.data?.rows?.[0]
+    const row = rowDetailsData.data?.rows?.[0] as AnyRecord | undefined
     if (!row) return
     const tableName = url.params.table || schema.data?.tables?.[0]?.table
     const tableDef = schema.data?.tables?.find((t) => t.table === tableName)
@@ -1382,14 +1375,20 @@ const RowDetails = () => {
     const data: Record<string, unknown> = {}
 
     for (const [key, val] of formData.entries()) {
+      if (row[key] === val) continue
       const col = tableDef.columns.find((c) => c.name === key)
       if (!col) continue
       const type = col.type
-      if (type.includes('Int') || type.includes('Float') || type.includes('Decimal')) {
+      if (
+        type.includes('Int') || type.includes('Float') ||
+        type.includes('Decimal')
+      ) {
         data[key] = Number(val)
       } else if (type.includes('Bool')) {
         data[key] = val === 'on'
-      } else if (type.includes('JSON') || type.includes('Array') || type.includes('Map')) {
+      } else if (
+        type.includes('JSON') || type.includes('Array') || type.includes('Map')
+      ) {
         try {
           data[key] = JSON.parse(val as string)
         } catch {
@@ -1404,7 +1403,7 @@ const RowDetails = () => {
       await api['POST/api/deployment/table/update'].fetch({
         deployment: url.params.dep!,
         table: tableName,
-        pk: { key: pk, value: row[pk] },
+        pk: { key: pk, value: row[pk] as unknown as string },
         data,
       })
       toast('Row updated successfully')
@@ -1431,7 +1430,8 @@ const RowDetails = () => {
       <form onSubmit={onUpdateRow} class='flex-1 flex flex-col min-h-0'>
         <div class='flex-1 overflow-y-auto p-4 space-y-4'>
           {Object.entries(row).map(([key, value]) => {
-            const tableName = url.params.table || schema.data?.tables?.[0]?.table
+            const tableName = url.params.table ||
+              schema.data?.tables?.[0]?.table
             const tableDef = schema.data?.tables?.find((t) =>
               t.table === tableName
             )
@@ -1721,7 +1721,7 @@ const InsertRow = () => {
   const tableName = url.params.table || schema.data?.tables?.[0]?.table
   const tableDef = schema.data?.tables?.find((t) => t.table === tableName)
 
-  if (!tableDef) {
+  if (!tableName || !tableDef) {
     return (
       <div class='p-4 text-base-content/60'>
         Select a table from the schema panel first.
@@ -1739,11 +1739,16 @@ const InsertRow = () => {
       const col = tableDef.columns.find((c) => c.name === key)
       if (!col) continue
       const type = col.type
-      if (type.includes('Int') || type.includes('Float') || type.includes('Decimal')) {
+      if (
+        type.includes('Int') || type.includes('Float') ||
+        type.includes('Decimal')
+      ) {
         data[key] = Number(val)
       } else if (type.includes('Bool')) {
         data[key] = val === 'on'
-      } else if (type.includes('JSON') || type.includes('Array') || type.includes('Map')) {
+      } else if (
+        type.includes('JSON') || type.includes('Array') || type.includes('Map')
+      ) {
         try {
           data[key] = JSON.parse(val as string)
         } catch {

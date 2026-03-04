@@ -6,6 +6,7 @@ import {
 import { DB_SCHEMA_REFRESH_MS } from '/api/lib/env.ts'
 import {
   applyReadTransformers,
+  applyWriteTransformers,
   getProjectFunctions,
 } from '/api/lib/functions.ts'
 
@@ -276,15 +277,33 @@ export const insertTableData = async (
   if (!sqlToken || !sqlEndpoint) {
     throw Error('Missing SQL endpoint or token')
   }
-  const columns = Object.keys(data)
-  const values = Object.values(data).map((v) => {
+  const projectFunctions = getProjectFunctions(deployment.projectId)
+  const transformedData = await applyWriteTransformers(
+    data,
+    deployment.projectId,
+    deployment.url,
+    table,
+    projectFunctions,
+  )
+  const columns = Object.keys(transformedData)
+  const values = Object.values(transformedData).map((v) => {
     if (v === null) return 'NULL'
     if (typeof v === 'string') return `'${v.replace(/'/g, "''")}'`
     return String(v)
   })
-  const query =
-    `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${values.join(', ')})`
-  return await runSQL(sqlEndpoint, sqlToken, query)
+  const query = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${
+    values.join(', ')
+  })`
+  const rows = await runSQL(sqlEndpoint, sqlToken, query)
+
+  // Apply read transformer pipeline
+  return await applyReadTransformers(
+    rows,
+    deployment.projectId,
+    deployment.url,
+    table,
+    projectFunctions,
+  )
 }
 
 export const updateTableData = async (
@@ -294,10 +313,21 @@ export const updateTableData = async (
   data: Record<string, unknown>,
 ) => {
   const { sqlEndpoint, sqlToken } = deployment
+
   if (!sqlToken || !sqlEndpoint) {
     throw Error('Missing SQL endpoint or token')
   }
-  const sets = Object.entries(data).map(([k, v]) => {
+  const projectFunctions = getProjectFunctions(deployment.projectId)
+
+  const transformedData = await applyWriteTransformers(
+    data,
+    deployment.projectId,
+    deployment.url,
+    table,
+    projectFunctions,
+  )
+
+  const sets = Object.entries(transformedData).map(([k, v]) => {
     const val = v === null
       ? 'NULL'
       : typeof v === 'string'
@@ -305,9 +335,23 @@ export const updateTableData = async (
       : String(v)
     return `${k} = ${val}`
   })
+
   const pkVal = typeof pk.value === 'string'
     ? `'${String(pk.value).replace(/'/g, "''")}'`
     : String(pk.value)
-  const query = `UPDATE ${table} SET ${sets.join(', ')} WHERE ${pk.key} = ${pkVal}`
-  return await runSQL(sqlEndpoint, sqlToken, query)
+
+  const query = `UPDATE ${table} SET ${
+    sets.join(', ')
+  } WHERE ${pk.key} = ${pkVal}`
+
+  const rows = await runSQL(sqlEndpoint, sqlToken, query)
+
+  // Apply read transformer pipeline
+  return await applyReadTransformers(
+    rows,
+    deployment.projectId,
+    deployment.url,
+    table,
+    projectFunctions,
+  )
 }

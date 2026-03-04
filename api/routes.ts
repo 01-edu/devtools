@@ -12,7 +12,16 @@ import {
   UserDef,
   UsersCollection,
 } from './schema.ts'
-import { ARR, BOOL, LIST, NUM, OBJ, optional, STR } from '@01edu/api/validator'
+import {
+  ARR,
+  BOOL,
+  LIST,
+  NUM,
+  OBJ,
+  optional,
+  STR,
+  UNION,
+} from '@01edu/api/validator'
 import { respond } from '@01edu/api/response'
 import { deleteCookie } from '@std/http/cookie'
 import { getPicture } from '/api/picture.ts'
@@ -543,7 +552,10 @@ const defs = {
       table: STR('The table name'),
       pk: OBJ({
         key: STR('The primary key column name'),
-        value: OBJ({}, 'The primary key value'),
+        value: UNION(
+          STR('The primary key value'),
+          NUM('The primary key value'),
+        ),
       }),
       data: OBJ({}, 'The row data to update'),
     }),
