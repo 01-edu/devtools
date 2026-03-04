@@ -293,8 +293,9 @@ export const insertTableData = async (
     if (typeof v === 'string') return `'${v.replace(/'/g, "''")}'`
     return String(v)
   })
-  const query =
-    `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${values.join(', ')})`
+  const query = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${
+    values.join(', ')
+  })`
   const rows = await runSQL(sqlEndpoint, sqlToken, query)
 
   // Apply read transformer pipeline
@@ -314,6 +315,7 @@ export const updateTableData = async (
   data: Record<string, unknown>,
 ) => {
   const { sqlEndpoint, sqlToken } = deployment
+
   if (!sqlToken || !sqlEndpoint) {
     throw Error('Missing SQL endpoint or token')
   }
@@ -335,6 +337,7 @@ export const updateTableData = async (
       : String(v)
     return `${k} = ${val}`
   })
+
   const pkVal = typeof pk.value === 'string'
     ? `'${String(pk.value).replace(/'/g, "''")}'`
     : String(pk.value)

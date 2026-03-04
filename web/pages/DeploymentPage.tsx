@@ -1430,7 +1430,8 @@ const RowDetails = () => {
       <form onSubmit={onUpdateRow} class='flex-1 flex flex-col min-h-0'>
         <div class='flex-1 overflow-y-auto p-4 space-y-4'>
           {Object.entries(row).map(([key, value]) => {
-            const tableName = url.params.table || schema.data?.tables?.[0]?.table
+            const tableName = url.params.table ||
+              schema.data?.tables?.[0]?.table
             const tableDef = schema.data?.tables?.find((t) =>
               t.table === tableName
             )
@@ -1720,7 +1721,7 @@ const InsertRow = () => {
   const tableName = url.params.table || schema.data?.tables?.[0]?.table
   const tableDef = schema.data?.tables?.find((t) => t.table === tableName)
 
-  if (!tableDef) {
+  if (!tableName || !tableDef) {
     return (
       <div class='p-4 text-base-content/60'>
         Select a table from the schema panel first.
@@ -1738,11 +1739,16 @@ const InsertRow = () => {
       const col = tableDef.columns.find((c) => c.name === key)
       if (!col) continue
       const type = col.type
-      if (type.includes('Int') || type.includes('Float') || type.includes('Decimal')) {
+      if (
+        type.includes('Int') || type.includes('Float') ||
+        type.includes('Decimal')
+      ) {
         data[key] = Number(val)
       } else if (type.includes('Bool')) {
         data[key] = val === 'on'
-      } else if (type.includes('JSON') || type.includes('Array') || type.includes('Map')) {
+      } else if (
+        type.includes('JSON') || type.includes('Array') || type.includes('Map')
+      ) {
         try {
           data[key] = JSON.parse(val as string)
         } catch {
