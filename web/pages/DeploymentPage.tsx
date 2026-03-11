@@ -26,7 +26,7 @@ import {
   parseSort,
   SortMenu,
 } from '../components/Filtre.tsx'
-import { effect, Signal } from '@preact/signals'
+import { effect, Signal, signal } from '@preact/signals'
 import { api } from '../lib/api.ts'
 import { QueryHistory } from '../components/QueryHistory.tsx'
 
@@ -46,6 +46,33 @@ const schema = api['GET/api/deployment/schema'].signal()
 export const tableData = api['POST/api/deployment/table/data'].signal()
 export const rowDetailsData = api['POST/api/deployment/table/data'].signal()
 export const logDetailsData = api['POST/api/deployment/logs'].signal()
+
+const toastSignal = signal<{ message: string; type: 'info' | 'error' } | null>(
+  null,
+)
+function toast(message: string, type: 'info' | 'error' = 'info') {
+  toastSignal.value = { message, type }
+  setTimeout(() => (toastSignal.value = null), 3000)
+}
+
+effect(() => {
+  const dep = url.params.dep
+  if (dep) {
+    schema.fetch({ url: dep })
+  }
+})
+
+const Toast = () => {
+  if (!toastSignal.value) return null
+  return (
+    <div class='fixed bottom-4 right-4 bg-base-200 shadow-lg rounded-lg p-4 text-sm flex items-center gap-3 z-[100] border border-base-300'>
+      {toastSignal.value.type === 'error' && (
+        <AlertTriangle class='w-5 h-5 text-error' />
+      )}
+      <span class='text-base-content'>{toastSignal.value.message}</span>
+    </div>
+  )
+}
 
 // Effect to fetch schema when deployment URL changes
 effect(() => {
@@ -1259,13 +1286,6 @@ function LogsViewer() {
   )
 }
 
-const ComingSoon = ({ title }: { title: string }) => (
-  <div class='p-4'>
-    <h3 class='text-lg font-semibold mb-4'>{title}</h3>
-    <p>This feature is coming soon! 🚀</p>
-  </div>
-)
-
 const schemaPanel = <SchemaPanel />
 const TabViews = {
   tables: (
@@ -1312,7 +1332,7 @@ effect(() => {
 })
 
 const RowDetails = () => {
-  const row = rowDetailsData.data?.rows?.[0]
+  const row = rowDetailsData.data?.rows?.[0] as AnyRecord | undefined
 
   if (rowDetailsData.pending) {
     return (
@@ -1338,6 +1358,62 @@ const RowDetails = () => {
     )
   }
 
+  const onUpdateRow = async (e: Event) => {
+    e.preventDefault()
+    const row = rowDetailsData.data?.rows?.[0] as AnyRecord | undefined
+    if (!row) return
+    const tableName = url.params.table || schema.data?.tables?.[0]?.table
+    const tableDef = schema.data?.tables?.find((t) => t.table === tableName)
+    const pk = tableDef?.columns?.[0]?.name
+    if (!tableName || !pk) {
+      toast('Could not identify table or primary key', 'error')
+      return
+    }
+
+    const form = e.currentTarget as HTMLFormElement
+    const formData = new FormData(form)
+    const data: Record<string, unknown> = {}
+
+    for (const [key, val] of formData.entries()) {
+      if (row[key] === val) continue
+      const col = tableDef.columns.find((c) => c.name === key)
+      if (!col) continue
+      const type = col.type
+      if (
+        type.includes('Int') || type.includes('Float') ||
+        type.includes('Decimal')
+      ) {
+        data[key] = Number(val)
+      } else if (type.includes('Bool')) {
+        data[key] = val === 'on'
+      } else if (
+        type.includes('JSON') || type.includes('Array') || type.includes('Map')
+      ) {
+        try {
+          data[key] = JSON.parse(val as string)
+        } catch {
+          data[key] = val
+        }
+      } else {
+        data[key] = val
+      }
+    }
+
+    try {
+      await api['POST/api/deployment/table/update'].fetch({
+        deployment: url.params.dep!,
+        table: tableName,
+        pk: { key: pk, value: row[pk] as unknown as string },
+        data,
+      })
+      toast('Row updated successfully')
+      tableData.fetch()
+      navigate({ params: { drawer: null, 'row-id': null } })
+    } catch (err) {
+      toast(err instanceof Error ? err.message : String(err), 'error')
+    }
+  }
+
   return (
     <div class='flex flex-col h-full bg-base-100'>
       <div class='p-4 border-b border-base-300 flex items-center justify-between sticky top-0 bg-base-100 z-10'>
@@ -1351,118 +1427,165 @@ const RowDetails = () => {
         </A>
       </div>
 
-      <div class='flex-1 overflow-y-auto p-4 space-y-4'>
-        {Object.entries(row).map(([key, value]) => {
-          // Find column definition
-          const tableName = url.params.table || schema.data?.tables?.[0]?.table
-          const tableDef = schema.data?.tables?.find((t) =>
-            t.table === tableName
-          )
-          const colDef = tableDef?.columns?.find((c) => c.name === key)
-          const type = colDef?.type || 'String'
+      <form onSubmit={onUpdateRow} class='flex-1 flex flex-col min-h-0'>
+        <div class='flex-1 overflow-y-auto p-4 space-y-4'>
+          {Object.entries(row).map(([key, value]) => {
+            const tableName = url.params.table ||
+              schema.data?.tables?.[0]?.table
+            const tableDef = schema.data?.tables?.find((t) =>
+              t.table === tableName
+            )
+            const colDef = tableDef?.columns?.find((c) => c.name === key)
+            const type = colDef?.type || 'String'
 
-          const isObject = (type.includes('Map') || type.includes('Array') ||
-            type.includes('Tuple') || type.includes('Nested') ||
-            type.includes('JSON') || type.toLowerCase().includes('blob')) &&
-            (typeof value === 'object' || typeof value === 'string')
-          const isNumber = type.includes('Int') || type.includes('Float') ||
-            type.includes('Decimal')
-          const isBoolean = type.includes('Bool')
-          const isDate = type.includes('Date') || type.includes('Time') ||
-            (key.endsWith('At') &&
-              (typeof value === 'number' || !isNaN(Number(value))))
+            const isObject = (type.includes('Map') || type.includes('Array') ||
+              type.includes('Tuple') || type.includes('Nested') ||
+              type.includes('JSON') || type.toLowerCase().includes('blob')) &&
+              (typeof value === 'object' || typeof value === 'string')
+            const isNumber = type.includes('Int') || type.includes('Float') ||
+              type.includes('Decimal')
+            const isBoolean = type.includes('Bool')
+            const isDate = type.includes('Date') || type.includes('Time') ||
+              (key.endsWith('At') &&
+                (typeof value === 'number' || !isNaN(Number(value))))
 
-          return (
-            <div key={key} class='form-control'>
-              <label class='label py-1'>
-                <span class='label-text text-xs font-semibold text-base-content/50 uppercase tracking-wider'>
-                  {key}
-                </span>
-                <span class='label-text-alt text-[10px] opacity-50'>
-                  {type}
-                </span>
-              </label>
+            return (
+              <div key={key} class='form-control'>
+                <label class='label py-1'>
+                  <span class='label-text text-xs font-semibold text-base-content/50 uppercase tracking-wider'>
+                    {key}
+                  </span>
+                  <span class='label-text-alt text-[10px] opacity-50'>
+                    {type}
+                  </span>
+                </label>
 
-              {isObject
-                ? <ObjectInput value={value} />
-                : isBoolean
-                ? <BooleanInput value={Boolean(value)} />
-                : isDate
-                ? (
-                  <DateInput
-                    value={typeof value === 'number'
-                      ? new Date(value < 10000000000 ? value * 1000 : value)
-                        .toISOString()
-                      : String(value)}
-                  />
-                )
-                : isNumber
-                ? <NumberInput value={value as string | number} />
-                : <TextInput value={String(value ?? '')} />}
-            </div>
-          )
-        })}
-      </div>
+                {isObject
+                  ? <ObjectInput name={key} defaultValue={value} />
+                  : isBoolean
+                  ? <BooleanInput name={key} defaultChecked={Boolean(value)} />
+                  : isDate
+                  ? (
+                    <DateInput
+                      name={key}
+                      defaultValue={typeof value === 'number'
+                        ? new Date(value < 10000000000 ? value * 1000 : value)
+                          .toISOString()
+                        : String(value)}
+                    />
+                  )
+                  : isNumber
+                  ? <NumberInput name={key} defaultValue={value as number} />
+                  : <TextInput name={key} defaultValue={String(value ?? '')} />}
+              </div>
+            )
+          })}
+        </div>
 
-      <div class='p-4 border-t border-base-300 sticky bottom-0 bg-base-100'>
-        <button
-          type='button'
-          class='btn btn-primary w-full'
-          disabled
-        >
-          <Save class='h-4 w-4' />
-          Update Row
-        </button>
-      </div>
+        <div class='p-4 border-t border-base-300 sticky bottom-0 bg-base-100'>
+          <button type='submit' class='btn btn-primary w-full'>
+            <Save class='h-4 w-4' />
+            Update Row
+          </button>
+        </div>
+      </form>
     </div>
   )
 }
 
 // Input components for RowDetails
-const ObjectInput = ({ value }: { value: unknown }) => (
-  <textarea
-    class='textarea textarea-bordered font-mono text-sm bg-base-200/50 min-h-32 resize-y'
-    value={JSON.stringify(value, null, 2)}
-    readOnly
-  />
-)
+const ObjectInput = (
+  { defaultValue, readOnly, name }: {
+    defaultValue?: unknown
+    readOnly?: boolean
+    name?: string
+  },
+) => {
+  const stringified = typeof defaultValue === 'string'
+    ? defaultValue
+    : JSON.stringify(defaultValue, null, 2)
+  return (
+    <textarea
+      name={name}
+      class={`textarea textarea-bordered font-mono text-sm min-h-32 resize-y ${
+        readOnly ? 'bg-base-200/50' : ''
+      }`}
+      defaultValue={stringified}
+      readOnly={readOnly}
+    />
+  )
+}
 
-const BooleanInput = ({ value }: { value: boolean }) => (
+const BooleanInput = (
+  { defaultChecked, readOnly, name }: {
+    defaultChecked?: boolean
+    readOnly?: boolean
+    name?: string
+  },
+) => (
   <div class='flex items-center gap-3 p-2'>
     <input
       type='checkbox'
+      name={name}
       class='toggle toggle-primary'
-      checked={value}
-      disabled
+      defaultChecked={defaultChecked}
+      disabled={readOnly}
     />
-    <span class='text-sm font-mono'>{String(value)}</span>
+    <span class='text-sm font-mono'>{String(defaultChecked)}</span>
   </div>
 )
 
-const NumberInput = ({ value }: { value: number | string }) => (
+const NumberInput = (
+  { defaultValue, readOnly, name }: {
+    defaultValue?: number | string
+    readOnly?: boolean
+    name?: string
+  },
+) => (
   <input
     type='number'
-    class='input input-bordered font-mono text-sm bg-base-200/50'
-    value={value}
-    readOnly
+    name={name}
+    class={`input input-bordered font-mono text-sm ${
+      readOnly ? 'bg-base-200/50' : ''
+    }`}
+    defaultValue={defaultValue}
+    readOnly={readOnly}
   />
 )
 
-const DateInput = ({ value }: { value: string }) => (
+const DateInput = (
+  { defaultValue, readOnly, name }: {
+    defaultValue?: string
+    readOnly?: boolean
+    name?: string
+  },
+) => (
   <input
     type='datetime-local'
-    class='input input-bordered font-mono text-sm bg-base-200/50'
-    value={String(value).slice(0, 16)}
-    readOnly
+    name={name}
+    class={`input input-bordered font-mono text-sm ${
+      readOnly ? 'bg-base-200/50' : ''
+    }`}
+    defaultValue={String(defaultValue || '').slice(0, 16)}
+    readOnly={readOnly}
   />
 )
 
-const TextInput = ({ value }: { value: string }) => (
+const TextInput = (
+  { defaultValue, readOnly, name }: {
+    defaultValue?: string
+    readOnly?: boolean
+    name?: string
+  },
+) => (
   <input
     type='text'
-    class='input input-bordered font-mono text-sm bg-base-200/50'
-    value={value}
-    readOnly
+    name={name}
+    class={`input input-bordered font-mono text-sm ${
+      readOnly ? 'bg-base-200/50' : ''
+    }`}
+    defaultValue={defaultValue}
+    readOnly={readOnly}
   />
 )
 
@@ -1597,7 +1720,7 @@ const LogDetails = () => {
 type DrawerTab = 'history' | 'insert' | 'view-row' | 'view-log'
 const drawerViews: Record<DrawerTab, JSX.Element> = {
   history: <QueryHistory />,
-  insert: <ComingSoon title='Insert Row' />,
+  insert: <div></div>,
   'view-row': <RowDetails />,
   'view-log': <LogDetails />,
 } as const
@@ -1682,6 +1805,7 @@ export const DeploymentPage = () => {
           </section>
         </main>
       </div>
+      <Toast />
     </div>
   )
 }
