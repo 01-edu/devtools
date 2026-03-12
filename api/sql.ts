@@ -288,7 +288,7 @@ export const insertTableData = async (
   const columns = Object.keys(transformedData)
   const values = Object.values(transformedData).map((v) => {
     if (v === null) return 'NULL'
-    if (typeof v === 'string') return `'${v.replace(/'/g, "''")}'`
+    if (typeof v === 'string') return `'${v.replaceAll("'", "''")}'`
     return String(v)
   })
   const query = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${
@@ -331,13 +331,13 @@ export const updateTableData = async (
     const val = v === null
       ? 'NULL'
       : typeof v === 'string'
-      ? `'${v.replace(/'/g, "''")}'`
+      ? `'${v.replaceAll("'", "''")}'`
       : String(v)
     return `${k} = ${val}`
   })
 
   const pkVal = typeof pk.value === 'string'
-    ? `'${String(pk.value).replace(/'/g, "''")}'`
+    ? `'${String(pk.value).replaceAll("'", "''")}'`
     : String(pk.value)
 
   const query = `UPDATE ${table} SET ${
