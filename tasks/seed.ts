@@ -3,8 +3,6 @@ import {
   DeploymentsCollection,
   type Project,
   ProjectsCollection,
-  type Team,
-  TeamsCollection,
   type User,
   UsersCollection,
 } from '/api/schema.ts'
@@ -42,19 +40,6 @@ const users: User[] = [
   },
 ]
 
-const teams: Team[] = [
-  {
-    teamId: 'frontend-devs',
-    teamName: 'Frontend Devs',
-    teamMembers: ['admin@example.com', 'member1@example.com'],
-  },
-  {
-    teamId: 'backend-devs',
-    teamName: 'Backend Devs',
-    teamMembers: ['admin@example.com', 'member2@example.com'],
-  },
-]
-
 const projects: Omit<Project, 'createdAt'>[] = [
   {
     slug: 'website-redesign',
@@ -82,7 +67,6 @@ const projects: Omit<Project, 'createdAt'>[] = [
 async function clearCollection(
   collection:
     | typeof UsersCollection
-    | typeof TeamsCollection
     | typeof ProjectsCollection
     | typeof DeploymentsCollection,
 ) {
@@ -98,7 +82,6 @@ async function seed() {
 
   // Clear existing data
   await clearCollection(UsersCollection)
-  await clearCollection(TeamsCollection)
   await clearCollection(ProjectsCollection)
   await clearCollection(DeploymentsCollection)
 
@@ -108,13 +91,6 @@ async function seed() {
     await UsersCollection.insert(user)
   }
   console.log('Users seeded.')
-
-  // Seed teams
-  console.log('Seeding teams...')
-  for (const team of teams) {
-    await TeamsCollection.insert(team)
-  }
-  console.log('Teams seeded.')
 
   // Seed projects
   console.log('Seeding projects...')

@@ -20,3 +20,6 @@ export const CLICKHOUSE_PASSWORD = ENV('CLICKHOUSE_PASSWORD')
 export const DB_SCHEMA_REFRESH_MS = Number(
   ENV('DB_SCHEMA_REFRESH_MS', `${24 * 60 * 60 * 1000}`),
 )
+
+export const STORE_URL = ENV('STORE_URL')
+export const STORE_SECRET = ENV('STORE_SECRET')

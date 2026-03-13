@@ -10,6 +10,7 @@ import {
   Plus,
   Search,
   Settings,
+  Users,
 } from 'lucide-preact'
 import { Dialog, DialogModal } from '../components/Dialog.tsx'
 import { url } from '@01edu/signal-router'
@@ -75,40 +76,6 @@ async function saveProject(
   }
 }
 
-async function saveTeam(e: Event, teamId?: string) {
-  e.preventDefault()
-  const form = e.currentTarget as HTMLFormElement
-  const formData = new FormData(form)
-  const name = formData.get('name') as string
-
-  try {
-    if (teamId) {
-      const team = teams.data?.find((t) => t.teamId === teamId)
-      if (!team) throw new Error('Team not found')
-      await api['PUT/api/team'].fetch({ ...team, teamName: name })
-      toast(`Team "${name}" updated.`, 'info')
-    } else {
-      const newTeamId = formData.get('teamId') as string
-      if (!newTeamId || !name) {
-        toast('Team ID and name are required.', 'error')
-        return
-      }
-
-      if (teams.data?.some((t) => t.teamId === newTeamId)) {
-        toast(`Team ID "${newTeamId}" already exists.`, 'error')
-        return
-      }
-
-      await api['POST/api/teams'].fetch({ teamId: newTeamId, teamName: name })
-      toast(`Team "${name}" created.`, 'info')
-      form.reset()
-    }
-    teams.fetch()
-  } catch (err) {
-    toast(err instanceof Error ? err.message : String(err), 'error')
-  }
-}
-
 function toast(message: string, type: 'info' | 'error' = 'info') {
   toastSignal.value = { message, type }
   setTimeout(() => (toastSignal.value = null), 3000)
@@ -120,49 +87,6 @@ async function deleteProject(slug: string) {
     toast('Project deleted.', 'info')
     projects.fetch()
     navigate({ params: { dialog: null, id: null, key: null }, replace: true })
-  } catch (err) {
-    toast(err instanceof Error ? err.message : String(err), 'error')
-  }
-}
-
-async function deleteTeam(id: string) {
-  try {
-    await api['DELETE/api/team'].fetch({ teamId: id })
-    toast('Team deleted.', 'info')
-    teams.fetch()
-    navigate({ params: { dialog: null, id: null, key: null }, replace: true })
-  } catch (err) {
-    toast(err instanceof Error ? err.message : String(err), 'error')
-  }
-}
-
-async function addUserToTeam(user: User, team: Team) {
-  if (team.teamMembers.includes(user.userEmail)) return
-  const updatedMembers = [...team.teamMembers, user.userEmail]
-  try {
-    await api['PUT/api/team'].fetch({
-      ...team,
-      teamMembers: updatedMembers,
-    })
-    toast(`${user.userFullName} added to ${team.teamName}.`)
-    teams.fetch()
-  } catch (err) {
-    toast(err instanceof Error ? err.message : String(err), 'error')
-  }
-}
-
-async function removeUserFromTeam(user: User, team: Team) {
-  const updatedMembers = team.teamMembers.filter((email) =>
-    email !== user.userEmail
-  )
-  if (updatedMembers.length === team.teamMembers.length) return
-  try {
-    await api['PUT/api/team'].fetch({
-      ...team,
-      teamMembers: updatedMembers,
-    })
-    toast(`${user.userFullName} removed from ${team.teamName}.`)
-    teams.fetch()
   } catch (err) {
     toast(err instanceof Error ? err.message : String(err), 'error')
   }
@@ -205,7 +129,7 @@ const ProjectCard = (
   console.log(project)
   console.log(team)
 
-  const isMember = team.teamMembers.includes(user.data?.userEmail || '')
+  const isMember = team.members.includes(user.data?.userEmail || '')
   return (
     <A
       key={project.slug}
@@ -269,12 +193,12 @@ const TeamMembersRow = ({ user, team }: { user: User; team: Team }) => (
       <input
         type='checkbox'
         class='toggle toggle-sm toggle-primary'
-        checked={team.teamMembers.includes(user.userEmail)}
-        onChange={(e) => {
-          if ((e.target as HTMLInputElement).checked) {
-            addUserToTeam(user, team)
-          } else removeUserFromTeam(user, team)
-        }}
+        checked={team.members.includes(user.userEmail)}
+        // onChange={(e) => {
+        //   if ((e.target as HTMLInputElement).checked) {
+        //     addUserToTeam(user, team)
+        //   } else removeUserFromTeam(user, team)
+        // }}
       />
     </td>
   </tr>
@@ -371,7 +295,7 @@ function ProjectDialog() {
           >
             <option disabled value=''>Select a team</option>
             {teams.data?.map((t) => (
-              <option key={t.teamId} value={t.teamId}>{t.teamName}</option>
+              <option key={t.id} value={t.id}>{t.name}</option>
             ))}
           </select>
         </FormField>
@@ -405,42 +329,6 @@ function ProjectDialog() {
   )
 }
 
-function TeamSettingsSection({ team }: { team: Team }) {
-  return (
-    <div class='space-y-6 max-w-md'>
-      <form
-        onSubmit={(e) => saveTeam(e, team.teamId)}
-        class='space-y-4'
-      >
-        <FormField label='Team Name'>
-          <input
-            type='text'
-            name='name'
-            defaultValue={team.teamName}
-            class='input input-bordered w-full'
-          />
-        </FormField>
-        <button
-          type='submit'
-          class='btn btn-primary btn-sm mt-2'
-        >
-          Save
-        </button>
-      </form>
-      <div class='divider' />
-      <div>
-        <h4 class='font-medium mb-2 text-error'>Danger Zone</h4>
-        <A
-          params={{ dialog: 'delete', id: team.teamId, key: 'team' }}
-          class='btn btn-error btn-sm'
-        >
-          Delete Team
-        </A>
-      </div>
-    </div>
-  )
-}
-
 function TeamMembersSection({ team }: { team: Team }) {
   return (
     <div class='overflow-x-auto pb-10'>
@@ -463,13 +351,13 @@ function TeamMembersSection({ team }: { team: Team }) {
 }
 
 function TeamProjectsSection({ team }: { team: Team }) {
-  const teamProjects = projects.data?.filter((p) => p.teamId === team.teamId) ||
+  const teamProjects = projects.data?.filter((p) => p.teamId === team.id) ||
     []
   return (
     <div>
       <A
         class='btn btn-primary btn-sm mb-4'
-        params={{ dialog: 'add-project', teamId: team.teamId }}
+        params={{ dialog: 'add-project', teamId: team.id }}
       >
         + Add Project
       </A>
@@ -526,65 +414,59 @@ function TeamsManagementDialog() {
     return null
   }
 
-  const selectedTeamId = steamid || (teams.data || [])[0]?.teamId
-  const selectedTeam = teams.data?.find((t) => t.teamId === selectedTeamId)
+  const selectedTeamId = steamid || (teams.data || [])[0]?.id
+  const selectedTeam = teams.data?.find((t) => t.id === selectedTeamId)
 
   return (
     <Dialog id='manage-teams' class='modal'>
       <div class='modal-box w-full max-w-5xl h-[90vh] flex flex-col'>
         <DialogTitle>Team Management</DialogTitle>
-        <div class='flex-1 flex gap-4 overflow-hidden'>
-          <aside class='w-72 shrink-0 border-r border-divider flex flex-col'>
-            <div class='p-4 flex-1 flex flex-col'>
+        <div class='flex-1 flex gap-4 overflow-hidden min-h-0'>
+          <aside class='w-72 shrink-0 border-r border-divider flex flex-col min-h-0'>
+            <div class='p-4 flex-1 flex flex-col min-h-0'>
               <DialogSectionTitle>My Teams</DialogSectionTitle>
-              <ul class='space-y-1 flex-1 overflow-y-auto'>
+              <ul class='space-y-1 flex-1 overflow-y-auto pr-2'>
                 {teams.data?.map((t) => (
-                  <li key={t.teamId}>
+                  <li key={t.id}>
                     <A
-                      params={{ steamid: t.teamId, tab: 'members' }}
-                      class={`w-full text-left px-3 py-2 rounded-md text-sm transition ${
-                        t.teamId === selectedTeamId
-                          ? 'bg-primary/10 text-primary font-medium'
-                          : 'hover:bg-surface2'
+                      params={{ steamid: t.id, tab: 'members' }}
+                      class={`group w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
+                        t.id === selectedTeamId
+                          ? 'bg-primary/10 text-primary font-semibold shadow-sm'
+                          : 'text-text2 hover:bg-surface2 hover:text-text'
                       }`}
                     >
-                      {t.teamName}
+                      <Users
+                        class={`w-4 h-4 shrink-0 ${
+                          t.id === selectedTeamId
+                            ? 'text-primary'
+                            : 'text-text3 group-hover:text-text2'
+                        }`}
+                      />
+                      <span class='flex-1 truncate text-left'>{t.name}</span>
+                      {t.members.length > 0 && (
+                        <span
+                          class={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                            t.id === selectedTeamId
+                              ? 'bg-primary text-primary-content'
+                              : 'bg-surface3 text-text3'
+                          }`}
+                        >
+                          {t.members.length}
+                        </span>
+                      )}
                     </A>
                   </li>
                 ))}
               </ul>
-              <form onSubmit={(e) => saveTeam(e)} class='mt-4 space-y-2'>
-                <FormField label='New team ID'>
-                  <input
-                    type='text'
-                    name='teamId'
-                    required
-                    class='input input-bordered input-sm w-full'
-                  />
-                </FormField>
-                <FormField label='New team name'>
-                  <input
-                    type='text'
-                    name='name'
-                    required
-                    class='input input-bordered input-sm w-full'
-                  />
-                </FormField>
-                <button
-                  type='submit'
-                  class='btn btn-sm btn-primary w-full mt-2'
-                >
-                  + Add Team
-                </button>
-              </form>
             </div>
           </aside>
-          <main class='flex-1 p-4 overflow-y-auto'>
+          <main class='flex-1 p-4 overflow-y-auto min-h-0'>
             {selectedTeam
               ? (
                 <>
                   <h3 class='text-lg font-semibold mb-4'>
-                    {selectedTeam.teamName}
+                    {selectedTeam.name}
                   </h3>
                   <TabNav
                     tab={tab}
@@ -595,9 +477,6 @@ function TeamsManagementDialog() {
                   )}
                   {tab === 'projects' && (
                     <TeamProjectsSection team={selectedTeam} />
-                  )}
-                  {tab === 'settings' && (
-                    <TeamSettingsSection team={selectedTeam} />
                   )}
                 </>
               )
@@ -611,24 +490,18 @@ function TeamsManagementDialog() {
 
 function DeleteDialog() {
   const { dialog, id, key } = url.params
-  if (dialog !== 'delete' || !id || (key !== 'project' && key !== 'team')) {
+  if (dialog !== 'delete' || !id || key !== 'project') {
     return null
   }
 
-  const name = key === 'project'
-    ? projects.data?.find((p) => p.slug === id)?.name
-    : teams.data?.find((t) => t.teamId === id)?.teamName
+  const name = projects.data?.find((p) => p.slug === id)?.name
 
   if (!name) return null
   const canDelete = useSignal(false)
 
   const handleDelete = (e: Event) => {
     e.preventDefault()
-    if (key === 'project') {
-      deleteProject(id)
-    } else if (key === 'team') {
-      deleteTeam(id)
-    }
+    deleteProject(id)
   }
 
   return (
@@ -744,11 +617,11 @@ export function ProjectsPage() {
             />
           )
           : teams.data?.map((team) => {
-            const teamProjects = projectsByTeam[team.teamId] ?? []
+            const teamProjects = projectsByTeam[team.id] ?? []
             return (
-              <section key={team.teamId} class='mb-12 last:mb-0'>
+              <section key={team.id} class='mb-12 last:mb-0'>
                 <SectionTitle
-                  title={team.teamName}
+                  title={team.name}
                   count={teamProjects.length}
                 />
                 {teamProjects.length > 0

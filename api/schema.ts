@@ -18,14 +18,13 @@ export const UserDef = OBJ({
 export type User = Asserted<typeof UserDef>
 
 export const TeamDef = OBJ({
-  teamId: STR('The unique identifier for the team'),
-  teamName: STR('The name of the team'),
-  teamMembers: ARR(
+  id: STR('The unique identifier for the team'),
+  name: STR('The name of the team'),
+  members: ARR(
     STR('The user emails of team members'),
     'The list of user emails who are members of the team',
   ),
 }, 'The team schema definition')
-export type Team = Asserted<typeof TeamDef>
 
 export const ProjectDef = OBJ({
   slug: STR('The unique identifier for the project'),
@@ -68,10 +67,6 @@ export type DatabaseSchema = Asserted<typeof DatabaseSchemaDef>
 
 export const UsersCollection = await createCollection<User, 'userEmail'>(
   { name: 'users', primaryKey: 'userEmail' },
-)
-
-export const TeamsCollection = await createCollection<Team, 'teamId'>(
-  { name: 'teams', primaryKey: 'teamId' },
 )
 
 export const ProjectsCollection = await createCollection<
