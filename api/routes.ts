@@ -7,7 +7,6 @@ import {
   DeploymentsCollection,
   ProjectsCollection,
   TeamDef,
-  TeamsCollection,
   User,
   UserDef,
   UsersCollection,
@@ -39,6 +38,15 @@ import {
   updateTableData,
 } from '/api/sql.ts'
 import { Log } from '@01edu/api/log'
+import { get } from './lmdb-store.ts'
+
+type GoogleGroupItem = {
+  kind: string
+  id: string
+  name: string
+  email?: string
+  _key: string
+}
 
 const withUserSession = async ({ cookies }: RequestContext) => {
   const session = await decodeSession(cookies.session)
@@ -62,12 +70,15 @@ const withDeploymentSession = async (ctx: RequestContext) => {
   return dep
 }
 
-const userInTeam = (teamId: string, userEmail?: string) => {
+const userInTeam = async (teamId: string, userEmail?: string) => {
   if (!userEmail) return false
-  return TeamsCollection.get(teamId)?.teamMembers.includes(userEmail)
+  const members = await get<GoogleGroupItem[]>('google/group', {
+    q: `select(.kind == "admin#directory#member" and (._key | split("/")[2]) == "${teamId}" and .email == "${userEmail}")`,
+  })
+  return members.length > 0
 }
 
-const withDeploymentTableAccess = (
+const withDeploymentTableAccess = async (
   ctx: RequestContext & { session: User },
   deployment: string,
 ) => {
@@ -83,7 +94,7 @@ const withDeploymentTableAccess = (
   const project = ProjectsCollection.get(dep.projectId)
   if (!project) throw respond.NotFound({ message: 'Project not found' })
   if (!project.isPublic && !ctx.session.isAdmin) {
-    if (!userInTeam(project.teamId, ctx.session.userEmail)) {
+    if (!(await userInTeam(project.teamId, ctx.session.userEmail))) {
       throw respond.Forbidden({
         message: 'Access to project tables denied',
       })
@@ -161,67 +172,66 @@ const defs = {
   }),
   'GET/api/teams': route({
     authorize: withUserSession,
-    fn: () => TeamsCollection.values().toArray(),
+    fn: async () => {
+      // Optimized query to fetch only groups and members in one call
+      const allData = await get<GoogleGroupItem[]>('google/group', {
+        q: 'select(.kind == "admin#directory#group" or .kind == "admin#directory#member")',
+      })
+
+      const teamsMap = new Map<
+        string,
+        { id: string; name: string; members: string[] }
+      >()
+
+      // First pass: Initialize groups
+      for (const item of allData) {
+        if (item.kind === 'admin#directory#group') {
+          teamsMap.set(item.id, { id: item.id, name: item.name, members: [] })
+        }
+      }
+
+      // Second pass: Associate members
+      for (const item of allData) {
+        if (item.kind === 'admin#directory#member') {
+          const groupId = item._key.split('/')[2]
+          const team = teamsMap.get(groupId)
+          if (team && item.email) {
+            team.members.push(item.email)
+          }
+        }
+      }
+      return Array.from(teamsMap.values())
+    },
     output: ARR(TeamDef, 'List of teams'),
     description: 'Get all teams',
   }),
-  'POST/api/teams': route({
-    authorize: withAdminSession,
-    fn: (_ctx, team) =>
-      TeamsCollection.insert({
-        teamId: team.teamId,
-        teamName: team.teamName,
-        teamMembers: [],
-      }),
-    input: OBJ({
-      teamId: STR('The ID of the team'),
-      teamName: STR('The name of the team'),
-    }),
-    output: TeamDef,
-    description: 'Create a new team',
-  }),
   'GET/api/team': route({
     authorize: withUserSession,
-    fn: (_ctx, { teamId }) => {
-      const team = TeamsCollection.get(teamId)
-      if (!team) throw respond.NotFound({ message: 'Team not found' })
-      return team
+    fn: async (_ctx, { id }) => {
+      // Optimized query to fetch group and its members in one call
+      const allData = await get<GoogleGroupItem[]>('google/group', {
+        q: `select((.kind == "admin#directory#group" and .id == "${id}") or (.kind == "admin#directory#member" and (._key | split("/")[2]) == "${id}"))`,
+      })
+
+      const group = allData.find((item) =>
+        item.kind === 'admin#directory#group'
+      )
+      if (!group) throw respond.NotFound({ message: 'Team not found' })
+
+      const members = allData
+        .filter((item) => item.kind === 'admin#directory#member')
+        .map((item) => item.email)
+        .filter((e): e is string => !!e)
+
+      return {
+        id: group.id,
+        name: group.name,
+        members,
+      }
     },
-    input: OBJ({ teamId: STR('The ID of the team') }),
+    input: OBJ({ id: STR('The ID of the team') }),
     output: TeamDef,
     description: 'Get a team by ID',
-  }),
-  'PUT/api/team': route({
-    authorize: withAdminSession,
-    fn: (_ctx, input) =>
-      TeamsCollection.update(input.teamId, {
-        teamName: input.teamName,
-        teamMembers: input.teamMembers || undefined,
-      }),
-    input: OBJ({
-      teamId: STR('The ID of the team'),
-      teamName: STR('The name of the team'),
-      teamMembers: optional(
-        ARR(
-          STR('The user emails of team members'),
-          'The list of user emails who are members of the team',
-        ),
-      ),
-    }),
-    output: TeamDef,
-    description: 'Update a team by ID',
-  }),
-  'DELETE/api/team': route({
-    authorize: withAdminSession,
-    fn: (_ctx, { teamId }) => {
-      const team = TeamsCollection.get(teamId)
-      if (!team) throw respond.NotFound({ message: 'Team not found' })
-      TeamsCollection.delete(teamId)
-      return true
-    },
-    input: OBJ({ teamId: STR('The ID of the team') }),
-    output: BOOL('Indicates if the team was deleted'),
-    description: 'Delete a team by ID',
   }),
   'GET/api/projects': route({
     authorize: withUserSession,
@@ -427,7 +437,7 @@ const defs = {
   }),
   'POST/api/deployment/logs': route({
     authorize: withUserSession,
-    fn: (ctx, params) => {
+    fn: async (ctx, params) => {
       const deployment = DeploymentsCollection.get(params.deployment)
       if (!deployment) {
         throw respond.NotFound({ message: 'Deployment not found' })
@@ -440,7 +450,7 @@ const defs = {
       const project = ProjectsCollection.get(deployment.projectId)
       if (!project) throw respond.NotFound({ message: 'Project not found' })
       if (!project.isPublic && !ctx.session.isAdmin) {
-        if (!userInTeam(project.teamId, ctx.session.userEmail)) {
+        if (!(await userInTeam(project.teamId, ctx.session.userEmail))) {
           throw respond.Forbidden({ message: 'Access to project logs denied' })
         }
       }
@@ -476,8 +486,8 @@ const defs = {
   }),
   'POST/api/deployment/table/data': route({
     authorize: withUserSession,
-    fn: (ctx, { deployment, table, ...input }) => {
-      const dep = withDeploymentTableAccess(ctx, deployment)
+    fn: async (ctx, { deployment, table, ...input }) => {
+      const dep = await withDeploymentTableAccess(ctx, deployment)
 
       const schema = DatabaseSchemasCollection.get(deployment)
       if (!schema) throw respond.NotFound({ message: 'Schema not cached yet' })
@@ -529,8 +539,8 @@ const defs = {
   }),
   'POST/api/deployment/table/update': route({
     authorize: withUserSession,
-    fn: (ctx, { deployment, table, pk, data }) => {
-      const dep = withDeploymentTableAccess(ctx, deployment)
+    fn: async (ctx, { deployment, table, pk, data }) => {
+      const dep = await withDeploymentTableAccess(ctx, deployment)
       return updateTableData(dep, table, pk, data)
     },
     input: OBJ({
@@ -565,7 +575,7 @@ const defs = {
       const project = ProjectsCollection.get(dep.projectId)
       if (!project) throw respond.NotFound({ message: 'Project not found' })
       if (!project.isPublic && !ctx.session.isAdmin) {
-        if (!userInTeam(project.teamId, ctx.session.userEmail)) {
+        if (!(await userInTeam(project.teamId, ctx.session.userEmail))) {
           throw new respond.ForbiddenError({
             message: 'Access to project queries denied',
           })
