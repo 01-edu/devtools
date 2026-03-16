@@ -26,6 +26,19 @@ export const TeamDef = OBJ({
   ),
 }, 'The team schema definition')
 
+export const TeamDetailDef = OBJ({
+  id: STR('The unique identifier for the team'),
+  name: STR('The name of the team'),
+  members: ARR(
+    OBJ({
+      email: STR('The email of the team member'),
+      id: STR('The unique identifier of the team member'),
+      name: STR('The full name of the team member'),
+    }),
+    'The list of enriched team members',
+  ),
+}, 'The detailed team schema definition')
+
 export const ProjectDef = OBJ({
   slug: STR('The unique identifier for the project'),
   name: STR('The name of the project'),

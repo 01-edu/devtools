@@ -7,6 +7,7 @@ import {
   DeploymentsCollection,
   ProjectsCollection,
   TeamDef,
+  TeamDetailDef,
   User,
   UserDef,
   UsersCollection,
@@ -38,15 +39,7 @@ import {
   updateTableData,
 } from '/api/sql.ts'
 import { Log } from '@01edu/api/log'
-import { get } from './lmdb-store.ts'
-
-type GoogleGroupItem = {
-  kind: string
-  id: string
-  name: string
-  email?: string
-  _key: string
-}
+import { get, getOne } from './lmdb-store.ts'
 
 const withUserSession = async ({ cookies }: RequestContext) => {
   const session = await decodeSession(cookies.session)
@@ -72,10 +65,11 @@ const withDeploymentSession = async (ctx: RequestContext) => {
 
 const userInTeam = async (teamId: string, userEmail?: string) => {
   if (!userEmail) return false
-  const members = await get<GoogleGroupItem[]>('google/group', {
-    q: `select(.kind == "admin#directory#member" and (._key | split("/")[2]) == "${teamId}" and .email == "${userEmail}")`,
-  })
-  return members.length > 0
+  const matches = await get<{ id: string }[]>(
+    `google/group/${teamId}/member`,
+    { q: `select(.email == "${userEmail}") | { id: .id }` },
+  )
+  return matches.length > 0
 }
 
 const withDeploymentTableAccess = async (
@@ -173,64 +167,91 @@ const defs = {
   'GET/api/teams': route({
     authorize: withUserSession,
     fn: async () => {
-      // Optimized query to fetch only groups and members in one call
-      const allData = await get<GoogleGroupItem[]>('google/group', {
-        q: 'select(.kind == "admin#directory#group" or .kind == "admin#directory#member")',
-      })
+      const groups = await get<{ id: string; name: string }[]>(
+        'google/group',
+        {
+          q: 'select((.kind == "admin#directory#group") and (.email | contains("@01edu")) and (.directMembersCount > 1)) | { id: .id, name: .name }',
+        },
+      )
 
-      const teamsMap = new Map<
-        string,
-        { id: string; name: string; members: string[] }
-      >()
-
-      // First pass: Initialize groups
-      for (const item of allData) {
-        if (item.kind === 'admin#directory#group') {
-          teamsMap.set(item.id, { id: item.id, name: item.name, members: [] })
-        }
-      }
-
-      // Second pass: Associate members
-      for (const item of allData) {
-        if (item.kind === 'admin#directory#member') {
-          const groupId = item._key.split('/')[2]
-          const team = teamsMap.get(groupId)
-          if (team && item.email) {
-            team.members.push(item.email)
+      const teams = await Promise.all(
+        groups.map(async (group) => {
+          const members = await get<{ id: string; email: string }[]>(
+            `google/group/${group.id}`,
+            { q: '{ id: .id, email: .email }' },
+          )
+          const enrichedMembers = await Promise.all(
+            members.map(async (m) => {
+              const user = await getOne<{ name: { fullName: string } }>(
+                'google/user',
+                m.id,
+              )
+              return {
+                email: m.email,
+                id: m.id,
+                name: user?.name?.fullName ?? m.email,
+              }
+            }),
+          )
+          return {
+            id: group.id,
+            name: group.name,
+            members: enrichedMembers,
           }
-        }
-      }
-      return Array.from(teamsMap.values())
+        }),
+      )
+
+      return new Response(JSON.stringify(teams), {
+        headers: {
+          'Cache-Control': 'max-age=3600', // 1 hour
+          'Content-Type': 'application/json',
+        },
+      })
     },
-    output: ARR(TeamDef, 'List of teams'),
+    output: ARR(TeamDetailDef, 'List of teams'),
     description: 'Get all teams',
   }),
   'GET/api/team': route({
     authorize: withUserSession,
     fn: async (_ctx, { id }) => {
-      // Optimized query to fetch group and its members in one call
-      const allData = await get<GoogleGroupItem[]>('google/group', {
-        q: `select((.kind == "admin#directory#group" and .id == "${id}") or (.kind == "admin#directory#member" and (._key | split("/")[2]) == "${id}"))`,
-      })
-
-      const group = allData.find((item) =>
-        item.kind === 'admin#directory#group'
-      )
+      const group = await getOne<{ name: string }>('google/group', id)
       if (!group) throw respond.NotFound({ message: 'Team not found' })
 
-      const members = allData
-        .filter((item) => item.kind === 'admin#directory#member')
-        .map((item) => item.email)
-        .filter((e): e is string => !!e)
+      const members = await get<{ id: string; email: string }[]>(
+        `google/group/${id}`,
+        { q: '{ id: .id, email: .email }' },
+      )
 
-      return {
-        id: group.id,
-        name: group.name,
-        members,
-      }
+      const enrichedMembers = await Promise.all(
+        members.map(async (m) => {
+          const user = await getOne<{ name: { fullName: string } }>(
+            'google/user',
+            m.id,
+          )
+          return {
+            email: m.email,
+            id: m.id,
+            name: user?.name?.fullName ?? m.email,
+          }
+        }),
+      )
+
+      return new Response(
+        JSON.stringify({
+          id,
+          name: group.name,
+          members: enrichedMembers,
+        }),
+        {
+          headers: {
+            'Cache-Control': 'max-age=3600', // 1 hour
+            'Content-Type': 'application/json',
+          },
+        },
+      )
     },
     input: OBJ({ id: STR('The ID of the team') }),
-    output: TeamDef,
+    output: TeamDetailDef,
     description: 'Get a team by ID',
   }),
   'GET/api/projects': route({
