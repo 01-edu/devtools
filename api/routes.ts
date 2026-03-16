@@ -2,6 +2,7 @@ import { makeRouter, route } from '@01edu/api/router'
 import type { RequestContext } from '@01edu/api/context'
 import { handleGoogleCallback, initiateGoogleAuth } from '/api/auth.ts'
 import {
+  AdminsCollection,
   DatabaseSchemasCollection,
   DeploymentDef,
   DeploymentsCollection,
@@ -10,7 +11,7 @@ import {
   TeamDetailDef,
   User,
   UserDef,
-  UsersCollection,
+  // UsersCollection,
 } from './schema.ts'
 import {
   ARR,
@@ -44,7 +45,8 @@ import { get, getOne } from './lmdb-store.ts'
 const withUserSession = async ({ cookies }: RequestContext) => {
   const session = await decodeSession(cookies.session)
   if (!session) throw Error('Missing user session')
-  return session
+  const admin = AdminsCollection.get(session.id)
+  return { ...session, isAdmin: !!admin }
 }
 
 const withAdminSession = async (ctx: RequestContext) => {
@@ -63,11 +65,11 @@ const withDeploymentSession = async (ctx: RequestContext) => {
   return dep
 }
 
-const userInTeam = async (teamId: string, userEmail?: string) => {
-  if (!userEmail) return false
+const userInTeam = async (teamId: string, userId?: string) => {
+  if (!userId) return false
   const matches = await get<{ id: string }[]>(
-    `google/group/${teamId}/member`,
-    { q: `select(.email == "${userEmail}") | { id: .id }` },
+    `google/group/${teamId}`,
+    { q: `select(.id == "${userId}") | { id: .id }` },
   )
   return matches.length > 0
 }
@@ -88,7 +90,7 @@ const withDeploymentTableAccess = async (
   const project = ProjectsCollection.get(dep.projectId)
   if (!project) throw respond.NotFound({ message: 'Project not found' })
   if (!project.isPublic && !ctx.session.isAdmin) {
-    if (!(await userInTeam(project.teamId, ctx.session.userEmail))) {
+    if (!(await userInTeam(project.teamId, ctx.session.id))) {
       throw respond.Forbidden({
         message: 'Access to project tables denied',
       })
@@ -158,12 +160,6 @@ const defs = {
     output: OBJ({}),
     description: 'Logout the user',
   }),
-  'GET/api/users': route({
-    authorize: withAdminSession,
-    fn: () => UsersCollection.values().toArray(),
-    output: ARR(UserDef, 'List of users'),
-    description: 'Get all users',
-  }),
   'GET/api/teams': route({
     authorize: withUserSession,
     fn: async () => {
@@ -175,29 +171,12 @@ const defs = {
       )
 
       const teams = await Promise.all(
-        groups.map(async (group) => {
-          const members = await get<{ id: string; email: string }[]>(
-            `google/group/${group.id}`,
-            { q: '{ id: .id, email: .email }' },
+        groups.map(async (g) => {
+          const members = await get<string[]>(
+            `google/group/${g.id}`,
+            { q: '.id' },
           )
-          const enrichedMembers = await Promise.all(
-            members.map(async (m) => {
-              const user = await getOne<{ name: { fullName: string } }>(
-                'google/user',
-                m.id,
-              )
-              return {
-                email: m.email,
-                id: m.id,
-                name: user?.name?.fullName ?? m.email,
-              }
-            }),
-          )
-          return {
-            id: group.id,
-            name: group.name,
-            members: enrichedMembers,
-          }
+          return { ...g, members }
         }),
       )
 
@@ -208,7 +187,7 @@ const defs = {
         },
       })
     },
-    output: ARR(TeamDetailDef, 'List of teams'),
+    output: ARR(TeamDef, 'List of teams'),
     description: 'Get all teams',
   }),
   'GET/api/team': route({
@@ -228,10 +207,12 @@ const defs = {
             'google/user',
             m.id,
           )
+          const admin = AdminsCollection.get(m.id)
           return {
             email: m.email,
             id: m.id,
             name: user?.name?.fullName ?? m.email,
+            isAdmin: !!admin,
           }
         }),
       )
@@ -471,7 +452,7 @@ const defs = {
       const project = ProjectsCollection.get(deployment.projectId)
       if (!project) throw respond.NotFound({ message: 'Project not found' })
       if (!project.isPublic && !ctx.session.isAdmin) {
-        if (!(await userInTeam(project.teamId, ctx.session.userEmail))) {
+        if (!(await userInTeam(project.teamId, ctx.session.email))) {
           throw respond.Forbidden({ message: 'Access to project logs denied' })
         }
       }
@@ -596,7 +577,7 @@ const defs = {
       const project = ProjectsCollection.get(dep.projectId)
       if (!project) throw respond.NotFound({ message: 'Project not found' })
       if (!project.isPublic && !ctx.session.isAdmin) {
-        if (!(await userInTeam(project.teamId, ctx.session.userEmail))) {
+        if (!(await userInTeam(project.teamId, ctx.session.email))) {
           throw new respond.ForbiddenError({
             message: 'Access to project queries denied',
           })

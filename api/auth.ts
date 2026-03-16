@@ -19,10 +19,11 @@ interface GoogleTokens {
   token_type: string
 }
 
-interface GoogleUserInfo {
+export type GoogleUserInfo = {
   email: string
   name: string
   hd?: string
+  sub: string
   picture?: string
   given_name?: string
   family_name?: string
@@ -99,20 +100,17 @@ export async function handleGoogleCallback(
   // Verify and decode the ID token
   await verifyGoogleToken(tokens.id_token)
   const userInfo = decodeGoogleJWT(tokens.id_token) as GoogleUserInfo
-  // Authenticate admin user (creates if doesn't exist)
-  const userPicture = await savePicture(userInfo.picture)
-  const adminSessionId = await authenticateOauthUser({
-    userEmail: userInfo.email,
-    userFullName: userInfo.name,
-    userPicture,
-  })
+  if (userInfo.picture) {
+    userInfo.picture = await savePicture(userInfo.picture)
+  }
+  const sessionId = await authenticateOauthUser(userInfo)
 
   // Return response with session cookie
   return new Response(null, {
     status: 302,
     headers: {
       'Location': ORIGIN,
-      'Set-Cookie': `session=${adminSessionId}; ${
+      'Set-Cookie': `session=${sessionId}; ${
         Object.entries(GOOGLE_CONFIG.COOKIE_OPTIONS)
           .map(([key, value]) => `${key}=${value}`)
           .join('; ')

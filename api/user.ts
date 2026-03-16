@@ -1,6 +1,8 @@
 import { decodeBase64Url, encodeBase64Url } from '@std/encoding/base64url'
 import { SECRET } from '/api/lib/env.ts'
-import { UsersCollection } from '/api/schema.ts'
+import { getOne } from './lmdb-store.ts'
+import { GoogleUserInfo } from './auth.ts'
+// import { UsersCollection } from '/api/schema.ts'
 
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
@@ -44,40 +46,29 @@ const key = await crypto.subtle.importKey(
 export async function decodeSession(sessionCode?: string) {
   if (sessionCode == null) return
   try {
-    const id = await decryptMessage(sessionCode)
-    return UsersCollection.find(({ userEmail }) => userEmail === id)
+    const json = await decryptMessage(sessionCode)
+    const googleUser = JSON.parse(json) as GoogleUserInfo
+    const user = await getOne<
+      { name: { fullName: string }; thumbnailPhotoUrl: string }
+    >(
+      'google/user',
+      googleUser.sub,
+    )
+    if (!user) throw Error('User not found')
+    return {
+      id: googleUser.sub,
+      email: googleUser.email,
+      fullName: user.name.fullName,
+      picture: user.thumbnailPhotoUrl,
+    }
   } catch {
     // Invalid session code
   }
 }
 
-export async function authenticateOauthUser(
-  oauthInfo: {
-    userEmail: string
-    userFullName: string
-    userPicture: string | undefined
-  },
+export function authenticateOauthUser(
+  oauthInfo: GoogleUserInfo,
 ) {
-  const existingUser = UsersCollection.find(({ userEmail }) =>
-    userEmail === oauthInfo.userEmail.trim()
-  )
-
-  let userEmail: string
-  if (!existingUser) {
-    const newUser = await UsersCollection.insert({
-      ...oauthInfo,
-      isAdmin: false,
-    })
-    userEmail = newUser.userEmail
-  } else {
-    userEmail = existingUser.userEmail
-    const needsUpdate = existingUser.userFullName !== oauthInfo.userFullName ||
-      existingUser.userPicture !== oauthInfo.userPicture
-    needsUpdate && UsersCollection.update(existingUser.userEmail, {
-      userFullName: oauthInfo.userFullName,
-      userPicture: oauthInfo.userPicture,
-    })
-  }
-  // Encrypt
-  return encryptMessage(userEmail)
+  const json = JSON.stringify(oauthInfo)
+  return encryptMessage(json)
 }

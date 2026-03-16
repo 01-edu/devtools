@@ -1,4 +1,4 @@
-import { signal, useSignal } from '@preact/signals'
+import { effect, signal, useSignal } from '@preact/signals'
 import { A, navigate } from '@01edu/signal-router'
 import {
   AlertTriangle,
@@ -20,11 +20,7 @@ import { api, ApiOutput } from '../lib/api.ts'
 import { PageContent, PageHeader, PageLayout } from '../components/Layout.tsx'
 
 type Project = ApiOutput['GET/api/projects'][number]
-type User = ApiOutput['GET/api/users'][number]
-type Team = ApiOutput['GET/api/teams'][number]
-
-const users = api['GET/api/users'].signal()
-users.fetch()
+type Team = ApiOutput['GET/api/team']
 
 const teams = api['GET/api/teams'].signal()
 teams.fetch()
@@ -124,12 +120,10 @@ const EmptyState = (
 )
 
 const ProjectCard = (
-  { project, team }: { project: Project; team: Team },
+  { project, members }: { project: Project; members: string[] },
 ) => {
-  console.log(project)
-  console.log(team)
-
-  const isMember = team.members.includes(user.data?.userEmail || '')
+  const isMember = members.includes(user.data?.id || '')
+  console.log(members, user.data?.id, isMember)
   return (
     <A
       key={project.slug}
@@ -182,18 +176,18 @@ const Toast = () => {
   )
 }
 
-const TeamMembersRow = ({ user, team }: { user: User; team: Team }) => (
+const TeamMembersRow = ({ user }: { user: Team['members'][number] }) => (
   <tr class='border-b border-divider'>
     <td class='py-3'>
-      <div class='font-medium truncate'>{user.userFullName}</div>
-      <div class='text-text2 truncate'>{user.userEmail}</div>
+      <div class='font-medium truncate'>{user.name}</div>
+      <div class='text-text2 truncate'>{user.email}</div>
     </td>
     <td class='py-3'>{user.isAdmin ? 'Admin' : 'Member'}</td>
     <td class='py-3 text-right'>
       <input
         type='checkbox'
         class='toggle toggle-sm toggle-primary'
-        checked={team.members.includes(user.userEmail)}
+        checked={true}
         // onChange={(e) => {
         //   if ((e.target as HTMLInputElement).checked) {
         //     addUserToTeam(user, team)
@@ -341,9 +335,7 @@ function TeamMembersSection({ team }: { team: Team }) {
           </tr>
         </thead>
         <tbody>
-          {users.data?.map((u) => (
-            <TeamMembersRow key={u.userEmail} user={u} team={team} />
-          ))}
+          {team.members.map((u) => <TeamMembersRow key={u.id} user={u} />)}
         </tbody>
       </table>
     </div>
@@ -406,6 +398,16 @@ const TabNav = ({ tab, sections }: { tab: string; sections: string[] }) => (
   </div>
 )
 
+const selectedTeam = api['GET/api/team'].signal()
+effect(() => {
+  const { steamid } = url.params
+  const selectedTeamId = steamid || (teams.data || [])[0]?.id
+  if (selectedTeamId) {
+    selectedTeam.reset()
+    selectedTeam.fetch({ id: selectedTeamId })
+  }
+})
+
 function TeamsManagementDialog() {
   const { dialog, steamid, tab } = url.params
   if (dialog !== 'manage-teams') return null
@@ -413,9 +415,6 @@ function TeamsManagementDialog() {
     navigate({ params: { tab: 'members' }, replace: true })
     return null
   }
-
-  const selectedTeamId = steamid || (teams.data || [])[0]?.id
-  const selectedTeam = teams.data?.find((t) => t.id === selectedTeamId)
 
   return (
     <Dialog id='manage-teams' class='modal'>
@@ -431,14 +430,14 @@ function TeamsManagementDialog() {
                     <A
                       params={{ steamid: t.id, tab: 'members' }}
                       class={`group w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
-                        t.id === selectedTeamId
+                        t.id === steamid
                           ? 'bg-primary/10 text-primary font-semibold shadow-sm'
                           : 'text-text2 hover:bg-surface2 hover:text-text'
                       }`}
                     >
                       <Users
                         class={`w-4 h-4 shrink-0 ${
-                          t.id === selectedTeamId
+                          t.id === steamid
                             ? 'text-primary'
                             : 'text-text3 group-hover:text-text2'
                         }`}
@@ -447,7 +446,7 @@ function TeamsManagementDialog() {
                       {t.members.length > 0 && (
                         <span
                           class={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                            t.id === selectedTeamId
+                            t.id === steamid
                               ? 'bg-primary text-primary-content'
                               : 'bg-surface3 text-text3'
                           }`}
@@ -462,21 +461,21 @@ function TeamsManagementDialog() {
             </div>
           </aside>
           <main class='flex-1 p-4 overflow-y-auto min-h-0'>
-            {selectedTeam
+            {selectedTeam.data
               ? (
                 <>
                   <h3 class='text-lg font-semibold mb-4'>
-                    {selectedTeam.name}
+                    {selectedTeam.data.name}
                   </h3>
                   <TabNav
                     tab={tab}
                     sections={['members', 'projects', 'settings']}
                   />
                   {tab === 'members' && (
-                    <TeamMembersSection team={selectedTeam} />
+                    <TeamMembersSection team={selectedTeam.data} />
                   )}
                   {tab === 'projects' && (
-                    <TeamProjectsSection team={selectedTeam} />
+                    <TeamProjectsSection team={selectedTeam.data} />
                   )}
                 </>
               )
@@ -571,6 +570,18 @@ export function ProjectsPage() {
     : 'pointer-events-none cursor-not-allowed opacity-20'
 
   const hasTeams = teams.data && teams.data.length > 0
+  const sortedTeams = teams.data?.sort((a, b) => {
+    const aHasUser = a.members.includes(user.data?.id || '')
+    const bHasUser = b.members.includes(user.data?.id || '')
+    const aProjects = projectsByTeam[a.id] ?? []
+    const bProjects = projectsByTeam[b.id] ?? []
+    if (aHasUser && !bHasUser) return -1
+    if (!aHasUser && bHasUser) return 1
+    if (aProjects.length > bProjects.length) return -1
+    if (aProjects.length < bProjects.length) return 1
+    return 0
+  }) ?? []
+  
   return (
     <PageLayout>
       <PageHeader>
@@ -616,7 +627,7 @@ export function ProjectsPage() {
                 : 'Contact an administrator'}
             />
           )
-          : teams.data?.map((team) => {
+          : sortedTeams.map((team) => {
             const teamProjects = projectsByTeam[team.id] ?? []
             return (
               <section key={team.id} class='mb-12 last:mb-0'>
@@ -631,7 +642,7 @@ export function ProjectsPage() {
                         <ProjectCard
                           key={p.slug}
                           project={p}
-                          team={team}
+                          members={team.members}
                         />
                       ))}
                     </div>
