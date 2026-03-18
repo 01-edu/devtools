@@ -2,7 +2,6 @@ import { decodeBase64Url, encodeBase64Url } from '@std/encoding/base64url'
 import { SECRET } from '/api/lib/env.ts'
 import { getOne } from './lmdb-store.ts'
 import { GoogleUserInfo } from './auth.ts'
-// import { UsersCollection } from '/api/schema.ts'
 
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()

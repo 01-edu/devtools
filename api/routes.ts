@@ -11,7 +11,6 @@ import {
   TeamDetailDef,
   User,
   UserDef,
-  // UsersCollection,
 } from './schema.ts'
 import {
   ARR,
@@ -67,11 +66,11 @@ const withDeploymentSession = async (ctx: RequestContext) => {
 
 const userInTeam = async (teamId: string, userId?: string) => {
   if (!userId) return false
-  const matches = await get<{ id: string }[]>(
+  const matches = await getOne<{ id: string }>(
     `google/group/${teamId}`,
-    { q: `select(.id == "${userId}") | { id: .id }` },
+    userId,
   )
-  return matches.length > 0
+  return !!matches
 }
 
 const withDeploymentTableAccess = async (
@@ -121,6 +120,15 @@ const projectOutput = OBJ({
   updatedAt: optional(NUM('The last update date of the project')),
 })
 
+const userNameCache = new Map<string, string>()
+const getUserName = async (userId: string) => {
+  if (userNameCache.has(userId)) return userNameCache.get(userId)
+  const user = await getOne<{ name: { fullName: string } }>('google/user', userId)
+  const name = user?.name?.fullName ?? userId
+  userNameCache.set(userId, name)
+  return name
+}
+
 const defs = {
   'GET/api/health': route({
     fn: () => new Response('OK'),
@@ -166,7 +174,7 @@ const defs = {
       const groups = await get<{ id: string; name: string }[]>(
         'google/group',
         {
-          q: 'select((.kind == "admin#directory#group") and (.email | contains("@01edu")) and (.directMembersCount > 1)) | { id: .id, name: .name }',
+          q: 'select((.kind == "admin#directory#group") and (.email | endswith("@01edu.ai")) and (.directMembersCount > 1)) | { id: .id, name: .name }',
         },
       )
 
@@ -203,15 +211,12 @@ const defs = {
 
       const enrichedMembers = await Promise.all(
         members.map(async (m) => {
-          const user = await getOne<{ name: { fullName: string } }>(
-            'google/user',
-            m.id,
-          )
+          const name = await getUserName(m.id)
           const admin = AdminsCollection.get(m.id)
           return {
             email: m.email,
             id: m.id,
-            name: user?.name?.fullName ?? m.email,
+            name,
             isAdmin: !!admin,
           }
         }),

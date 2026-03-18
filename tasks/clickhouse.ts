@@ -41,6 +41,6 @@ if (import.meta.main) {
     console.log('logs table is ready')
   } catch (error) {
     console.error('Error creating ClickHouse table:', { error })
-    // Deno.exit(1)
+    Deno.exit(1)
   }
 }

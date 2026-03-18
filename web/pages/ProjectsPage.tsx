@@ -123,7 +123,6 @@ const ProjectCard = (
   { project, members }: { project: Project; members: string[] },
 ) => {
   const isMember = members.includes(user.data?.id || '')
-  console.log(members, user.data?.id, isMember)
   return (
     <A
       key={project.slug}
@@ -187,12 +186,6 @@ const TeamMembersRow = ({ user }: { user: Team['members'][number] }) => (
       <input
         type='checkbox'
         class='toggle toggle-sm toggle-primary'
-        checked={true}
-        // onChange={(e) => {
-        //   if ((e.target as HTMLInputElement).checked) {
-        //     addUserToTeam(user, team)
-        //   } else removeUserFromTeam(user, team)
-        // }}
       />
     </td>
   </tr>
@@ -569,19 +562,12 @@ export function ProjectsPage() {
     ? ''
     : 'pointer-events-none cursor-not-allowed opacity-20'
 
-  const hasTeams = teams.data && teams.data.length > 0
-  const sortedTeams = teams.data?.sort((a, b) => {
-    const aHasUser = a.members.includes(user.data?.id || '')
-    const bHasUser = b.members.includes(user.data?.id || '')
-    const aProjects = projectsByTeam[a.id] ?? []
-    const bProjects = projectsByTeam[b.id] ?? []
-    if (aHasUser && !bHasUser) return -1
-    if (!aHasUser && bHasUser) return 1
-    if (aProjects.length > bProjects.length) return -1
-    if (aProjects.length < bProjects.length) return 1
-    return 0
-  }) ?? []
-  
+  const sortedTeams =
+    teams.data?.filter((t) =>
+      (t.members.includes(user.data?.id || '') || isAdmin) &&
+      projectsByTeam[t.id]?.length > 0
+    ) ?? []
+
   return (
     <PageLayout>
       <PageHeader>
@@ -617,7 +603,7 @@ export function ProjectsPage() {
       </PageHeader>
 
       <PageContent>
-        {!hasTeams
+        {sortedTeams.length < 1
           ? (
             <EmptyState
               icon={Search}

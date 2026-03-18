@@ -100,9 +100,7 @@ export async function handleGoogleCallback(
   // Verify and decode the ID token
   await verifyGoogleToken(tokens.id_token)
   const userInfo = decodeGoogleJWT(tokens.id_token) as GoogleUserInfo
-  if (userInfo.picture) {
-    userInfo.picture = await savePicture(userInfo.picture)
-  }
+  userInfo.picture &&= await savePicture(userInfo.picture)
   const sessionId = await authenticateOauthUser(userInfo)
 
   // Return response with session cookie
