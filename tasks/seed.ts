@@ -3,57 +3,7 @@ import {
   DeploymentsCollection,
   type Project,
   ProjectsCollection,
-  type Team,
-  TeamsCollection,
-  type User,
-  UsersCollection,
 } from '/api/schema.ts'
-
-const users: User[] = [
-  {
-    userEmail: 'admin@example.com',
-    userFullName: 'Admin User',
-    userPicture: undefined,
-    isAdmin: true,
-  },
-  {
-    userEmail: 'member1@example.com',
-    userFullName: 'Member One',
-    userPicture: undefined,
-    isAdmin: false,
-  },
-  {
-    userEmail: 'member2@example.com',
-    userFullName: 'Member Two',
-    userPicture: undefined,
-    isAdmin: false,
-  },
-  {
-    userEmail: 'clement@01talent.com',
-    userFullName: 'Clement',
-    userPicture: undefined,
-    isAdmin: true,
-  },
-  {
-    userEmail: 'abdou.top@01talent.com',
-    userFullName: 'Abdou Top',
-    userPicture: undefined,
-    isAdmin: true,
-  },
-]
-
-const teams: Team[] = [
-  {
-    teamId: 'frontend-devs',
-    teamName: 'Frontend Devs',
-    teamMembers: ['admin@example.com', 'member1@example.com'],
-  },
-  {
-    teamId: 'backend-devs',
-    teamName: 'Backend Devs',
-    teamMembers: ['admin@example.com', 'member2@example.com'],
-  },
-]
 
 const projects: Omit<Project, 'createdAt'>[] = [
   {
@@ -81,8 +31,6 @@ const projects: Omit<Project, 'createdAt'>[] = [
 
 async function clearCollection(
   collection:
-    | typeof UsersCollection
-    | typeof TeamsCollection
     | typeof ProjectsCollection
     | typeof DeploymentsCollection,
 ) {
@@ -97,24 +45,8 @@ async function seed() {
   console.log('Starting seeding process...')
 
   // Clear existing data
-  await clearCollection(UsersCollection)
-  await clearCollection(TeamsCollection)
   await clearCollection(ProjectsCollection)
   await clearCollection(DeploymentsCollection)
-
-  // Seed users
-  console.log('Seeding users...')
-  for (const user of users) {
-    await UsersCollection.insert(user)
-  }
-  console.log('Users seeded.')
-
-  // Seed teams
-  console.log('Seeding teams...')
-  for (const team of teams) {
-    await TeamsCollection.insert(team)
-  }
-  console.log('Teams seeded.')
 
   // Seed projects
   console.log('Seeding projects...')

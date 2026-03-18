@@ -86,12 +86,9 @@ export async function verifyGoogleToken(idToken: string) {
 export function decodeGoogleJWT(idToken: string) {
   const [, payload] = idToken.split('.')
   if (!payload) throw new Error('Invalid ID token format')
+
   try {
-    return JSON.parse(atob(payload)) as {
-      email: string
-      name: string
-      hd?: string
-    }
+    return JSON.parse(atob(payload))
   } catch {
     throw new Error('Invalid ID token payload')
   }

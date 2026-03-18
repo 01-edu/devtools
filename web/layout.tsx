@@ -22,7 +22,7 @@ const UserInfo = () => {
     <div class='flex items-center gap-2'>
       <div class='flex flex-col items-end'>
         <span class='text-sm font-medium text-base-content select-none'>
-          {user.data.userFullName}
+          {user.data.fullName}
         </span>
 
         <A href='/api/logout' class='text-xs whitespace-nowrap'>
@@ -31,9 +31,9 @@ const UserInfo = () => {
         </A>
       </div>
 
-      {user.data.userPicture && (
+      {user.data.picture && (
         <img
-          src={`/api/picture?hash=${user.data.userPicture}`}
+          src={`/api/picture?hash=${user.data.picture}`}
           alt='profile'
           class='w-10 h-10 rounded-full pointer-events-none'
         />
