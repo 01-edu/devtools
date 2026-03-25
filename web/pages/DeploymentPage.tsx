@@ -328,7 +328,7 @@ effect(() => {
 })
 
 const RowNumberCell = ({ index }: { index: number }) => (
-  <td class='sticky left-0 bg-base-100 tabular-nums font-medium text-xs text-base-content/60 w-12 min-w-[3rem] px-2 py-1 border-r border-base-300/50'>
+  <td class='sticky left-0 bg-base-100 tabular-nums font-medium text-xs text-base-content/60 w-10 min-w-[2.5rem] p-0 pl-1 border-r border-base-300/50 text-left'>
     {(Number(url.params.tpage) || 0) * pageSize + index + 1}
   </td>
 )
@@ -340,7 +340,7 @@ const TableCell = ({ value }: { value: unknown }) => {
 
   if (value === null || value === undefined || value === '') {
     return (
-      <span class='text-xs text-base-content/30 italic select-none text-left block w-full'>
+      <span class='text-sm text-base-content/30 italic select-none text-left block w-full'>
         null
       </span>
     )
@@ -349,7 +349,7 @@ const TableCell = ({ value }: { value: unknown }) => {
   if (isObj) {
     return (
       <code
-        class='font-mono text-xs text-base-content/70 block overflow-hidden text-ellipsis whitespace-nowrap max-w-md text-left w-full'
+        class='font-mono text-sm text-base-content/70 block overflow-hidden text-ellipsis whitespace-nowrap max-w-md text-left w-full'
         title={isTooLong ? stringValue : undefined}
       >
         {stringValue}
@@ -396,7 +396,7 @@ const DataRow = (
         {columns.map((key, i) => (
           <td
             key={i}
-            class='align-top min-w-[6rem] px-3 py-1 border-r border-base-300/30 font-normal text-left'
+            class='align-top min-w-[6rem] p-0 pl-1 border-r border-base-300/30 font-normal text-left'
           >
             <TableCell value={row[key]} />
           </td>
@@ -415,8 +415,8 @@ const TableHeader = (
   return (
     <thead class='sticky top-0 bg-base-200/90 backdrop-blur-sm shadow-sm z-10 border-b-2 border-base-300'>
       <tr>
-        <th class='sticky left-0 bg-base-200 w-12 min-w-[3rem] px-2 py-2 border-r border-base-300/50 text-left'>
-          <span class='text-[10px] font-bold text-base-content/80 uppercase tracking-wider'>
+        <th class='sticky left-0 bg-base-200 w-10 min-w-[2.5rem] p-0 pl-1 border-r border-base-300/50 text-left'>
+          <span class='text-xs font-bold text-base-content/80 uppercase tracking-wider'>
             #
           </span>
         </th>
@@ -430,7 +430,7 @@ const TableHeader = (
                 <th
                   key={key}
                   onClick={() => toggleSort(prefix, key)}
-                  class='whitespace-nowrap min-w-[6rem] px-3 py-2 font-bold text-[10px] text-base-content/80 cursor-pointer hover:bg-base-300/50 border-r border-base-300/50 transition-colors group text-left'
+                  class='whitespace-nowrap min-w-[6rem] p-0 pl-1 font-bold text-xs text-base-content/80 cursor-pointer hover:bg-base-300/50 border-r border-base-300/50 transition-colors group text-left'
                   title={`Sort by ${label}`}
                 >
                   <div class='flex items-center gap-2 shrink-0'>
@@ -454,7 +454,7 @@ const TableHeader = (
             })
           )
           : (
-            <th class='text-left text-xs px-4 py-2 uppercase tracking-wider'>
+            <th class='text-left text-sm px-4 py-2 uppercase tracking-wider'>
               No columns
             </th>
           )}
@@ -1164,7 +1164,9 @@ const AttributesBlock = (
 const logThreads = [
   { label: 'Timestamp', key: 'timestamp' },
   { label: 'Severity', key: 'severity_number' },
+  { label: 'Instance', key: 'service_instance_id' },
   { label: 'Event', key: 'event_name' },
+  { label: 'Version', key: 'service_version' },
   { label: 'Trace', key: 'trace_id' },
   { label: 'Span', key: 'span_id' },
   { label: 'Attributes', key: 'attributes' },
@@ -1240,8 +1242,9 @@ function LogsViewer() {
                       key={log.id}
                       class='hover:bg-base-200/50 border-b border-base-300/50 cursor-pointer transition-colors'
                     >
-                      <td class='px-3 py-1 font-mono text-xs text-base-content/70 tabular-nums w-48 shrink-0 border-r border-base-300/30 text-left'>
-                        <div class='flex items-center gap-2 text-[11px]'>
+                      <RowNumberCell index={logData.data?.indexOf(log) ?? 0} />
+                      <td class='p-0 pl-1 font-mono text-xs text-base-content/70 tabular-nums w-44 shrink-0 border-r border-base-300/30 text-left'>
+                        <div class='flex items-center gap-2 text-xs'>
                           <Clock class='w-3 h-3 shrink-0 opacity-50' />
                           <span
                             class='truncate block'
@@ -1251,26 +1254,29 @@ function LogsViewer() {
                           </span>
                         </div>
                       </td>
-                      <td class='px-3 py-1 w-28 shrink-0 text-left border-r border-base-300/30'>
+                      <td class='p-0 pl-1 w-24 shrink-0 text-left border-r border-base-300/30'>
                         <div
-                          class={`badge badge-outline text-[10px] uppercase font-bold h-5 min-h-[1.25rem] px-2 ${severityColor} ${severityBg} border-current/20`}
+                          class={`badge badge-outline text-xs uppercase font-bold h-5 min-h-[1.25rem] px-2 ${severityColor} ${severityBg} border-current/20`}
                           title={`severity: ${serverityNum}`}
                         >
                           <SeverityIcon class='w-2.5 h-2.5 mr-1' />
                           {severity}
                         </div>
                       </td>
-                      <td class='px-3 py-1 min-w-[12rem] max-w-lg text-left border-r border-base-300/30'>
-                        <div class='flex flex-col leading-tight'>
+                      <td class='p-0 pl-1 w-32 shrink-0 text-left border-r border-base-300/30 text-xs text-base-content/60 font-mono truncate uppercase'>
+                        {log.service_instance_id || '-'}
+                      </td>
+                      <td class='p-0 pl-1 min-w-[12rem] max-w-lg text-left border-r border-base-300/30'>
+                        <div class='flex flex-col leading-tight py-0.5'>
                           <span
-                            class='text-xs text-base-content font-medium truncate block'
+                            class='text-sm text-base-content font-medium truncate block'
                             title={log.event_name}
                           >
                             {log.event_name}
                           </span>
                           {log.body && (
                             <span
-                              class='text-[11px] text-base-content/50 truncate block'
+                              class='text-xs text-base-content/50 truncate block'
                               title={log.body}
                             >
                               {log.body}
@@ -1278,13 +1284,16 @@ function LogsViewer() {
                           )}
                         </div>
                       </td>
-                      <td class='px-3 py-1 w-32 shrink-0 hidden md:table-cell text-left border-r border-base-300/30'>
+                      <td class='p-0 pl-1 w-24 shrink-0 text-left border-r border-base-300/30 text-xs text-base-content/60 font-mono truncate uppercase'>
+                        {log.service_version || '-'}
+                      </td>
+                      <td class='p-0 pl-1 w-32 shrink-0 hidden lg:table-cell text-left border-r border-base-300/30'>
                         <Hex128 hex={log.trace_id} type='trace' />
                       </td>
-                      <td class='px-3 py-1 w-32 shrink-0 hidden md:table-cell text-left border-r border-base-300/30'>
+                      <td class='p-0 pl-1 w-32 shrink-0 hidden lg:table-cell text-left border-r border-base-300/30'>
                         <Hex128 hex={log.span_id} type='span' />
                       </td>
-                      <td class='px-3 py-1 text-[11px] text-base-content/60 hidden lg:table-cell min-w-[10rem] max-w-lg text-left border-r border-base-300/30'>
+                      <td class='p-0 pl-1 text-xs text-base-content/60 hidden xl:table-cell min-w-[10rem] max-w-lg text-left border-r border-base-300/30'>
                         <code
                           class='font-mono block overflow-hidden text-ellipsis whitespace-nowrap'
                           title={JSON.stringify(log.attributes ?? {})}
