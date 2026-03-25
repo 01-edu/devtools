@@ -34,6 +34,7 @@ import {
 import { decodeSession, decryptMessage, encryptMessage } from '/api/user.ts'
 import {
   fetchTablesData,
+  insertTableData,
   runSQL,
   SQLQueryError,
   updateTableData,
@@ -543,6 +544,19 @@ const defs = {
       totalRows: NUM('The total number of rows matching the criteria'),
       rows: ARR(OBJ({}, 'A row of the result set'), 'The result set rows'),
     }),
+  }),
+  'POST/api/deployment/table/insert': route({
+    authorize: withUserSession,
+    fn: (ctx, { deployment, table, data }) => {
+      const dep = withDeploymentTableAccess(ctx, deployment)
+      return insertTableData(dep, table, data)
+    },
+    input: OBJ({
+      deployment: STR("The deployment's URL"),
+      table: STR('The table name'),
+      data: OBJ({}, 'The row data to insert'),
+    }),
+    output: OBJ({}, 'The result of the insert'),
   }),
   'POST/api/deployment/table/update': route({
     authorize: withUserSession,
