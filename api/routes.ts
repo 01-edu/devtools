@@ -124,7 +124,10 @@ const projectOutput = OBJ({
 const userNameCache = new Map<string, string>()
 const getUserName = async (userId: string) => {
   if (userNameCache.has(userId)) return userNameCache.get(userId)
-  const user = await getOne<{ name: { fullName: string } }>('google/user', userId)
+  const user = await getOne<{ name: { fullName: string } }>(
+    'google/user',
+    userId,
+  )
   const name = user?.name?.fullName ?? userId
   userNameCache.set(userId, name)
   return name
@@ -547,8 +550,8 @@ const defs = {
   }),
   'POST/api/deployment/table/insert': route({
     authorize: withUserSession,
-    fn: (ctx, { deployment, table, data }) => {
-      const dep = withDeploymentTableAccess(ctx, deployment)
+    fn: async (ctx, { deployment, table, data }) => {
+      const dep = await withDeploymentTableAccess(ctx, deployment)
       return insertTableData(dep, table, data)
     },
     input: OBJ({

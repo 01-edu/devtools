@@ -394,7 +394,10 @@ const DataRow = (
       <tr class='hover:bg-base-200/50 cursor-pointer transition-colors border-b border-base-200/50 last:border-b-0'>
         <RowNumberCell index={index} />
         {columns.map((key, i) => (
-          <td key={i} class='align-top min-w-[6rem] px-3 py-1 border-r border-base-300/30 font-normal text-left'>
+          <td
+            key={i}
+            class='align-top min-w-[6rem] px-3 py-1 border-r border-base-300/30 font-normal text-left'
+          >
             <TableCell value={row[key]} />
           </td>
         ))}
@@ -413,7 +416,9 @@ const TableHeader = (
     <thead class='sticky top-0 bg-base-200/90 backdrop-blur-sm shadow-sm z-10 border-b-2 border-base-300'>
       <tr>
         <th class='sticky left-0 bg-base-200 w-12 min-w-[3rem] px-2 py-2 border-r border-base-300/50 text-left'>
-          <span class='text-[10px] font-bold text-base-content/80 uppercase tracking-wider'>#</span>
+          <span class='text-[10px] font-bold text-base-content/80 uppercase tracking-wider'>
+            #
+          </span>
         </th>
         {columns.length > 0
           ? (
@@ -429,7 +434,9 @@ const TableHeader = (
                   title={`Sort by ${label}`}
                 >
                   <div class='flex items-center gap-2 shrink-0'>
-                    <span class='truncate flex-1 uppercase tracking-wider'>{label}</span>
+                    <span class='truncate flex-1 uppercase tracking-wider'>
+                      {label}
+                    </span>
                     <div class='shrink-0 w-4 h-4 flex items-center justify-center'>
                       {sort
                         ? (
@@ -446,7 +453,11 @@ const TableHeader = (
               )
             })
           )
-          : <th class='text-left text-xs px-4 py-2 uppercase tracking-wider'>No columns</th>}
+          : (
+            <th class='text-left text-xs px-4 py-2 uppercase tracking-wider'>
+              No columns
+            </th>
+          )}
       </tr>
     </thead>
   )
