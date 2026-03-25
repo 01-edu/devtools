@@ -328,7 +328,7 @@ effect(() => {
 })
 
 const RowNumberCell = ({ index }: { index: number }) => (
-  <td class='sticky left-0 bg-base-100 tabular-nums font-medium text-xs text-base-content/60 w-16 max-w-[4rem]'>
+  <td class='sticky left-0 bg-base-100 tabular-nums font-medium text-xs text-base-content/60 w-12 min-w-[3rem] px-2 py-1 border-r border-base-300/50'>
     {(Number(url.params.tpage) || 0) * pageSize + index + 1}
   </td>
 )
@@ -340,7 +340,7 @@ const TableCell = ({ value }: { value: unknown }) => {
 
   if (value === null || value === undefined || value === '') {
     return (
-      <span class='text-xs text-base-content/30 italic select-none'>
+      <span class='text-xs text-base-content/30 italic select-none text-left block w-full'>
         null
       </span>
     )
@@ -349,7 +349,7 @@ const TableCell = ({ value }: { value: unknown }) => {
   if (isObj) {
     return (
       <code
-        class='font-mono text-xs text-base-content/70 block overflow-hidden text-ellipsis whitespace-nowrap'
+        class='font-mono text-xs text-base-content/70 block overflow-hidden text-ellipsis whitespace-nowrap max-w-md text-left w-full'
         title={isTooLong ? stringValue : undefined}
       >
         {stringValue}
@@ -359,7 +359,7 @@ const TableCell = ({ value }: { value: unknown }) => {
 
   return (
     <span
-      class='block overflow-hidden text-ellipsis whitespace-nowrap text-sm'
+      class='block overflow-hidden text-ellipsis whitespace-nowrap text-sm max-w-md text-left w-full'
       title={isTooLong ? stringValue : undefined}
     >
       {stringValue}
@@ -391,10 +391,10 @@ const DataRow = (
       params={{ drawer: 'view-row', 'row-id': rowId }}
       class='contents'
     >
-      <tr class='hover:bg-base-200/50 cursor-pointer'>
+      <tr class='hover:bg-base-200/50 cursor-pointer transition-colors border-b border-base-200/50 last:border-b-0'>
         <RowNumberCell index={index} />
         {columns.map((key, i) => (
-          <td key={i} class='align-top min-w-[8rem] max-w-[20rem]'>
+          <td key={i} class='align-top min-w-[6rem] px-3 py-1 border-r border-base-300/30 font-normal text-left'>
             <TableCell value={row[key]} />
           </td>
         ))}
@@ -410,10 +410,10 @@ const TableHeader = (
   const sorts = parseSort(prefix).filter((s) => s.key)
 
   return (
-    <thead class='sticky top-0 bg-base-100 shadow-sm z-10'>
+    <thead class='sticky top-0 bg-base-200/90 backdrop-blur-sm shadow-sm z-10 border-b-2 border-base-300'>
       <tr>
-        <th class='sticky left-0 bg-base-100 w-16 min-w-[3rem] max-w-[4rem]'>
-          <span class='text-xs font-semibold text-base-content/70'>#</span>
+        <th class='sticky left-0 bg-base-200 w-12 min-w-[3rem] px-2 py-2 border-r border-base-300/50 text-left'>
+          <span class='text-[10px] font-bold text-base-content/80 uppercase tracking-wider'>#</span>
         </th>
         {columns.length > 0
           ? (
@@ -425,11 +425,11 @@ const TableHeader = (
                 <th
                   key={key}
                   onClick={() => toggleSort(prefix, key)}
-                  class='whitespace-nowrap min-w-[8rem] max-w-[20rem] font-semibold text-base-content/70 cursor-pointer hover:bg-base-200 transition-colors group'
+                  class='whitespace-nowrap min-w-[6rem] px-3 py-2 font-bold text-[10px] text-base-content/80 cursor-pointer hover:bg-base-300/50 border-r border-base-300/50 transition-colors group text-left'
                   title={`Sort by ${label}`}
                 >
-                  <div class='flex items-center gap-1 shrink-0'>
-                    <span class='truncate flex-1'>{label}</span>
+                  <div class='flex items-center gap-2 shrink-0'>
+                    <span class='truncate flex-1 uppercase tracking-wider'>{label}</span>
                     <div class='shrink-0 w-4 h-4 flex items-center justify-center'>
                       {sort
                         ? (
@@ -438,7 +438,7 @@ const TableHeader = (
                             : <ArrowDown class='h-3 w-3 text-primary' />
                         )
                         : (
-                          <ArrowUp class='h-3 w-3 opacity-0 group-hover:opacity-20 transition-opacity' />
+                          <ArrowUp class='h-3 w-3 opacity-0 group-hover:opacity-40 transition-opacity' />
                         )}
                     </div>
                   </div>
@@ -446,7 +446,7 @@ const TableHeader = (
               )
             })
           )
-          : <th class='text-left'>No columns</th>}
+          : <th class='text-left text-xs px-4 py-2 uppercase tracking-wider'>No columns</th>}
       </tr>
     </thead>
   )
@@ -1165,7 +1165,7 @@ const Hex128 = ({ hex, type }: { hex: string; type: 'trace' | 'span' }) => {
 
   return (
     <A
-      class='badge badge-outline badge-sm border-current/20'
+      class='badge badge-outline text-xs h-6 min-h-[1.5rem] px-1.5 border-current/20'
       title={`${type}: ${hex} (${value})`}
       params={{ fl: `${type}_id,eq,${hex}` }}
       style={{
@@ -1227,11 +1227,11 @@ function LogsViewer() {
                   >
                     <tr
                       key={log.id}
-                      class='hover:bg-base-200/50 border-b border-base-300/50 cursor-pointer'
+                      class='hover:bg-base-200/50 border-b border-base-300/50 cursor-pointer transition-colors'
                     >
-                      <td class='p-0 pl-1 font-mono text-xs text-base-content/70 tabular-nums max-w-[12rem]'>
-                        <div class='flex items-center gap-2'>
-                          <Clock class='w-3 h-3 shrink-0' />
+                      <td class='px-3 py-1 font-mono text-xs text-base-content/70 tabular-nums w-48 shrink-0 border-r border-base-300/30 text-left'>
+                        <div class='flex items-center gap-2 text-[11px]'>
+                          <Clock class='w-3 h-3 shrink-0 opacity-50' />
                           <span
                             class='truncate block'
                             title={String(timestamp.getTime())}
@@ -1240,26 +1240,26 @@ function LogsViewer() {
                           </span>
                         </div>
                       </td>
-                      <td class='p-0 max-w-[10rem] text-left'>
+                      <td class='px-3 py-1 w-28 shrink-0 text-left border-r border-base-300/30'>
                         <div
-                          class={`badge badge-outline badge-sm ${severityColor} ${severityBg} border-current/20`}
+                          class={`badge badge-outline text-[10px] uppercase font-bold h-5 min-h-[1.25rem] px-2 ${severityColor} ${severityBg} border-current/20`}
                           title={`severity: ${serverityNum}`}
                         >
-                          <SeverityIcon class='w-3 h-3 mr-1' />
+                          <SeverityIcon class='w-2.5 h-2.5 mr-1' />
                           {severity}
                         </div>
                       </td>
-                      <td class='p-0 min-w-[12rem] max-w-[20rem] text-left'>
-                        <div class='flex flex-col gap-1'>
+                      <td class='px-3 py-1 min-w-[12rem] max-w-lg text-left border-r border-base-300/30'>
+                        <div class='flex flex-col leading-tight'>
                           <span
-                            class='text-sm text-base-content font-medium truncate'
+                            class='text-xs text-base-content font-medium truncate block'
                             title={log.event_name}
                           >
                             {log.event_name}
                           </span>
                           {log.body && (
                             <span
-                              class='text-xs text-base-content/50 truncate'
+                              class='text-[11px] text-base-content/50 truncate block'
                               title={log.body}
                             >
                               {log.body}
@@ -1267,13 +1267,13 @@ function LogsViewer() {
                           )}
                         </div>
                       </td>
-                      <td class='p-0 max-w-[12rem] hidden md:table-cell text-left'>
+                      <td class='px-3 py-1 w-32 shrink-0 hidden md:table-cell text-left border-r border-base-300/30'>
                         <Hex128 hex={log.trace_id} type='trace' />
                       </td>
-                      <td class='p-0 max-w-[12rem] hidden md:table-cell text-left'>
+                      <td class='px-3 py-1 w-32 shrink-0 hidden md:table-cell text-left border-r border-base-300/30'>
                         <Hex128 hex={log.span_id} type='span' />
                       </td>
-                      <td class='p-0 text-xs text-base-content/60 hidden lg:table-cell min-w-[12rem] max-w-[16rem] text-left'>
+                      <td class='px-3 py-1 text-[11px] text-base-content/60 hidden lg:table-cell min-w-[10rem] max-w-lg text-left border-r border-base-300/30'>
                         <code
                           class='font-mono block overflow-hidden text-ellipsis whitespace-nowrap'
                           title={JSON.stringify(log.attributes ?? {})}
