@@ -2,6 +2,8 @@ import { A, navigate, url } from '@01edu/signal-router'
 import {
   AlertCircle,
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   Bug,
   ChevronDown,
   ChevronRight,
@@ -25,6 +27,7 @@ import {
   parseFilters,
   parseSort,
   SortMenu,
+  toggleSort,
 } from '../components/Filtre.tsx'
 import { effect, Signal, signal } from '@preact/signals'
 import { api } from '../lib/api.ts'
@@ -199,15 +202,17 @@ const QueryStatus = () => (
     {querier.pending
       ? (
         <div class='flex items-center gap-2'>
-          <div class='w-2 h-2 bg-primary rounded-full animate-pulse' />
+          <div class='w-2 h-2 bg-primary rounded-full' />
           <span class='text-xs text-base-content/60'>Running…</span>
         </div>
       )
-      : (
+      : (querier.data?.rows.length ?? 0) > 0
+      ? (
         <span class='text-xs text-base-content/60'>
-          {querier.data?.rows.length ?? 0} rows
+          {querier.data?.rows.length} rows
         </span>
-      )}
+      )
+      : null}
   </div>
 )
 
@@ -398,28 +403,54 @@ const DataRow = (
   )
 }
 
-const TableHeader = ({ columns }: { columns: string[] }) => (
-  <thead class='sticky top-0 bg-base-100 shadow-sm'>
-    <tr>
-      <th class='sticky left-0 bg-base-100 w-16 min-w-[3rem] max-w-[4rem]'>
-        <span class='text-xs font-semibold text-base-content/70'>#</span>
-      </th>
-      {columns.length > 0
-        ? (
-          columns.map((key) => (
-            <th
-              key={key}
-              class='whitespace-nowrap min-w-[8rem] max-w-[20rem] font-semibold text-base-content/70'
-              title={key}
-            >
-              <span class='truncate block'>{key}</span>
-            </th>
-          ))
-        )
-        : <th class='text-left'>No columns</th>}
-    </tr>
-  </thead>
-)
+const TableHeader = (
+  { columns }: { columns: (string | { key: string; label: string })[] },
+) => {
+  const prefix = url.params.tab === 'tables' ? 't' : 'l'
+  const sorts = parseSort(prefix).filter((s) => s.key)
+
+  return (
+    <thead class='sticky top-0 bg-base-100 shadow-sm z-10'>
+      <tr>
+        <th class='sticky left-0 bg-base-100 w-16 min-w-[3rem] max-w-[4rem]'>
+          <span class='text-xs font-semibold text-base-content/70'>#</span>
+        </th>
+        {columns.length > 0
+          ? (
+            columns.map((col) => {
+              const key = typeof col === 'string' ? col : col.key
+              const label = typeof col === 'string' ? col : col.label
+              const sort = sorts.find((s) => s.key === key)
+              return (
+                <th
+                  key={key}
+                  onClick={() => toggleSort(prefix, key)}
+                  class='whitespace-nowrap min-w-[8rem] max-w-[20rem] font-semibold text-base-content/70 cursor-pointer hover:bg-base-200 transition-colors group'
+                  title={`Sort by ${label}`}
+                >
+                  <div class='flex items-center gap-1 shrink-0'>
+                    <span class='truncate flex-1'>{label}</span>
+                    <div class='shrink-0 w-4 h-4 flex items-center justify-center'>
+                      {sort
+                        ? (
+                          sort.dir === 'asc'
+                            ? <ArrowUp class='h-3 w-3 text-primary' />
+                            : <ArrowDown class='h-3 w-3 text-primary' />
+                        )
+                        : (
+                          <ArrowUp class='h-3 w-3 opacity-0 group-hover:opacity-20 transition-opacity' />
+                        )}
+                    </div>
+                  </div>
+                </th>
+              )
+            })
+          )
+          : <th class='text-left'>No columns</th>}
+      </tr>
+    </thead>
+  )
+}
 
 const PaginationControls = ({ totalPages }: { totalPages: number }) => {
   const tpage = Number(url.params.tpage) || 0
@@ -519,17 +550,15 @@ const DataTable = () => {
 
   return (
     <div class='flex flex-col h-full min-h-0 grow-1 relative'>
-      {isPending && (
+      {!!isPending && (
         <div class='absolute top-0 left-0 right-0 h-0.5 z-20 overflow-hidden bg-base-300'>
-          <div class='h-full bg-primary animate-progress origin-left'></div>
+          <div class='h-full bg-primary w-1/3'></div>
         </div>
       )}
       <div class='flex-1 min-h-0 overflow-hidden'>
         <div
-          class={`w-full overflow-x-auto overflow-y-auto h-full transition-all duration-300 ease-in-out ${
-            isPending
-              ? 'opacity-50 grayscale-[0.5] scale-[0.995]'
-              : 'opacity-100 scale-100'
+          class={`w-full overflow-x-auto overflow-y-auto h-full transition-all duration-200 ease-in-out ${
+            isPending ? 'opacity-60 scale-[0.998]' : 'opacity-100 scale-100'
           }`}
         >
           <TableContent rows={rows} />
@@ -636,7 +665,7 @@ function SchemaPanel() {
                   title='Refresh schema'
                 >
                   <RefreshCw
-                    class={`h-3 w-3 ${schema.pending ? 'animate-spin' : ''}`}
+                    class={`h-3 w-3`}
                   />
                 </button>
               )}
@@ -1122,12 +1151,12 @@ const AttributesBlock = (
 )
 
 const logThreads = [
-  'Timestamp',
-  'Severity',
-  'Event',
-  'Trace',
-  'Span',
-  'Attributes',
+  { label: 'Timestamp', key: 'timestamp' },
+  { label: 'Severity', key: 'severity_number' },
+  { label: 'Event', key: 'event_name' },
+  { label: 'Trace', key: 'trace_id' },
+  { label: 'Span', key: 'span_id' },
+  { label: 'Attributes', key: 'attributes' },
 ] as const
 
 const Hex128 = ({ hex, type }: { hex: string; type: 'trace' | 'span' }) => {
@@ -1156,32 +1185,26 @@ function LogsViewer() {
 
   return (
     <div class='flex flex-col h-full min-h-0 relative'>
-      {isPending && (
+      {!!isPending && (
         <div class='absolute top-0 left-0 right-0 h-0.5 z-20 overflow-hidden bg-base-300'>
           <div class='h-full bg-primary animate-progress origin-left'></div>
         </div>
       )}
       <div class='flex-1 min-h-0 overflow-hidden'>
         <div
-          class={`w-full overflow-x-auto overflow-y-auto h-full transition-all duration-300 ease-in-out p-4 ${
+          class={`w-full overflow-x-auto overflow-y-auto h-full transition-all duration-300 ease-in-out pb-4 ${
             isPending
               ? 'opacity-50 grayscale-[0.5] scale-[0.995]'
               : 'opacity-100 scale-100'
           }`}
         >
           <table class='table table-zebra w-full'>
-            <thead class='sticky top-0 bg-base-100 shadow-sm'>
-              <tr class='border-b border-base-300'>
-                {logThreads.map((header) => (
-                  <th
-                    key={header}
-                    class='text-left font-semibold text-base-content/70 whitespace-nowrap min-w-[8rem] max-w-[20rem]'
-                  >
-                    {header}
-                  </th>
-                ))}
-              </tr>
-            </thead>
+            <TableHeader
+              columns={logThreads as unknown as {
+                key: string
+                label: string
+              }[]}
+            />
             <tbody>
               {filteredLogs.map((log) => {
                 const serverityNum = log.severity_number

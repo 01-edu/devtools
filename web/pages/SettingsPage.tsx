@@ -172,9 +172,9 @@ const EditCard = (
               class='btn btn-primary btn-xs gap-1'
               disabled={saving}
             >
-              {saving
-                ? <Loader2 class='w-3 h-3 animate-spin' />
-                : <Check class='w-3 h-3' />} Save
+              {saving ? <Loader2 class='w-3 h-3' /> : <Check class='w-3 h-3' />}
+              {' '}
+              Save
             </button>
           </div>
         )
@@ -336,7 +336,7 @@ const Accordion = ({
           : <span class='text-sm font-medium'>{enabled ? 'Yes' : 'No'}</span>}
       </div>
       {showChildren && (
-        <div class='pb-2 pt-2 px-3 mb-2 bg-base-300/60 rounded-md animate-in fade-in slide-in-from-top-1 duration-200'>
+        <div class='pb-2 pt-2 px-3 mb-2 bg-base-300/60 rounded-md'>
           {children}
         </div>
       )}
@@ -398,7 +398,7 @@ const AddDeploymentDialog = () => (
           disabled={!!createDeployment.pending}
         >
           {createDeployment.pending
-            ? <Loader2 class='w-4 h-4 animate-spin' />
+            ? <Loader2 class='w-4 h-4' />
             : 'Add Deployment'}
         </button>
       </div>
@@ -440,7 +440,7 @@ function LogsTokenSection({ deploymentUrl }: { deploymentUrl: string }) {
           title='Regenerate'
           onClick={regenerate}
         >
-          <RefreshCw class={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw class={`w-3 h-3`} />
         </button>
       </div>
       {(getDeployment.error || regenToken.error) && (
@@ -717,7 +717,7 @@ export const SettingsPage = () => {
   if (!project.data) {
     return (
       <div class='flex items-center justify-center h-full bg-base-100'>
-        <Loader2 class='w-8 h-8 animate-spin text-primary' />
+        <Loader2 class='w-8 h-8 text-primary' />
       </div>
     )
   }

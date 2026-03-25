@@ -115,6 +115,21 @@ function removeSort(prefix: string, idx: number) {
   setSort(prefix, rows.filter((r) => r.idx !== idx))
 }
 
+export function toggleSort(prefix: string, key: string) {
+  const rows = parseSort(prefix).filter((r) => r.key)
+  const existing = rows.find((r) => r.key === key)
+
+  if (existing) {
+    setSort(prefix, [{
+      idx: 0,
+      key,
+      dir: existing.dir === 'asc' ? 'desc' : 'asc',
+    }])
+  } else {
+    setSort(prefix, [{ idx: 0, key, dir: 'asc' }])
+  }
+}
+
 // --- Components -------------------------------------------------------------
 
 export const FilterMenu = (
