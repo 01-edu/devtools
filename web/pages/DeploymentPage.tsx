@@ -2,6 +2,8 @@ import { A, navigate, url } from '@01edu/signal-router'
 import {
   AlertCircle,
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   Bug,
   ChevronDown,
   ChevronRight,
@@ -25,6 +27,7 @@ import {
   parseFilters,
   parseSort,
   SortMenu,
+  toggleSort,
 } from '../components/Filtre.tsx'
 import { effect, Signal, signal } from '@preact/signals'
 import { api } from '../lib/api.ts'
@@ -199,15 +202,17 @@ const QueryStatus = () => (
     {querier.pending
       ? (
         <div class='flex items-center gap-2'>
-          <div class='w-2 h-2 bg-primary rounded-full animate-pulse' />
+          <div class='w-2 h-2 bg-primary rounded-full' />
           <span class='text-xs text-base-content/60'>Running…</span>
         </div>
       )
-      : (
+      : (querier.data?.rows.length ?? 0) > 0
+      ? (
         <span class='text-xs text-base-content/60'>
-          {querier.data?.rows.length ?? 0} rows
+          {querier.data?.rows.length} rows
         </span>
-      )}
+      )
+      : null}
   </div>
 )
 
@@ -323,7 +328,7 @@ effect(() => {
 })
 
 const RowNumberCell = ({ index }: { index: number }) => (
-  <td class='sticky left-0 bg-base-100 tabular-nums font-medium text-xs text-base-content/60 w-16 max-w-[4rem]'>
+  <td class='sticky left-0 bg-base-100 tabular-nums font-medium text-xs text-base-content/60 w-10 min-w-[2.5rem] p-0 pl-1 border-r border-base-300/50 text-left'>
     {(Number(url.params.tpage) || 0) * pageSize + index + 1}
   </td>
 )
@@ -335,7 +340,7 @@ const TableCell = ({ value }: { value: unknown }) => {
 
   if (value === null || value === undefined || value === '') {
     return (
-      <span class='text-xs text-base-content/30 italic select-none'>
+      <span class='text-sm text-base-content/30 italic select-none text-left block w-full'>
         null
       </span>
     )
@@ -344,7 +349,7 @@ const TableCell = ({ value }: { value: unknown }) => {
   if (isObj) {
     return (
       <code
-        class='font-mono text-xs text-base-content/70 block overflow-hidden text-ellipsis whitespace-nowrap'
+        class='font-mono text-sm text-base-content/70 block overflow-hidden text-ellipsis whitespace-nowrap max-w-md text-left w-full'
         title={isTooLong ? stringValue : undefined}
       >
         {stringValue}
@@ -354,7 +359,7 @@ const TableCell = ({ value }: { value: unknown }) => {
 
   return (
     <span
-      class='block overflow-hidden text-ellipsis whitespace-nowrap text-sm'
+      class='block overflow-hidden text-ellipsis whitespace-nowrap text-sm max-w-md text-left w-full'
       title={isTooLong ? stringValue : undefined}
     >
       {stringValue}
@@ -386,10 +391,10 @@ const DataRow = (
       params={{ drawer: 'view-row', 'row-id': rowId }}
       class='contents'
     >
-      <tr class='hover:bg-base-200/50 cursor-pointer'>
+      <tr class='hover:bg-base-200/50 cursor-pointer transition-colors border-b border-base-200/50 last:border-b-0'>
         <RowNumberCell index={index} />
-        {columns.map((key, i) => (
-          <td key={i} class='align-top min-w-[8rem] max-w-[20rem]'>
+        {columns.map((key) => (
+          <td class='align-top min-w-[6rem] p-0 pl-1 border-r border-base-300/30 font-normal text-left'>
             <TableCell value={row[key]} />
           </td>
         ))}
@@ -398,28 +403,62 @@ const DataRow = (
   )
 }
 
-const TableHeader = ({ columns }: { columns: string[] }) => (
-  <thead class='sticky top-0 bg-base-100 shadow-sm'>
-    <tr>
-      <th class='sticky left-0 bg-base-100 w-16 min-w-[3rem] max-w-[4rem]'>
-        <span class='text-xs font-semibold text-base-content/70'>#</span>
-      </th>
-      {columns.length > 0
-        ? (
-          columns.map((key) => (
-            <th
-              key={key}
-              class='whitespace-nowrap min-w-[8rem] max-w-[20rem] font-semibold text-base-content/70'
-              title={key}
-            >
-              <span class='truncate block'>{key}</span>
+const TableHeader = (
+  { columns }: { columns: (string | { key: string; label: string })[] },
+) => {
+  const prefix = url.params.tab === 'tables' ? 't' : 'l'
+  const sorts = parseSort(prefix).filter((s) => s.key)
+
+  return (
+    <thead class='sticky top-0 bg-base-200/90 backdrop-blur-sm shadow-sm z-10 border-b-2 border-base-300'>
+      <tr>
+        <th class='sticky left-0 bg-base-200 w-10 min-w-[2.5rem] p-0 pl-1 border-r border-base-300/50 text-left'>
+          <span class='text-xs font-bold text-base-content/80 uppercase tracking-wider'>
+            #
+          </span>
+        </th>
+        {columns.length > 0
+          ? (
+            columns.map((col) => {
+              const key = typeof col === 'string' ? col : col.key
+              const label = typeof col === 'string' ? col : col.label
+              const sort = sorts.find((s) => s.key === key)
+              return (
+                <th
+                  key={key}
+                  onClick={() => toggleSort(prefix, key)}
+                  class='whitespace-nowrap min-w-[6rem] p-0 pl-1 font-bold text-xs text-base-content/80 cursor-pointer hover:bg-base-300/50 border-r border-base-300/50 transition-colors group text-left'
+                  title={`Sort by ${label}`}
+                >
+                  <div class='flex items-center gap-2 shrink-0'>
+                    <span class='truncate flex-1 uppercase tracking-wider'>
+                      {label}
+                    </span>
+                    <div class='shrink-0 w-4 h-4 flex items-center justify-center'>
+                      {sort
+                        ? (
+                          sort.dir === 'asc'
+                            ? <ArrowUp class='h-3 w-3 text-primary' />
+                            : <ArrowDown class='h-3 w-3 text-primary' />
+                        )
+                        : (
+                          <ArrowUp class='h-3 w-3 opacity-0 group-hover:opacity-40 transition-opacity' />
+                        )}
+                    </div>
+                  </div>
+                </th>
+              )
+            })
+          )
+          : (
+            <th class='text-left text-sm px-4 py-2 uppercase tracking-wider'>
+              No columns
             </th>
-          ))
-        )
-        : <th class='text-left'>No columns</th>}
-    </tr>
-  </thead>
-)
+          )}
+      </tr>
+    </thead>
+  )
+}
 
 const PaginationControls = ({ totalPages }: { totalPages: number }) => {
   const tpage = Number(url.params.tpage) || 0
@@ -519,17 +558,15 @@ const DataTable = () => {
 
   return (
     <div class='flex flex-col h-full min-h-0 grow-1 relative'>
-      {isPending && (
+      {!!isPending && (
         <div class='absolute top-0 left-0 right-0 h-0.5 z-20 overflow-hidden bg-base-300'>
-          <div class='h-full bg-primary animate-progress origin-left'></div>
+          <div class='h-full bg-primary w-1/3'></div>
         </div>
       )}
       <div class='flex-1 min-h-0 overflow-hidden'>
         <div
-          class={`w-full overflow-x-auto overflow-y-auto h-full transition-all duration-300 ease-in-out ${
-            isPending
-              ? 'opacity-50 grayscale-[0.5] scale-[0.995]'
-              : 'opacity-100 scale-100'
+          class={`w-full overflow-x-auto overflow-y-auto h-full transition-all duration-200 ease-in-out ${
+            isPending ? 'opacity-60 scale-[0.998]' : 'opacity-100 scale-100'
           }`}
         >
           <TableContent rows={rows} />
@@ -635,9 +672,7 @@ function SchemaPanel() {
                   }}
                   title='Refresh schema'
                 >
-                  <RefreshCw
-                    class={`h-3 w-3 ${schema.pending ? 'animate-spin' : ''}`}
-                  />
+                  <RefreshCw class='h-3 w-3' />
                 </button>
               )}
               <div class='text-xs text-base-content/40'>
@@ -653,7 +688,7 @@ function SchemaPanel() {
           </div>
         )}
 
-        {schema.pending && (
+        {!!schema.pending && (
           <div class='flex items-center justify-center py-8'>
             <span class='loading loading-spinner loading-sm'></span>
           </div>
@@ -1122,12 +1157,14 @@ const AttributesBlock = (
 )
 
 const logThreads = [
-  'Timestamp',
-  'Severity',
-  'Event',
-  'Trace',
-  'Span',
-  'Attributes',
+  { label: 'Timestamp', key: 'timestamp' },
+  { label: 'Severity', key: 'severity_number' },
+  { label: 'Instance', key: 'service_instance_id' },
+  { label: 'Event', key: 'event_name' },
+  { label: 'Version', key: 'service_version' },
+  { label: 'Trace', key: 'trace_id' },
+  { label: 'Span', key: 'span_id' },
+  { label: 'Attributes', key: 'attributes' },
 ] as const
 
 const Hex128 = ({ hex, type }: { hex: string; type: 'trace' | 'span' }) => {
@@ -1136,7 +1173,7 @@ const Hex128 = ({ hex, type }: { hex: string; type: 'trace' | 'span' }) => {
 
   return (
     <A
-      class='badge badge-outline badge-sm border-current/20'
+      class='badge badge-outline text-xs h-6 min-h-[1.5rem] px-1.5 border-current/20'
       title={`${type}: ${hex} (${value})`}
       params={{ fl: `${type}_id,eq,${hex}` }}
       style={{
@@ -1156,32 +1193,26 @@ function LogsViewer() {
 
   return (
     <div class='flex flex-col h-full min-h-0 relative'>
-      {isPending && (
+      {!!isPending && (
         <div class='absolute top-0 left-0 right-0 h-0.5 z-20 overflow-hidden bg-base-300'>
           <div class='h-full bg-primary animate-progress origin-left'></div>
         </div>
       )}
       <div class='flex-1 min-h-0 overflow-hidden'>
         <div
-          class={`w-full overflow-x-auto overflow-y-auto h-full transition-all duration-300 ease-in-out p-4 ${
+          class={`w-full overflow-x-auto overflow-y-auto h-full transition-all duration-300 ease-in-out pb-4 ${
             isPending
               ? 'opacity-50 grayscale-[0.5] scale-[0.995]'
               : 'opacity-100 scale-100'
           }`}
         >
           <table class='table table-zebra w-full'>
-            <thead class='sticky top-0 bg-base-100 shadow-sm'>
-              <tr class='border-b border-base-300'>
-                {logThreads.map((header) => (
-                  <th
-                    key={header}
-                    class='text-left font-semibold text-base-content/70 whitespace-nowrap min-w-[8rem] max-w-[20rem]'
-                  >
-                    {header}
-                  </th>
-                ))}
-              </tr>
-            </thead>
+            <TableHeader
+              columns={logThreads as unknown as {
+                key: string
+                label: string
+              }[]}
+            />
             <tbody>
               {filteredLogs.map((log) => {
                 const serverityNum = log.severity_number
@@ -1204,11 +1235,12 @@ function LogsViewer() {
                   >
                     <tr
                       key={log.id}
-                      class='hover:bg-base-200/50 border-b border-base-300/50 cursor-pointer'
+                      class='hover:bg-base-200/50 border-b border-base-300/50 cursor-pointer transition-colors'
                     >
-                      <td class='p-0 pl-1 font-mono text-xs text-base-content/70 tabular-nums max-w-[12rem]'>
-                        <div class='flex items-center gap-2'>
-                          <Clock class='w-3 h-3 shrink-0' />
+                      <RowNumberCell index={logData.data?.indexOf(log) ?? 0} />
+                      <td class='p-0 pl-1 font-mono text-xs text-base-content/70 tabular-nums w-44 shrink-0 border-r border-base-300/30 text-left'>
+                        <div class='flex items-center gap-2 text-xs'>
+                          <Clock class='w-3 h-3 shrink-0 opacity-50' />
                           <span
                             class='truncate block'
                             title={String(timestamp.getTime())}
@@ -1217,26 +1249,29 @@ function LogsViewer() {
                           </span>
                         </div>
                       </td>
-                      <td class='p-0 max-w-[10rem] text-left'>
+                      <td class='p-0 pl-1 w-24 shrink-0 text-left border-r border-base-300/30'>
                         <div
-                          class={`badge badge-outline badge-sm ${severityColor} ${severityBg} border-current/20`}
+                          class={`badge badge-outline text-xs uppercase font-bold h-5 min-h-[1.25rem] px-2 ${severityColor} ${severityBg} border-current/20`}
                           title={`severity: ${serverityNum}`}
                         >
-                          <SeverityIcon class='w-3 h-3 mr-1' />
+                          <SeverityIcon class='w-2.5 h-2.5 mr-1' />
                           {severity}
                         </div>
                       </td>
-                      <td class='p-0 min-w-[12rem] max-w-[20rem] text-left'>
-                        <div class='flex flex-col gap-1'>
+                      <td class='p-0 pl-1 w-32 shrink-0 text-left border-r border-base-300/30 text-xs text-base-content/60 font-mono truncate uppercase'>
+                        {log.service_instance_id || '-'}
+                      </td>
+                      <td class='p-0 pl-1 min-w-[12rem] max-w-lg text-left border-r border-base-300/30'>
+                        <div class='flex flex-col leading-tight py-0.5'>
                           <span
-                            class='text-sm text-base-content font-medium truncate'
+                            class='text-sm text-base-content font-medium truncate block'
                             title={log.event_name}
                           >
                             {log.event_name}
                           </span>
                           {log.body && (
                             <span
-                              class='text-xs text-base-content/50 truncate'
+                              class='text-xs text-base-content/50 truncate block'
                               title={log.body}
                             >
                               {log.body}
@@ -1244,13 +1279,16 @@ function LogsViewer() {
                           )}
                         </div>
                       </td>
-                      <td class='p-0 max-w-[12rem] hidden md:table-cell text-left'>
+                      <td class='p-0 pl-1 w-24 shrink-0 text-left border-r border-base-300/30 text-xs text-base-content/60 font-mono truncate uppercase'>
+                        {log.service_version || '-'}
+                      </td>
+                      <td class='p-0 pl-1 w-32 shrink-0 hidden lg:table-cell text-left border-r border-base-300/30'>
                         <Hex128 hex={log.trace_id} type='trace' />
                       </td>
-                      <td class='p-0 max-w-[12rem] hidden md:table-cell text-left'>
+                      <td class='p-0 pl-1 w-32 shrink-0 hidden lg:table-cell text-left border-r border-base-300/30'>
                         <Hex128 hex={log.span_id} type='span' />
                       </td>
-                      <td class='p-0 text-xs text-base-content/60 hidden lg:table-cell min-w-[12rem] max-w-[16rem] text-left'>
+                      <td class='p-0 pl-1 text-xs text-base-content/60 hidden xl:table-cell min-w-[10rem] max-w-lg text-left border-r border-base-300/30'>
                         <code
                           class='font-mono block overflow-hidden text-ellipsis whitespace-nowrap'
                           title={JSON.stringify(log.attributes ?? {})}
