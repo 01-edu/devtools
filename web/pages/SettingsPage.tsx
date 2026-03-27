@@ -173,8 +173,7 @@ const EditCard = (
               disabled={saving}
             >
               {saving ? <Loader2 class='w-3 h-3' /> : <Check class='w-3 h-3' />}
-              {' '}
-              Save
+              {' Save'}
             </button>
           </div>
         )
@@ -440,7 +439,7 @@ function LogsTokenSection({ deploymentUrl }: { deploymentUrl: string }) {
           title='Regenerate'
           onClick={regenerate}
         >
-          <RefreshCw class={`w-3 h-3`} />
+          <RefreshCw class='w-3 h-3' />
         </button>
       </div>
       {(getDeployment.error || regenToken.error) && (

@@ -393,11 +393,8 @@ const DataRow = (
     >
       <tr class='hover:bg-base-200/50 cursor-pointer transition-colors border-b border-base-200/50 last:border-b-0'>
         <RowNumberCell index={index} />
-        {columns.map((key, i) => (
-          <td
-            key={i}
-            class='align-top min-w-[6rem] p-0 pl-1 border-r border-base-300/30 font-normal text-left'
-          >
+        {columns.map((key) => (
+          <td class='align-top min-w-[6rem] p-0 pl-1 border-r border-base-300/30 font-normal text-left'>
             <TableCell value={row[key]} />
           </td>
         ))}
@@ -675,9 +672,7 @@ function SchemaPanel() {
                   }}
                   title='Refresh schema'
                 >
-                  <RefreshCw
-                    class={`h-3 w-3`}
-                  />
+                  <RefreshCw class='h-3 w-3' />
                 </button>
               )}
               <div class='text-xs text-base-content/40'>
@@ -693,7 +688,7 @@ function SchemaPanel() {
           </div>
         )}
 
-        {schema.pending && (
+        {!!schema.pending && (
           <div class='flex items-center justify-center py-8'>
             <span class='loading loading-spinner loading-sm'></span>
           </div>
