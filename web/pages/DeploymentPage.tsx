@@ -49,6 +49,7 @@ const schema = api['GET/api/deployment/schema'].signal()
 export const tableData = api['POST/api/deployment/table/data'].signal()
 export const rowDetailsData = api['POST/api/deployment/table/data'].signal()
 export const logDetailsData = api['POST/api/deployment/logs'].signal()
+export const metricsData = api['GET/api/deployment/metrics-sql'].signal()
 
 const toastSignal = signal<{ message: string; type: 'info' | 'error' } | null>(
   null,
@@ -795,7 +796,7 @@ function SchemaPanel() {
   )
 }
 
-const TabButton = ({ tabName }: { tabName: 'tables' | 'queries' | 'logs' }) => (
+const TabButton = ({ tabName }: { tabName: 'tables' | 'queries' | 'logs' | 'metrics' }) => (
   <A
     params={{ tab: tabName }}
     role='tab'
@@ -809,7 +810,7 @@ const TabButton = ({ tabName }: { tabName: 'tables' | 'queries' | 'logs' }) => (
 
 function TabNavigation({
   activeTab = 'tables',
-}: { activeTab?: 'tables' | 'queries' | 'logs' }) {
+}: { activeTab?: 'tables' | 'queries' | 'logs' | 'metrics' }) {
   // Get column names from the currently selected table for tables tab
   const selectedTableName = url.params.table || schema.data?.tables?.[0]?.table
   const selectedTable = schema.data?.tables?.find((t) =>
@@ -839,6 +840,7 @@ function TabNavigation({
           <TabButton tabName='tables' />
           <TabButton tabName='queries' />
           <TabButton tabName='logs' />
+          <TabButton tabName='metrics' />
         </div>
 
         <div class='flex flex-wrap items-center gap-2 shrink-0'>
@@ -876,7 +878,7 @@ function TabNavigation({
               </span>
             </A>
           )}
-          {activeTab !== 'queries' && (
+          {activeTab !== 'queries' && activeTab !== 'metrics' && (
             <>
               <FilterMenu filterKeyOptions={filterKeyOptions} tag={activeTab} />
               <SortMenu sortKeyOptions={filterKeyOptions} tag={activeTab} />
@@ -1339,7 +1341,84 @@ const TabViews = {
     </div>
   ),
   logs: <LogsViewer />,
+  metrics: <MetricsViewer />,
   // Add other tab views here as needed
+}
+
+effect(() => {
+  const { dep, tab } = url.params
+  if (dep && tab === 'metrics') {
+    metricsData.fetch({ deployment: dep })
+  }
+})
+
+function MetricsViewer() {
+  const filteredMetrics = metricsData.data || []
+  const isPending = metricsData.pending
+
+  return (
+    <div class='flex flex-col h-full min-h-0 relative'>
+      {!!isPending && (
+        <div class='absolute top-0 left-0 right-0 h-0.5 z-20 overflow-hidden bg-base-300'>
+          <div class='h-full bg-primary animate-progress origin-left'></div>
+        </div>
+      )}
+      <div class='flex-1 min-h-0 overflow-hidden'>
+        <div
+          class={`w-full overflow-x-auto overflow-y-auto h-full transition-all duration-300 ease-in-out pb-4 ${
+            isPending
+              ? 'opacity-50 grayscale-[0.5] scale-[0.995]'
+              : 'opacity-100 scale-100'
+          }`}
+        >
+          <table class='table table-zebra w-full'>
+            <TableHeader
+              columns={[
+                { key: 'query', label: 'Query' },
+                { key: 'count', label: 'Count' },
+                { key: 'duration', label: 'Duration (ms)' },
+                { key: 'explain', label: 'Explain' },
+              ]}
+            />
+            <tbody>
+              {filteredMetrics.map((metric, index) => (
+                <tr
+                  key={index}
+                  class='hover:bg-base-200/50 border-b border-base-300/50 cursor-pointer transition-colors'
+                >
+                  <RowNumberCell index={index} />
+                  <td class='p-3 min-w-[20rem] max-w-lg text-left border-r border-base-300/30 align-top'>
+                    <pre class='font-mono text-xs whitespace-pre-wrap break-all'>{metric.query}</pre>
+                  </td>
+                  <td class='p-3 w-24 shrink-0 text-left border-r border-base-300/30 tabular-nums align-top'>
+                    {metric.count}
+                  </td>
+                  <td class='p-3 w-32 shrink-0 text-left border-r border-base-300/30 tabular-nums align-top'>
+                    {metric.duration}
+                  </td>
+                  <td class='p-3 text-xs text-base-content/60 min-w-[20rem] max-w-lg text-left border-r border-base-300/30 align-top'>
+                    <pre class='font-mono whitespace-pre-wrap break-all'>{metric.explain}</pre>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {filteredMetrics.length === 0 && !isPending && (
+        <div class='px-4 sm:px-6 py-8 text-center'>
+          <div class='flex flex-col items-center gap-4'>
+            <Search class='w-12 h-12 text-base-content/50' />
+            <div>
+              <h3 class='text-lg font-medium text-base-content'>
+                No metrics found
+              </h3>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 effect(() => {
