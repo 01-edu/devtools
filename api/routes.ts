@@ -624,11 +624,11 @@ const defs = {
       } catch (error) {
         if (error instanceof SQLQueryError) {
           if (error.type === 'bad-query') {
-            throw new respond.BadRequestError({
+            throw respond.BadRequest({
               message: `SQL Query Error: ${error.sqlMessage}`,
             })
           } else if (error.type === 'timeout') {
-            throw new respond.BadRequestError({
+            throw respond.BadRequest({
               message: `SQL Query Timeout: ${error.sqlMessage}`,
             })
           }
@@ -645,6 +645,65 @@ const defs = {
       rows: ARR(OBJ({}, 'A row of the result set'), 'The result set rows'),
     }),
     description: 'Run a SQL query against the deployment database',
+  }),
+  'GET/api/deployment/metrics-sql': route({
+    authorize: withUserSession,
+    fn: async (ctx, { deployment }) => {
+      const dep = DeploymentsCollection.get(deployment)
+      if (!dep) throw respond.NotFound({ message: 'Deployment not found' })
+
+      if (!dep.databaseEnabled) {
+        throw respond.BadRequest({
+          message: 'Database not enabled for deployment',
+        })
+      }
+
+      const project = ProjectsCollection.get(dep.projectId)
+      if (!project) throw respond.NotFound({ message: 'Project not found' })
+      if (!project.isPublic && !ctx.session.isAdmin) {
+        if (!(await userInTeam(project.teamId, ctx.session.email))) {
+          throw respond.Forbidden({
+            message: 'Access to project metrics denied',
+          })
+        }
+      }
+
+      const { sqlEndpoint, sqlToken } = dep
+      if (!sqlEndpoint || !sqlToken) {
+        throw respond.BadRequest({
+          message: 'SQL endpoint or token not configured for deployment',
+        })
+      }
+
+      const url = new URL(sqlEndpoint)
+      url.pathname = url.pathname.replace(/\/sql\/?$/, '/metrics-sql')
+
+      try {
+        const res = await fetch(url.toString(), {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${sqlToken}`,
+          },
+        })
+        if (!res.ok) throw new Error(`Status ${res.status}`)
+        return await res.json()
+      } catch (_err) {
+        throw respond.InternalServerError({ message: 'Failed to fetch metrics' })
+      }
+    },
+    input: OBJ({
+      deployment: STR("The deployment's URL"),
+    }),
+    output: ARR(
+      OBJ({
+        query: STR('The SQL query text'),
+        count: NUM('How many times the query has run'),
+        duration: NUM('Total time spent running the query in milliseconds'),
+        explain: STR('The SQL explain text'),
+      }),
+      'Collected query metrics',
+    ),
+    description: 'Get SQL metrics from the deployment',
   }),
 } as const
 
