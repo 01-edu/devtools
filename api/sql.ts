@@ -36,7 +36,7 @@ export async function runSQL(
   query: string,
   params?: unknown,
 ) {
-  const res = await fetch(endpoint, {
+  const res = await fetch(`${endpoint}/execute`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
