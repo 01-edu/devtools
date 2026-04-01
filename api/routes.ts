@@ -675,11 +675,8 @@ const defs = {
         })
       }
 
-      const url = new URL(sqlEndpoint)
-      url.pathname = url.pathname.replace(/\/sql\/?$/, '/metrics-sql')
-
       try {
-        const res = await fetch(url.toString(), {
+        const res = await fetch(`${sqlEndpoint}/metrics`, {
           method: 'GET',
           headers: {
             Authorization: `Bearer ${sqlToken}`,
@@ -688,7 +685,9 @@ const defs = {
         if (!res.ok) throw new Error(`Status ${res.status}`)
         return await res.json()
       } catch (_err) {
-        throw respond.InternalServerError({ message: 'Failed to fetch metrics' })
+        throw respond.InternalServerError({
+          message: 'Failed to fetch metrics',
+        })
       }
     },
     input: OBJ({
