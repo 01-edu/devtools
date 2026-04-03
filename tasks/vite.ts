@@ -1,6 +1,6 @@
 // tasks/vite.js
 import { join } from 'node:path'
-import { AliasOptions, build, createServer } from 'vite'
+import { build, createServer } from 'vite'
 import { apiProxy } from '@01edu/api-proxy'
 import deno from '@deno/vite-plugin'
 import preact from '@preact/preset-vite'
@@ -13,27 +13,27 @@ const plugins = [
   deno(),
 ]
 
-const alias: AliasOptions = [
+const BASE_URL = Deno.env.get('BASE_URL') || '/'
+const preactRuntimeAlias = [
   {
-    find: 'npm:@preact/signals@^2.5.1',
-    replacement: '@preact/signals',
+    find: /^npm:preact(?:@[^/]+)?\/jsx-runtime$/,
+    replacement: 'preact/jsx-runtime',
   },
   {
-    find: 'npm:preact@^10.27.2',
-    replacement: 'preact',
+    find: /^npm:preact(?:@[^/]+)?\/jsx-dev-runtime$/,
+    replacement: 'preact/jsx-dev-runtime',
   },
 ]
+
 // Production build
 if (APP_ENV === 'prod') {
   await build({
     configFile: false,
     root: join(import.meta.dirname!, '../web'),
     plugins,
-    resolve: { alias },
-    build: {
-      outDir: '../dist/web',
-      emptyOutDir: true,
-    },
+    base: BASE_URL,
+    resolve: { alias: preactRuntimeAlias },
+    build: { outDir: '../dist/web', emptyOutDir: true },
   })
   Deno.exit(0)
 }
@@ -43,12 +43,10 @@ const PORT = Number(Deno.env.get('PORT')) || 2119
 const server = await createServer({
   configFile: false,
   root: join(import.meta.dirname!, '../web'),
+  base: BASE_URL,
   plugins: [...plugins, apiProxy({ port: PORT, prefix: '/api/' })],
-  resolve: { alias },
-  server: {
-    port: 7737,
-    host: true,
-  },
+  resolve: { alias: preactRuntimeAlias },
+  server: { port: 7737, host: true },
 })
 await server.listen()
 server.printUrls()

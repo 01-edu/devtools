@@ -12,7 +12,7 @@ import {
   TeamDetailDef,
   User,
   UserDef,
-} from './schema.ts'
+} from '/api/schema.ts'
 import {
   ARR,
   BOOL,
@@ -40,6 +40,7 @@ import {
   SQLQueryError,
   updateTableData,
 } from '/api/sql.ts'
+import { isLocal } from '/api/lib/env.ts'
 import { get, getOne } from './lmdb-store.ts'
 import { log } from '/api/lib/logger.ts'
 import { analyzeQueryWithAI } from '/api/fix-query.ts'
@@ -70,15 +71,25 @@ const MetricSchema = OBJ({
   }, 'SQLite sqlite3_stmt_status counters'),
 })
 
-const withUserSession = async ({ cookies }: RequestContext) => {
-  const session = await decodeSession(cookies.session)
-  if (!session) {
-    log.warn('auth-missing-session')
-    throw new respond.UnauthorizedError({ message: 'Missing user session' })
+const localUser = {
+  id: 'local', // this id is for local env, it will ignore permissions
+  email: 'local@admin.dev',
+  fullName: 'Local Dev',
+  picture: 'https://www.npmjs.com/npm-avatar/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdmF0YXJVUkwiOiJodHRwczovL3MuZ3JhdmF0YXIuY29tL2F2YXRhci9jMzQ1YzkyNTExNjZjNDVlYmViOWFjZTRiYmY5MjFiOT9zaXplPTQ5NiZkZWZhdWx0PXJldHJvIn0.7mU8AfQy7sYbuGZLwK5ZxkfwxfZnxaLOjDqoh5g4H5g',
+  isAdmin: true,
+} as const
+
+const withUserSession = isLocal
+  ? () => localUser
+  : async ({ cookies }: RequestContext) => {
+    const session = await decodeSession(cookies.session)
+    if (!session) {
+      log.warn('auth-missing-session')
+      throw new respond.UnauthorizedError({ message: 'Missing user session' })
+    }
+    const admin = AdminsCollection.get(session.id)
+    return { ...session, isAdmin: !!admin }
   }
-  const admin = AdminsCollection.get(session.id)
-  return { ...session, isAdmin: !!admin }
-}
 
 const withAdminSession = async (ctx: RequestContext) => {
   const session = await withUserSession(ctx)

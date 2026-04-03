@@ -4,9 +4,11 @@ import { server } from '@01edu/api/server'
 import { routeHandler } from '/api/routes.ts'
 import { PORT } from './lib/env.ts'
 import { init } from '/api/lib/functions.ts'
+import { initLogTable } from '/api/clickhouse-client.ts'
 import { startSchemaRefreshLoop } from './sql.ts'
 import { log } from '/api/lib/logger.ts'
 
+await initLogTable()
 await init()
 startSchemaRefreshLoop()
 
