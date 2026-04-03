@@ -21,7 +21,8 @@ export const DB_SCHEMA_REFRESH_MS = Number(
   ENV('DB_SCHEMA_REFRESH_MS', `${24 * 60 * 60 * 1000}`),
 )
 
-export const STORE_URL = ENV('STORE_URL')
-export const STORE_SECRET = ENV('STORE_SECRET')
+export const STORE_URL = ENV('STORE_URL', '')
+export const STORE_SECRET = ENV('STORE_SECRET', '')
 const LOCAL_ENV = ENV('LOCAL_ENV', '')
-export const isLocal = LOCAL_ENV === 'yes' || LOCAL_ENV == '1' || LOCAL_ENV === 'true'
+export const isLocal = LOCAL_ENV === 'yes' || LOCAL_ENV === '1' ||
+  LOCAL_ENV === 'true'

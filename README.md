@@ -96,8 +96,8 @@ deno task docker:logs
 
 ### Docker Compose
 
-Use the compose stack when you want ClickHouse and the app started together.
-It has inline defaults, so no env file is required.
+Use the compose stack when you want ClickHouse and the app started together. It
+has inline defaults, so no env file is required.
 
 ```bash
 docker compose up --build

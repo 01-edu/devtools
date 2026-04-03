@@ -47,7 +47,7 @@ const localUser = {
   id: 'local', // this id is for local env, it will ignore permissions
   email: 'local@admin.dev',
   fullName: 'Local Dev',
-  picture: 'https://www.npmjs.com/npm-avatar/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdmF0YXJVUkwiOiJodHRwczovL3MuZ3JhdmF0YXIuY29tL2F2YXRhci9jMzQ1YzkyNTExNjZjNDVlYmViOWFjZTRiYmY5MjFiOT9zaXplPTQ5NiZkZWZhdWx0PXJldHJvIn0.7mU8AfQy7sYbuGZLwK5ZxkfwxfZnxaLOjDqoh5g4H5g',
+  picture: '',
   isAdmin: true,
 } as const
 
@@ -341,10 +341,7 @@ const defs = {
       const token = await encryptMessage(
         JSON.stringify({ url: deployment.url, tokenSalt }),
       )
-      return {
-        ...deployment,
-        token,
-      }
+      return { ...deployment, token }
     },
     input: OBJ({ url: STR('Deployment URL') }),
     output: deploymentOutput,
@@ -355,21 +352,42 @@ const defs = {
     fn: async (_ctx, input) => {
       const tokenSalt = performance.now().toString()
       const { tokenSalt: _, ...deployment } = await DeploymentsCollection
-        .insert({
-          ...input,
-          tokenSalt,
-        })
+        .insert({ ...input, tokenSalt })
       const token = await encryptMessage(
         JSON.stringify({ url: deployment.url, tokenSalt }),
       )
-      return {
-        ...deployment,
-        token,
-      }
+      return { ...deployment, token }
     },
     input: DeploymentDef,
     output: deploymentOutput,
     description: 'Create a new deployment',
+  }),
+  'POST/api/deployment/local': route({
+    fn: async (_ctx, input) => {
+      if (!isLocal) return respond.NotFound()
+      if (!ProjectsCollection.get('local')) {
+        await ProjectsCollection.insert({
+          slug: 'local',
+          name: 'Local',
+          teamId: 'local',
+          isPublic: true,
+          repositoryUrl: undefined,
+        })
+      }
+
+      if (!DeploymentsCollection.get('dev')) {
+        await DeploymentsCollection.insert({
+          projectId: 'local',
+          url: 'dev',
+          logsEnabled: true,
+          databaseEnabled: !!input.endpoint,
+          sqlEndpoint: input.endpoint ?? new URL(input.endpoint).href,
+          sqlToken: 'local',
+          tokenSalt: 'local',
+        })
+      }
+    },
+    input: { endpoint: optional(STR('Full href of the SQL endpoint')) },
   }),
   'PUT/api/deployment': route({
     authorize: withAdminSession,
@@ -379,10 +397,7 @@ const defs = {
       const token = await encryptMessage(
         JSON.stringify({ url: deployment.url, tokenSalt }),
       )
-      return {
-        ...deployment,
-        token,
-      }
+      return { ...deployment, token }
     },
     input: DeploymentDef,
     output: deploymentOutput,
@@ -737,4 +752,6 @@ const defs = {
 } as const
 
 export type RouteDefinitions = typeof defs
-export const routeHandler = makeRouter(console as unknown as Log, defs)
+export const routeHandler = makeRouter(defs, {
+  log: console as unknown as Log,
+})

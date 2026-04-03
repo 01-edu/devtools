@@ -79,7 +79,7 @@ const numberToHex128 = (() => {
   }
 })()
 
-export async function insertLogs(service_name: string,data: LogsInput) {
+export async function insertLogs(service_name: string, data: LogsInput) {
   const logsToInsert = Array.isArray(data) ? data : [data]
   if (logsToInsert.length === 0) throw respond.NoContent()
 

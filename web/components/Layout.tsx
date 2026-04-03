@@ -1,8 +1,6 @@
-import { JSX } from 'preact'
+import { ComponentChildren } from 'preact'
 
-export const PageLayout = (
-  { children }: { children: JSX.Element | JSX.Element[] },
-) => (
+export const PageLayout = ({ children }: { children: ComponentChildren }) => (
   <div class='h-screen flex justify-center bg-bg'>
     <div class='w-full max-w-7xl h-full bg-base-100 flex flex-col'>
       {children}
@@ -13,7 +11,7 @@ export const PageLayout = (
 export const PageHeader = (
   { children, class: className }: {
     class?: string
-    children: JSX.Element | JSX.Element[]
+    children: ComponentChildren
   },
 ) => (
   <header
@@ -26,8 +24,6 @@ export const PageHeader = (
   </header>
 )
 
-export const PageContent = (
-  { children }: { children: JSX.Element | JSX.Element[] },
-) => (
+export const PageContent = ({ children }: { children: ComponentChildren }) => (
   <main class='flex-1 overflow-y-auto px-4 sm:px-6 py-6 pb-20'>{children}</main>
 )

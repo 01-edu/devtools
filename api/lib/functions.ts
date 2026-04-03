@@ -1,5 +1,5 @@
 import { batch } from '/api/lib/json_store.ts'
-import { join } from '@std/path'
+import { join, toFileUrl } from '@std/path'
 import { ensureDir } from '@std/fs'
 
 // Define the function signatures
@@ -36,12 +36,14 @@ export type LoadedFunction = {
 // Map<projectSlug, List of loaded functions>
 const functionsMap = new Map<string, LoadedFunction[]>()
 let watcher: Deno.FsWatcher | null = null
-const functionsDir = './db/functions'
+const functionsDir = join(import.meta.dirname!, '../../db/functions')
+const functionsDirUrl = toFileUrl(
+  functionsDir.endsWith('/') ? functionsDir : `${functionsDir}/`,
+)
 
 export async function init() {
   await ensureDir(functionsDir)
   await loadAll()
-  startWatcher()
 }
 
 async function loadAll() {
@@ -55,18 +57,15 @@ async function loadAll() {
 
 async function reloadProjectFunctions(slug: string) {
   const projectDir = join(functionsDir, slug)
+  const projectDirUrl = new URL(`${slug}/`, functionsDirUrl)
   const loaded: LoadedFunction[] = []
 
   try {
     await batch(5, Deno.readDir(projectDir), async (entry) => {
       if (entry.isFile && entry.name.endsWith('.js')) {
-        const mainFile = join(projectDir, entry.name)
-        // Build a fresh import URL to bust cache
-        const importUrl = `file://${await Deno.realPath(
-          mainFile,
-        )}?t=${Date.now()}`
+        const mainFileUrl = new URL(entry.name, projectDirUrl)
         try {
-          const module = await import(importUrl)
+          const module = await import(`${mainFileUrl.href}?t=${Date.now()}`)
           // We expect a default export or specific named exports
           const fns = module.default
           if (fns && typeof fns === 'object') {
@@ -93,27 +92,6 @@ async function reloadProjectFunctions(slug: string) {
     }
     functionsMap.delete(slug)
   }
-}
-
-function startWatcher() {
-  if (watcher) return
-  console.info(`Starting function watcher on ${functionsDir}`)
-  watcher = Deno.watchFs(functionsDir, { recursive: true }) // Process events
-  ;(async () => {
-    for await (const event of watcher!) {
-      if (!['modify', 'create', 'remove', 'rename'].includes(event.kind)) {
-        continue
-      }
-      for (const path of event.paths) {
-        if (!path.endsWith('.js')) continue
-        const parts = path.split('/')
-        const fileName = parts.pop()
-        const slug = parts.pop()
-        if (!fileName || !slug) continue
-        await reloadProjectFunctions(slug)
-      }
-    }
-  })()
 }
 
 export function getProjectFunctions(

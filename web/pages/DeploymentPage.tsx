@@ -157,7 +157,8 @@ const LineNumbers = () => {
   return (
     <div class='absolute inset-y-0 left-0 w-11 select-none overflow-hidden border-r border-base-300 z-10'>
       <div class='m-0 px-2.5 py-3 text-xs font-mono text-base-content/50 leading-6 text-right'>
-        {Array(lineCount).keys().map((i) => <div key={i}>{i + 1}</div>).toArray()}
+        {Array(lineCount).keys().map((i) => <div key={i}>{i + 1}</div>)
+          .toArray()}
       </div>
     </div>
   )
