@@ -94,6 +94,27 @@ deno task docker:prod
 deno task docker:logs
 ```
 
+### Docker Compose
+
+Use the compose stack when you want ClickHouse and the app started together.
+It has inline defaults, so no env file is required.
+
+```bash
+docker compose up --build
+```
+
+Override any value from your shell or a local `.env` file. Example:
+
+```bash
+PORT=8877 CLICKHOUSE_PASSWORD=strong-password docker compose up --build
+```
+
+The stack starts:
+
+- `clickhouse`: database server on ports `8123` and `9000`
+- `clickhouse-init`: one-shot schema creation for the `logs` table
+- `app`: compiled application on port `3021`
+
 ### Available Tasks
 
 ```bash

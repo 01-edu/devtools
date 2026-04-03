@@ -108,11 +108,9 @@ async function sha(message: string) {
 const queryHash = new Signal<string>('')
 effect(() => {
   const query = (url.params.q || '').trim()
-  if (query) {
-    sha(query).then((hash) => queryHash.value = hash)
-  } else {
-    queryHash.value = ''
-  }
+  query
+    ? sha(query).then((hash) => queryHash.value = hash)
+    : (queryHash.value = '')
 })
 
 const onSave = () => {
@@ -121,10 +119,7 @@ const onSave = () => {
     if (!queryHash.value) return
     queriesHistory.value = {
       ...queriesHistory.value,
-      [queryHash.value]: {
-        query,
-        timestamp: new Date().toISOString(),
-      },
+      [queryHash.value]: { query, timestamp: new Date().toISOString() },
     }
   }
 }
@@ -162,8 +157,7 @@ const LineNumbers = () => {
   return (
     <div class='absolute inset-y-0 left-0 w-11 select-none overflow-hidden border-r border-base-300 z-10'>
       <div class='m-0 px-2.5 py-3 text-xs font-mono text-base-content/50 leading-6 text-right'>
-        {Array(lineCount)
-          .keys().map((i) => <div key={i}>{i + 1}</div>).toArray()}
+        {Array(lineCount).keys().map((i) => <div key={i}>{i + 1}</div>).toArray()}
       </div>
     </div>
   )

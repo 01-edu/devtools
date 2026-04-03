@@ -13,6 +13,7 @@ COPY ./web /app/web
 RUN deno cache --allow-scripts --lock=deno.lock api/server.ts tasks/vite.ts
 
 # Build frontend (dist/web) and compile backend with static files
+ENV BASE_URL="/"
 RUN deno task prod
 
 # Stage 2: Final image
