@@ -15,7 +15,7 @@ const toggleTheme = () => {
 }
 
 const UserInfo = () => {
-  if (!user.data) return null
+  if (!user.data || user.data.id === 'local') return null
 
   return (
     <div class='flex items-center gap-2'>
