@@ -1,26 +1,34 @@
 import { A, navigate, url } from '@01edu/signal-router'
 import {
+  Activity,
   AlertCircle,
   AlertTriangle,
   ArrowDown,
   ArrowUp,
+  BarChart,
+  BarChart2,
   Bug,
   ChevronDown,
   ChevronRight,
   Clock,
   Columns,
+  Cpu,
+  Database,
   Download,
   FileText,
   Hash,
   Info,
   Link2,
+  PieChart,
   Play,
   Plus,
   RefreshCw,
   Save,
   Search,
   Table,
+  Timer,
   XCircle,
+  Zap,
 } from 'lucide-preact'
 import {
   FilterMenu,
@@ -796,7 +804,9 @@ function SchemaPanel() {
   )
 }
 
-const TabButton = ({ tabName }: { tabName: 'tables' | 'queries' | 'logs' | 'metrics' }) => (
+const TabButton = (
+  { tabName }: { tabName: 'tables' | 'queries' | 'logs' | 'metrics' },
+) => (
   <A
     params={{ tab: tabName }}
     role='tab'
@@ -1352,71 +1362,355 @@ effect(() => {
   }
 })
 
-function MetricsViewer() {
-  const filteredMetrics = metricsData.data || []
-  const isPending = metricsData.pending
+const expandedMetric = signal<number | null>(null)
 
+function formatDuration(ms: number): { value: string; unit: string } {
+  if (ms < 1) return { value: (ms * 1000).toFixed(2), unit: 'μs' }
+  if (ms >= 1000) return { value: (ms / 1000).toFixed(2), unit: 's' }
+  return { value: ms.toFixed(2), unit: 'ms' }
+}
+
+function formatBytes(bytes: number): { value: string; unit: string } {
+  if (bytes < 1024) return { value: bytes.toFixed(2), unit: 'B' }
+  if (bytes < 1024 * 1024) {
+    return { value: (bytes / 1024).toFixed(2), unit: 'KB' }
+  }
+  if (bytes < 1024 * 1024 * 1024) {
+    return { value: (bytes / (1024 * 1024)).toFixed(2), unit: 'MB' }
+  }
+  return { value: (bytes / (1024 * 1024 * 1024)).toFixed(2), unit: 'GB' }
+}
+
+const MEMORY_STATUS_KEYS = new Set(['memused'])
+
+function formatStatusValue(
+  key: string,
+  val: number,
+): { value: string; unit: string } {
+  if (MEMORY_STATUS_KEYS.has(key)) return formatBytes(val)
+  return { value: String(val), unit: '' }
+}
+
+type ExplainNode = {
+  id: number
+  parent: number
+  detail: string
+  children: ExplainNode[]
+}
+
+function buildExplainTree(
+  rows: { id: number; parent: number; detail: string }[],
+): ExplainNode[] {
+  const map = new Map<number, ExplainNode>()
+  const roots: ExplainNode[] = []
+  for (const row of rows) map.set(row.id, { ...row, children: [] })
+  for (const node of map.values()) {
+    const parent = map.get(node.parent)
+    if (parent) parent.children.push(node)
+    else roots.push(node)
+  }
+  return roots
+}
+
+function ExplainTreeNode(
+  { node, depth = 0, isLast = true, prefix = '' }: {
+    node: ExplainNode
+    depth?: number
+    isLast?: boolean
+    prefix?: string
+  },
+) {
+  const connector = depth === 0 ? '' : isLast ? '└─ ' : '├─ '
+  const childPrefix = depth === 0 ? '' : prefix + (isLast ? '   ' : '│  ')
   return (
-    <div class='flex flex-col h-full min-h-0 relative'>
-      {!!isPending && (
-        <div class='absolute top-0 left-0 right-0 h-0.5 z-20 overflow-hidden bg-base-300'>
-          <div class='h-full bg-primary animate-progress origin-left'></div>
-        </div>
-      )}
-      <div class='flex-1 min-h-0 overflow-hidden'>
-        <div
-          class={`w-full overflow-x-auto overflow-y-auto h-full transition-all duration-300 ease-in-out pb-4 ${
-            isPending
-              ? 'opacity-50 grayscale-[0.5] scale-[0.995]'
-              : 'opacity-100 scale-100'
+    <div>
+      <div class='flex items-start gap-1 py-1 group'>
+        {depth > 0 && (
+          <span class='font-mono text-[11px] text-base-content/25 whitespace-pre shrink-0 select-none'>
+            {prefix}
+            {connector}
+          </span>
+        )}
+        <span
+          class={`font-mono text-[12px] leading-relaxed text-base-content/80 ${
+            depth === 0 ? 'font-medium' : ''
           }`}
         >
-          <table class='table table-zebra w-full'>
-            <TableHeader
-              columns={[
-                { key: 'query', label: 'Query' },
-                { key: 'count', label: 'Count' },
-                { key: 'duration', label: 'Duration (ms)' },
-                { key: 'explain', label: 'Explain' },
-              ]}
-            />
-            <tbody>
-              {filteredMetrics.map((metric, index) => (
-                <tr
-                  key={index}
-                  class='hover:bg-base-200/50 border-b border-base-300/50 cursor-pointer transition-colors'
-                >
-                  <RowNumberCell index={index} />
-                  <td class='p-3 min-w-[20rem] max-w-lg text-left border-r border-base-300/30 align-top'>
-                    <pre class='font-mono text-xs whitespace-pre-wrap break-all'>{metric.query}</pre>
-                  </td>
-                  <td class='p-3 w-24 shrink-0 text-left border-r border-base-300/30 tabular-nums align-top'>
-                    {metric.count}
-                  </td>
-                  <td class='p-3 w-32 shrink-0 text-left border-r border-base-300/30 tabular-nums align-top'>
-                    {metric.duration}
-                  </td>
-                  <td class='p-3 text-xs text-base-content/60 min-w-[20rem] max-w-lg text-left border-r border-base-300/30 align-top'>
-                    <pre class='font-mono whitespace-pre-wrap break-all'>{metric.explain}</pre>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+          {node.detail}
+        </span>
       </div>
-      {filteredMetrics.length === 0 && !isPending && (
-        <div class='px-4 sm:px-6 py-8 text-center'>
-          <div class='flex flex-col items-center gap-4'>
-            <Search class='w-12 h-12 text-base-content/50' />
-            <div>
-              <h3 class='text-lg font-medium text-base-content'>
-                No metrics found
-              </h3>
-            </div>
-          </div>
+      {node.children.map((child, i) => (
+        <ExplainTreeNode
+          key={child.id}
+          node={child}
+          depth={depth + 1}
+          isLast={i === node.children.length - 1}
+          prefix={childPrefix}
+        />
+      ))}
+    </div>
+  )
+}
+
+const STATUS_LABELS: Record<string, { name: string; title: string }> = {
+  fullscanStep: {
+    name: 'Full Scan Steps',
+    title:
+      'Number of steps that performed a full scan of a table or index, which is a common cause of slow queries.',
+  },
+  sort: {
+    name: 'Sorts',
+    title: 'Number of steps that performed a sort operation.',
+  },
+  autoindex: {
+    name: 'Auto Index',
+    title: 'Number of steps that created an index automatically.',
+  },
+  vmStep: {
+    name: 'VM Steps',
+    title: 'Number of steps that involved virtual machine operations.',
+  },
+  reprepare: {
+    name: 'Reprepares',
+    title: 'Number of steps that reprepared a query plan.',
+  },
+  run: {
+    name: 'Runs',
+    title: 'Number of times a query was executed.',
+  },
+  filterHit: {
+    name: 'Filter Hits',
+    title: 'Number of times a filter condition was satisfied.',
+  },
+  filterMiss: {
+    name: 'Filter Miss',
+    title: 'Number of times a filter condition was not satisfied.',
+  },
+}
+
+function MetricsViewer() {
+  const metrics = metricsData.data || []
+  const isPending = metricsData.pending
+
+  const totalCalls = metrics.reduce((acc, m) => acc + (m.count || 0), 0)
+  const totalDuration = metrics.reduce((acc, m) => acc + (m.duration || 0), 0)
+  const maxDuration = Math.max(...metrics.map((m) => m.duration || 0), 1)
+  const sorted = [...metrics].sort((a, b) => b.duration - a.duration)
+
+  return (
+    <div class='flex flex-col h-full min-h-0 relative bg-base-100'>
+      {!!isPending && (
+        <div class='absolute top-0 left-0 right-0 h-0.5 z-20 overflow-hidden bg-base-300'>
+          <div class='h-full bg-primary animate-progress origin-left' />
         </div>
       )}
+
+      {/* Summary bar */}
+      <div class='flex items-center gap-6 px-5 py-3 border-b border-base-200 shrink-0 bg-base-100'>
+        <div class='flex items-center gap-2 text-sm'>
+          <Activity class='w-4 h-4 text-base-content/40' />
+          <span class='font-semibold text-base-content'>
+            {totalCalls.toLocaleString()}
+          </span>
+          <span class='text-base-content/40'>total calls</span>
+        </div>
+        <div class='w-px h-4 bg-base-300' />
+        <div class='flex items-center gap-2 text-sm'>
+          <Timer class='w-4 h-4 text-base-content/40' />
+          <span class='font-semibold text-base-content'>
+            {(() => {
+              const f = formatDuration(totalDuration)
+              return `${f.value} ${f.unit}`
+            })()}
+          </span>
+          <span class='text-base-content/40'>total time</span>
+        </div>
+        <div class='w-px h-4 bg-base-300' />
+        <div class='flex items-center gap-2 text-sm'>
+          <BarChart2 class='w-4 h-4 text-base-content/40' />
+          <span class='font-semibold text-base-content'>{sorted.length}</span>
+          <span class='text-base-content/40'>unique queries</span>
+        </div>
+      </div>
+
+      {/* Query list */}
+      <div class='flex-1 min-h-0 overflow-y-auto divide-y divide-base-200'>
+        {sorted.map((metric, index) => {
+          const isExpanded = expandedMetric.value === index
+          const avgMs = metric.count > 0 ? metric.duration / metric.count : 0
+          const avg = formatDuration(avgMs)
+          const maxFmt = metric.max != null ? formatDuration(metric.max) : null
+          const totalFmt = formatDuration(metric.duration)
+          const pct = (metric.duration / maxDuration) * 100
+          const explainTree = metric.explain?.length
+            ? buildExplainTree(metric.explain)
+            : []
+
+          return (
+            <div key={index}>
+              {/* Row */}
+              <div
+                class={`px-5 py-3 cursor-pointer hover:bg-base-200/40 transition-colors ${
+                  isExpanded ? 'bg-base-200/30' : ''
+                }`}
+                onClick={() => expandedMetric.value = isExpanded ? null : index}
+              >
+                <div class='flex items-center gap-4'>
+                  {/* Query text */}
+                  <div class='flex-1 min-w-0'>
+                    <div class='font-mono text-[13px] text-base-content/85 truncate'>
+                      {metric.query}
+                    </div>
+                    {/* Duration bar */}
+                    <div class='mt-1.5 h-1 bg-base-200 rounded-full overflow-hidden max-w-[200px]'>
+                      <div
+                        class={`h-full rounded-full ${
+                          pct > 66
+                            ? 'bg-error/70'
+                            : pct > 33
+                            ? 'bg-warning/70'
+                            : 'bg-success/70'
+                        }`}
+                        style={{ width: `${Math.max(2, pct)}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Key stats */}
+                  <div class='flex items-center shrink-0'>
+                    <div class='w-16 text-right px-2'>
+                      <div class='text-[10px] font-medium text-base-content/35 uppercase tracking-wide'>
+                        Calls
+                      </div>
+                      <div class='font-mono text-sm font-semibold text-base-content/80 tabular-nums'>
+                        {metric.count}
+                      </div>
+                    </div>
+                    <div class='w-24 text-right px-2'>
+                      <div class='text-[10px] font-medium text-base-content/35 uppercase tracking-wide'>
+                        Avg
+                      </div>
+                      <div class='font-mono text-sm font-semibold text-secondary tabular-nums'>
+                        {avg.value}
+                        <span class='text-[10px] text-secondary/50 ml-0.5'>
+                          {avg.unit}
+                        </span>
+                      </div>
+                    </div>
+                    <div class='w-24 text-right px-2'>
+                      <div class='text-[10px] font-medium text-base-content/35 uppercase tracking-wide'>
+                        Max
+                      </div>
+                      <div class='font-mono text-sm font-semibold text-error/80 tabular-nums'>
+                        {maxFmt ? maxFmt.value : '—'}
+                        <span class='text-[10px] text-error/40 ml-0.5'>
+                          {maxFmt?.unit}
+                        </span>
+                      </div>
+                    </div>
+                    <div class='w-24 text-right px-2'>
+                      <div class='text-[10px] font-medium text-base-content/35 uppercase tracking-wide'>
+                        Total
+                      </div>
+                      <div class='font-mono text-sm font-semibold text-base-content/60 tabular-nums'>
+                        {totalFmt.value}
+                        <span class='text-[10px] text-base-content/30 ml-0.5'>
+                          {totalFmt.unit}
+                        </span>
+                      </div>
+                    </div>
+                    <div class='text-base-content/30 w-8 flex justify-center'>
+                      {isExpanded
+                        ? <ChevronDown class='w-4 h-4' />
+                        : <ChevronRight class='w-4 h-4' />}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Expanded detail */}
+              {isExpanded && (
+                <div class='px-5 pb-5 pt-4 bg-base-200/20 border-t border-base-200 space-y-5'>
+                  {/* Full query */}
+                  <div>
+                    <div class='text-[10px] font-bold uppercase tracking-widest text-base-content/40 mb-2 flex items-center gap-1.5'>
+                      <Database class='w-3.5 h-3.5' /> Query
+                    </div>
+                    <pre class='font-mono text-[12px] text-base-content/80 bg-base-100 rounded-lg border border-base-200 p-3 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed'>{metric.query}</pre>
+                  </div>
+
+                  <div class='grid grid-cols-1 lg:grid-cols-2 gap-5'>
+                    {/* Status counters */}
+                    {metric.status && (
+                      <div>
+                        <div class='text-[10px] font-bold uppercase tracking-widest text-base-content/40 mb-2 flex items-center gap-1.5'>
+                          <Cpu class='w-3.5 h-3.5' /> Execution Counters
+                        </div>
+                        <div class='grid grid-cols-4 gap-2'>
+                          {Object.entries(metric.status).map(([key, val]) => {
+                            const fmt = formatStatusValue(key, val as number)
+                            return (
+                              <div
+                                key={key}
+                                class='bg-base-100 rounded-lg border border-base-200 px-2.5 py-2 text-center'
+                              >
+                                <div
+                                  class='text-[9px] font-medium text-base-content/35 uppercase tracking-wide truncate mb-0.5'
+                                  title={STATUS_LABELS[key]?.title ?? key}
+                                >
+                                  {STATUS_LABELS[key]?.name ?? key}
+                                </div>
+                                <div class='font-mono text-sm font-semibold text-base-content/75 tabular-nums'>
+                                  {fmt.value}
+                                  {fmt.unit && (
+                                    <span class='text-[9px] text-base-content/35 ml-0.5'>
+                                      {fmt.unit}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Explain tree */}
+                    {explainTree.length > 0 && (
+                      <div>
+                        <div class='text-[10px] font-bold uppercase tracking-widest text-base-content/40 mb-2 flex items-center gap-1.5'>
+                          <BarChart2 class='w-3.5 h-3.5' /> Query Plan
+                        </div>
+                        <div class='bg-base-100 rounded-lg border border-base-200 p-3 overflow-x-auto max-h-64 overflow-y-auto'>
+                          {explainTree.map((node) => (
+                            <ExplainTreeNode key={node.id} node={node} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+
+        {sorted.length === 0 && !isPending && (
+          <div class='flex flex-col items-center justify-center py-20 gap-4 text-center'>
+            <div class='h-16 w-16 rounded-full bg-base-200 flex items-center justify-center'>
+              <BarChart class='w-8 h-8 text-base-content/20' />
+            </div>
+            <div>
+              <h3 class='font-semibold text-base-content mb-1'>
+                No metrics recorded
+              </h3>
+              <p class='text-sm text-base-content/50 max-w-xs mx-auto'>
+                Execute database queries to see performance data here.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
