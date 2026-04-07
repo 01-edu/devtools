@@ -12,7 +12,7 @@ RUN deno install
 # Build frontend (dist/web) and compile backend with static files
 COPY ./tasks/vite.ts /app/tasks/vite.ts
 COPY ./web /app/web
-RUN deno cache --allow-scripts --lock=deno.lock tasks/vite.ts
+RUN deno cache --allow-scripts --lock=deno.lock tasks/vite.ts web/index.tsx
 ENV BASE_URL="/"
 RUN deno task prod:vite
 
@@ -28,6 +28,7 @@ WORKDIR /app
 
 # Copy compiled executable and Deno cache
 COPY --from=builder /app/dist/api /app/server
+COPY --from=builder /app/db/functions /app/db/functions
 
 # Expose port from .env.prod (3021)
 EXPOSE 3021
