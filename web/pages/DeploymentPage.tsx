@@ -1,14 +1,19 @@
 import { A, navigate, url } from '@01edu/signal-router'
 import {
+  Activity,
   AlertCircle,
   AlertTriangle,
   ArrowDown,
   ArrowUp,
+  BarChart,
+  BarChart2,
   Bug,
   ChevronDown,
   ChevronRight,
   Clock,
   Columns,
+  Cpu,
+  Database,
   Download,
   FileText,
   Hash,
@@ -20,6 +25,7 @@ import {
   Save,
   Search,
   Table,
+  Timer,
   XCircle,
 } from 'lucide-preact'
 import {
@@ -29,8 +35,8 @@ import {
   SortMenu,
   toggleSort,
 } from '../components/Filtre.tsx'
-import { effect, Signal, signal } from '@preact/signals'
-import { api } from '../lib/api.ts'
+import { computed, effect, Signal } from '@preact/signals'
+import { api, type ApiOutput } from '../lib/api.ts'
 import { QueryHistory } from '../components/QueryHistory.tsx'
 
 import { JSX } from 'preact'
@@ -51,20 +57,15 @@ export const rowDetailsData = api['POST/api/deployment/table/data'].signal()
 export const logDetailsData = api['POST/api/deployment/logs'].signal()
 export const metricsData = api['GET/api/deployment/metrics-sql'].signal()
 
-const toastSignal = signal<{ message: string; type: 'info' | 'error' } | null>(
+const toastSignal = new Signal<
+  { message: string; type: 'info' | 'error' } | null
+>(
   null,
 )
 function toast(message: string, type: 'info' | 'error' = 'info') {
   toastSignal.value = { message, type }
   setTimeout(() => (toastSignal.value = null), 3000)
 }
-
-effect(() => {
-  const dep = url.params.dep
-  if (dep) {
-    schema.fetch({ url: dep })
-  }
-})
 
 const Toast = () => {
   if (!toastSignal.value) return null
@@ -81,9 +82,12 @@ const Toast = () => {
 // Effect to fetch schema when deployment URL changes
 effect(() => {
   const dep = url.params.dep
-  if (dep) {
-    schema.fetch({ url: dep })
-  }
+  dep && schema.fetch({ url: dep })
+})
+
+effect(() => {
+  url.params.tab // clear expanded when params.tab change
+  navigate({ params: { expanded: null }, replace: true })
 })
 
 const queryHash = new Signal<string>('')
@@ -796,7 +800,9 @@ function SchemaPanel() {
   )
 }
 
-const TabButton = ({ tabName }: { tabName: 'tables' | 'queries' | 'logs' | 'metrics' }) => (
+const TabButton = (
+  { tabName }: { tabName: 'tables' | 'queries' | 'logs' | 'metrics' },
+) => (
   <A
     params={{ tab: tabName }}
     role='tab'
@@ -1352,71 +1358,392 @@ effect(() => {
   }
 })
 
-function MetricsViewer() {
-  const filteredMetrics = metricsData.data || []
-  const isPending = metricsData.pending
+// ─── Metrics types ───────────────────────────────────────────────────────────
 
+type Metric = ApiOutput['GET/api/deployment/metrics-sql'][number]
+type MetricStatus = NonNullable<Metric['status']>
+type MetricExplain = NonNullable<Metric['explain']>
+
+type ExplainNode = {
+  id: number
+  parent: number
+  detail: string
+  children: ExplainNode[]
+}
+
+type ExplainTreeNodeProps = {
+  node: ExplainNode
+  depth?: number
+  isLast?: boolean
+  prefix?: string
+}
+
+type StatCellProps = {
+  label: string
+  value: string | number
+  unit?: string
+  valueClass?: string
+  unitClass?: string
+  width?: string
+}
+
+type MetricRowProps = { metric: Metric; index: number }
+type StatusCountersProps = { status: MetricStatus }
+type QueryPlanProps = { explain: MetricExplain }
+
+// ─── Metrics helpers ────────────────────────────────────────────────────────
+
+function formatDuration(ms: number): { value: string; unit: string } {
+  if (ms < (1 / 1000)) return { value: (ms * 1000 ** 2).toFixed(2), unit: 'ns' }
+  if (ms < 1) return { value: (ms * 1000).toFixed(2), unit: 'μs' }
+  if (ms >= 1000 * 60) {
+    return { value: (ms / (1000 * 60)).toFixed(2), unit: 'm' }
+  }
+  if (ms >= 1000) return { value: (ms / 1000).toFixed(2), unit: 's' }
+  return { value: ms.toFixed(2), unit: 'ms' }
+}
+
+function formatBytes(bytes: number): { value: string; unit: string } {
+  if (bytes < 1024) return { value: bytes.toFixed(2), unit: 'B' }
+  if (bytes < 1024 ** 2) {
+    return { value: (bytes / 1024).toFixed(2), unit: 'KB' }
+  }
+  if (bytes < 1024 ** 3) {
+    return { value: (bytes / (1024 ** 2)).toFixed(2), unit: 'MB' }
+  }
+  return { value: (bytes / (1024 ** 3)).toFixed(2), unit: 'GB' }
+}
+
+type StatusProperty = { label: string; title: string; fmt?: typeof formatBytes }
+const STATUS_LABELS: Record<string, StatusProperty> = {
+  fullscanStep: {
+    label: 'Full Scan Steps',
+    title:
+      'Number of steps that performed a full scan of a table or index, which is a common cause of slow queries.',
+  },
+  sort: {
+    label: 'Sorts',
+    title: 'Number of steps that performed a sort operation.',
+  },
+  autoindex: {
+    label: 'Autoindex Steps',
+    title: 'Number of steps that created an index automatically.',
+  },
+  vmStep: {
+    label: 'VM Steps',
+    title: 'Number of steps that involved virtual machine operations.',
+  },
+  reprepare: {
+    label: 'Reprepares',
+    title: 'Number of steps that reprepared a query plan.',
+  },
+  run: { label: 'Runs', title: 'Number of times a query was executed.' },
+  filterHit: {
+    label: 'Filter Hit',
+    title: 'Number of times a filter condition was satisfied.',
+  },
+  filterMiss: {
+    label: 'Filter Miss',
+    title: 'Number of times a filter condition was not satisfied.',
+  },
+  memused: {
+    label: 'Memory Used',
+    title: 'The approximate number of bytes of heap memory used.',
+    fmt: formatBytes,
+  },
+}
+
+const sortedMetrics = computed(
+  () => (metricsData.data || []).toSorted((a, b) => b.duration - a.duration),
+)
+
+const stats = computed(() => {
+  const metrics = sortedMetrics.value
+  return {
+    count: metrics.length,
+    maxDuration: metrics[0]?.duration || 0,
+    totalCalls: metrics.reduce((acc, m) => acc + (m.count || 0), 0),
+    totalDuration: metrics.reduce((acc, m) => acc + (m.duration || 0), 0),
+  }
+})
+
+function buildExplainTree(rows: MetricExplain): ExplainNode[] {
+  const map = new Map<number, ExplainNode>()
+  const roots: ExplainNode[] = []
+  for (const row of rows) map.set(row.id, { ...row, children: [] })
+  for (const node of map.values()) {
+    const parent = map.get(node.parent)
+    if (parent) parent.children.push(node)
+    else roots.push(node)
+  }
+  return roots
+}
+
+// ─── Metrics sub-components ─────────────────────────────────────────────────
+
+function ExplainTreeNode(
+  { node, depth = 0, isLast = true, prefix = '' }: ExplainTreeNodeProps,
+) {
+  const connector = depth === 0 ? '' : isLast ? '└─ ' : '├─ '
+  const childPrefix = depth === 0 ? '' : prefix + (isLast ? '   ' : '│  ')
   return (
-    <div class='flex flex-col h-full min-h-0 relative'>
-      {!!isPending && (
-        <div class='absolute top-0 left-0 right-0 h-0.5 z-20 overflow-hidden bg-base-300'>
-          <div class='h-full bg-primary animate-progress origin-left'></div>
-        </div>
-      )}
-      <div class='flex-1 min-h-0 overflow-hidden'>
-        <div
-          class={`w-full overflow-x-auto overflow-y-auto h-full transition-all duration-300 ease-in-out pb-4 ${
-            isPending
-              ? 'opacity-50 grayscale-[0.5] scale-[0.995]'
-              : 'opacity-100 scale-100'
+    <div>
+      <div class='flex items-start gap-1 py-1'>
+        {depth > 0 && (
+          <span class='font-mono text-[11px] text-base-content/25 whitespace-pre shrink-0 select-none'>
+            {prefix}
+            {connector}
+          </span>
+        )}
+        <span
+          class={`font-mono text-[12px] leading-relaxed text-base-content/80 ${
+            depth === 0 ? 'font-medium' : ''
           }`}
         >
-          <table class='table table-zebra w-full'>
-            <TableHeader
-              columns={[
-                { key: 'query', label: 'Query' },
-                { key: 'count', label: 'Count' },
-                { key: 'duration', label: 'Duration (ms)' },
-                { key: 'explain', label: 'Explain' },
-              ]}
-            />
-            <tbody>
-              {filteredMetrics.map((metric, index) => (
-                <tr
-                  key={index}
-                  class='hover:bg-base-200/50 border-b border-base-300/50 cursor-pointer transition-colors'
-                >
-                  <RowNumberCell index={index} />
-                  <td class='p-3 min-w-[20rem] max-w-lg text-left border-r border-base-300/30 align-top'>
-                    <pre class='font-mono text-xs whitespace-pre-wrap break-all'>{metric.query}</pre>
-                  </td>
-                  <td class='p-3 w-24 shrink-0 text-left border-r border-base-300/30 tabular-nums align-top'>
-                    {metric.count}
-                  </td>
-                  <td class='p-3 w-32 shrink-0 text-left border-r border-base-300/30 tabular-nums align-top'>
-                    {metric.duration}
-                  </td>
-                  <td class='p-3 text-xs text-base-content/60 min-w-[20rem] max-w-lg text-left border-r border-base-300/30 align-top'>
-                    <pre class='font-mono whitespace-pre-wrap break-all'>{metric.explain}</pre>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+          {node.detail}
+        </span>
       </div>
-      {filteredMetrics.length === 0 && !isPending && (
-        <div class='px-4 sm:px-6 py-8 text-center'>
-          <div class='flex flex-col items-center gap-4'>
-            <Search class='w-12 h-12 text-base-content/50' />
-            <div>
-              <h3 class='text-lg font-medium text-base-content'>
-                No metrics found
-              </h3>
+      {node.children.map((child, i) => (
+        <ExplainTreeNode
+          key={child.id}
+          node={child}
+          depth={depth + 1}
+          isLast={i === node.children.length - 1}
+          prefix={childPrefix}
+        />
+      ))}
+    </div>
+  )
+}
+
+function QueryPlan({ explain }: QueryPlanProps) {
+  return (
+    <div>
+      <div class='text-[10px] font-bold uppercase tracking-widest text-base-content/40 mb-2 flex items-center gap-1.5'>
+        <BarChart2 class='w-3.5 h-3.5' /> Query Plan
+      </div>
+      <div class='bg-base-100 rounded-lg border border-base-200 p-3 overflow-x-auto max-h-64 overflow-y-auto'>
+        {buildExplainTree(explain).map((node) => (
+          <ExplainTreeNode key={node.id} node={node} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function StatusCounters({ status }: StatusCountersProps) {
+  return (
+    <div>
+      <div class='text-[10px] font-bold uppercase tracking-widest text-base-content/40 mb-2 flex items-center gap-1.5'>
+        <Cpu class='w-3.5 h-3.5' /> Execution Counters
+      </div>
+      <div class='grid grid-cols-4 gap-2'>
+        {Object.entries(status).map(([key, val]) => {
+          const match = STATUS_LABELS[key as keyof typeof STATUS_LABELS] ||
+            { label: key }
+          const { value, unit } = match.fmt?.(val) || { value: val }
+          return (
+            <div
+              key={key}
+              class='bg-base-100 rounded-lg border border-base-200 px-2.5 py-2 text-center'
+            >
+              <div
+                class='text-[9px] font-medium text-base-content/35 uppercase tracking-wide truncate mb-0.5'
+                title={match.title}
+              >
+                {match.label}
+              </div>
+              <div class='font-mono text-sm font-semibold text-base-content/75 tabular-nums'>
+                {value}
+                {unit && (
+                  <span class='text-[9px] text-base-content/35 ml-0.5'>
+                    {unit}
+                  </span>
+                )}
+              </div>
             </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function StatCell({
+  label,
+  value,
+  unit,
+  valueClass = 'text-base-content/80',
+  unitClass = 'text-base-content/30',
+  width = 'w-24',
+}: StatCellProps) {
+  return (
+    <div class={`${width} text-right px-2`}>
+      <div class='text-[10px] font-medium text-base-content/35 uppercase tracking-wide'>
+        {label}
+      </div>
+      <div class={`font-mono text-sm font-semibold tabular-nums ${valueClass}`}>
+        {value}
+        {unit && <span class={`text-[10px] ml-0.5 ${unitClass}`}>{unit}</span>}
+      </div>
+    </div>
+  )
+}
+
+function MetricDetail() {
+  const expandedIndex = Number(url.params.expanded)
+  const sorted = sortedMetrics.value
+  const metric = sorted[expandedIndex]
+  if (!metric) return null
+  return (
+    <div class='px-5 pb-5 pt-4 bg-base-200/20 border-t border-base-200 space-y-5'>
+      <div>
+        <div class='text-[10px] font-bold uppercase tracking-widest text-base-content/40 mb-2 flex items-center gap-1.5'>
+          <Database class='w-3.5 h-3.5' /> Query
+        </div>
+        <pre class='font-mono text-[12px] text-base-content/80 bg-base-100 rounded-lg border border-base-200 p-3 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed'>{metric.query}</pre>
+      </div>
+      <div class='grid grid-cols-1 lg:grid-cols-2 gap-5'>
+        {metric.status && <StatusCounters status={metric.status} />}
+        {metric.explain?.length > 0 && <QueryPlan explain={metric.explain} />}
+      </div>
+    </div>
+  )
+}
+
+function MetricRow({ metric, index }: MetricRowProps) {
+  const isExpanded = url.params.expanded === String(index)
+  const avg = formatDuration(metric.count && (metric.duration / metric.count))
+  const maxFmt = metric.max != null ? formatDuration(metric.max) : null
+  const totalFmt = formatDuration(metric.duration)
+  const pct = (metric.duration / stats.value.totalDuration) * 100
+
+  return (
+    <div>
+      <A
+        class={`px-5 py-3 flex items-center gap-4 cursor-pointer hover:bg-base-200/40 transition-colors ${
+          isExpanded ? 'bg-base-200/30' : ''
+        }`}
+        params={{ expanded: isExpanded ? null : index }}
+      >
+        <div class='flex-1 min-w-0'>
+          <div class='font-mono text-[13px] text-base-content/85 truncate'>
+            {metric.query}
+          </div>
+          <div class='mt-1.5 h-1 bg-base-200 rounded-full overflow-hidden max-w-[200px]'>
+            <div
+              class={`h-full rounded-full ${
+                pct > 66
+                  ? 'bg-error/70'
+                  : pct > 33
+                  ? 'bg-warning/70'
+                  : 'bg-success/70'
+              }`}
+              style={{ width: `${Math.max(2, pct)}%` }}
+            />
           </div>
         </div>
+        <div class='flex items-center shrink-0'>
+          <StatCell label='Calls' value={metric.count} width='w-16' />
+          <StatCell
+            label='Avg'
+            value={avg.value}
+            unit={avg.unit}
+            valueClass='text-secondary'
+            unitClass='text-secondary/50'
+          />
+          <StatCell
+            label='Max'
+            value={maxFmt ? maxFmt.value : '—'}
+            unit={maxFmt?.unit}
+            valueClass='text-error/80'
+            unitClass='text-error/40'
+          />
+          <StatCell
+            label='Total'
+            value={totalFmt.value}
+            unit={totalFmt.unit}
+            valueClass='text-base-content/60'
+          />
+          <div class='text-base-content/30 w-8 flex justify-center'>
+            {isExpanded
+              ? <ChevronDown class='w-4 h-4' />
+              : <ChevronRight class='w-4 h-4' />}
+          </div>
+        </div>
+      </A>
+      {isExpanded && <MetricDetail />}
+    </div>
+  )
+}
+
+function MetricsSummaryBar() {
+  const totalDuration = formatDuration(stats.value.totalDuration)
+  return (
+    <div class='flex items-center gap-6 px-5 py-3 border-b border-base-200 shrink-0 bg-base-100'>
+      <div class='flex items-center gap-2 text-sm'>
+        <Activity class='w-4 h-4 text-base-content/40' />
+        <span class='font-semibold text-base-content'>
+          {stats.value.totalCalls.toLocaleString()}
+        </span>
+        <span class='text-base-content/40'>total calls</span>
+      </div>
+      <div class='w-px h-4 bg-base-300' />
+      <div class='flex items-center gap-2 text-sm'>
+        <Timer class='w-4 h-4 text-base-content/40' />
+        <span class='font-semibold text-base-content'>
+          {totalDuration.value} {totalDuration.unit}
+        </span>
+        <span class='text-base-content/40'>total time</span>
+      </div>
+      <div class='w-px h-4 bg-base-300' />
+      <div class='flex items-center gap-2 text-sm'>
+        <BarChart2 class='w-4 h-4 text-base-content/40' />
+        <span class='font-semibold text-base-content'>{stats.value.count}</span>
+        <span class='text-base-content/40'>unique queries</span>
+      </div>
+    </div>
+  )
+}
+
+function MetricsEmpty() {
+  return (
+    <div class='flex flex-col items-center justify-center py-20 gap-4 text-center'>
+      <div class='h-16 w-16 rounded-full bg-base-200 flex items-center justify-center'>
+        <BarChart class='w-8 h-8 text-base-content/20' />
+      </div>
+      <div>
+        <h3 class='font-semibold text-base-content mb-1'>
+          No metrics recorded
+        </h3>
+        <p class='text-sm text-base-content/50 max-w-xs mx-auto'>
+          Execute database queries to see performance data here.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// ─── MetricsViewer ──────────────────────────────────────────────────────────
+
+function MetricsViewer() {
+  const isPending = metricsData.pending
+  const sorted = sortedMetrics.value
+
+  return (
+    <div class='flex flex-col h-full min-h-0 relative bg-base-100'>
+      {!!isPending && (
+        <div class='absolute top-0 left-0 right-0 h-0.5 z-20 overflow-hidden bg-base-300'>
+          <div class='h-full bg-primary animate-progress origin-left' />
+        </div>
       )}
+      <MetricsSummaryBar />
+      <div class='flex-1 min-h-0 overflow-y-auto divide-y divide-base-200'>
+        {sorted.map((metric, index) => (
+          <MetricRow key={index} metric={metric} index={index} />
+        ))}
+        {sorted.length === 0 && !isPending && <MetricsEmpty />}
+      </div>
     </div>
   )
 }
