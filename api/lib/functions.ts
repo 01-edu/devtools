@@ -35,7 +35,6 @@ export type LoadedFunction = {
 
 // Map<projectSlug, List of loaded functions>
 const functionsMap = new Map<string, LoadedFunction[]>()
-let watcher: Deno.FsWatcher | null = null
 const functionsDir = join(import.meta.dirname!, '../../db/functions')
 const functionsDirUrl = toFileUrl(
   functionsDir.endsWith('/') ? functionsDir : `${functionsDir}/`,
@@ -98,13 +97,6 @@ export function getProjectFunctions(
   slug: string,
 ): LoadedFunction[] | undefined {
   return functionsMap.get(slug)
-}
-
-export function stopWatcher() {
-  if (watcher) {
-    watcher.close()
-    watcher = null
-  }
 }
 
 export async function applyReadTransformers<T>(

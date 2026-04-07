@@ -381,13 +381,15 @@ const defs = {
           url: 'dev',
           logsEnabled: true,
           databaseEnabled: !!input.endpoint,
-          sqlEndpoint: input.endpoint ?? new URL(input.endpoint).href,
+          sqlEndpoint: input.endpoint
+            ? new URL(input.endpoint).href
+            : undefined,
           sqlToken: 'local',
           tokenSalt: 'local',
         })
       }
     },
-    input: { endpoint: optional(STR('Full href of the SQL endpoint')) },
+    input: OBJ({ endpoint: optional(STR('Full href of the SQL endpoint')) }),
   }),
   'PUT/api/deployment': route({
     authorize: withAdminSession,

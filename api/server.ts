@@ -6,11 +6,9 @@ import { routeHandler } from '/api/routes.ts'
 import { PORT } from './lib/env.ts'
 import { init } from '/api/lib/functions.ts'
 import { initLogTable } from '/api/clickhouse-client.ts'
-import { ensureLocalDefaults } from '/api/schema.ts'
 import { startSchemaRefreshLoop } from './sql.ts'
 
 await initLogTable()
-await ensureLocalDefaults()
 await init()
 startSchemaRefreshLoop()
 

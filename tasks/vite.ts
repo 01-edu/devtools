@@ -5,7 +5,6 @@ import { apiProxy } from '@01edu/api-proxy'
 import deno from '@deno/vite-plugin'
 import preact from '@preact/preset-vite'
 import tailwindcss from '@tailwindcss/vite'
-import { APP_ENV } from '@01edu/api/env'
 
 const plugins = [
   preact({ jsxImportSource: 'preact' }),
@@ -26,7 +25,7 @@ const preactRuntimeAlias = [
 ]
 
 // Production build
-if (APP_ENV === 'prod') {
+if (Deno.env.get('APP_ENV') === 'prod') {
   await build({
     configFile: false,
     root: join(import.meta.dirname!, '../web'),
