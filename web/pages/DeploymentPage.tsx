@@ -35,8 +35,8 @@ import {
   SortMenu,
   toggleSort,
 } from '../components/Filtre.tsx'
-import { effect, Signal, signal } from '@preact/signals'
-import { api, ApiOutput } from '../lib/api.ts'
+import { computed, effect, Signal } from '@preact/signals'
+import { api, type ApiOutput } from '../lib/api.ts'
 import { QueryHistory } from '../components/QueryHistory.tsx'
 
 import { JSX } from 'preact'
@@ -57,20 +57,15 @@ export const rowDetailsData = api['POST/api/deployment/table/data'].signal()
 export const logDetailsData = api['POST/api/deployment/logs'].signal()
 export const metricsData = api['GET/api/deployment/metrics-sql'].signal()
 
-const toastSignal = signal<{ message: string; type: 'info' | 'error' } | null>(
+const toastSignal = new Signal<
+  { message: string; type: 'info' | 'error' } | null
+>(
   null,
 )
 function toast(message: string, type: 'info' | 'error' = 'info') {
   toastSignal.value = { message, type }
   setTimeout(() => (toastSignal.value = null), 3000)
 }
-
-effect(() => {
-  const dep = url.params.dep
-  if (dep) {
-    schema.fetch({ url: dep })
-  }
-})
 
 const Toast = () => {
   if (!toastSignal.value) return null
@@ -87,9 +82,12 @@ const Toast = () => {
 // Effect to fetch schema when deployment URL changes
 effect(() => {
   const dep = url.params.dep
-  if (dep) {
-    schema.fetch({ url: dep })
-  }
+  dep && schema.fetch({ url: dep })
+})
+
+effect(() => {
+  url.params.tab // clear expanded when params.tab change
+  navigate({ params: { expanded: null }, replace: true })
 })
 
 const queryHash = new Signal<string>('')
@@ -1396,35 +1394,78 @@ type QueryPlanProps = { explain: MetricExplain }
 // ─── Metrics helpers ────────────────────────────────────────────────────────
 
 function formatDuration(ms: number): { value: string; unit: string } {
+  if (ms < (1 / 1000)) return { value: (ms * 1000 ** 2).toFixed(2), unit: 'ns' }
   if (ms < 1) return { value: (ms * 1000).toFixed(2), unit: 'μs' }
+  if (ms >= 1000 * 60) {
+    return { value: (ms / (1000 * 60)).toFixed(2), unit: 'm' }
+  }
   if (ms >= 1000) return { value: (ms / 1000).toFixed(2), unit: 's' }
   return { value: ms.toFixed(2), unit: 'ms' }
 }
 
 function formatBytes(bytes: number): { value: string; unit: string } {
   if (bytes < 1024) return { value: bytes.toFixed(2), unit: 'B' }
-  if (bytes < 1024 * 1024) {
+  if (bytes < 1024 ** 2) {
     return { value: (bytes / 1024).toFixed(2), unit: 'KB' }
   }
-  if (bytes < 1024 * 1024 * 1024) {
-    return { value: (bytes / (1024 * 1024)).toFixed(2), unit: 'MB' }
+  if (bytes < 1024 ** 3) {
+    return { value: (bytes / (1024 ** 2)).toFixed(2), unit: 'MB' }
   }
-  return { value: (bytes / (1024 * 1024 * 1024)).toFixed(2), unit: 'GB' }
+  return { value: (bytes / (1024 ** 3)).toFixed(2), unit: 'GB' }
 }
 
-const MEMORY_STATUS_KEYS = new Set(['memused'])
-
-const STATUS_LABELS: Record<string, string> = {
-  fullscanStep: 'Full Scan Steps',
-  sort: 'Sorts',
-  autoindex: 'Autoindex Steps',
-  vmStep: 'VM Steps',
-  reprepare: 'Reprepares',
-  run: 'Runs',
-  filterHit: 'Filter Hit',
-  filterMiss: 'Filter Miss',
-  memused: 'Memory Used',
+type StatusProperty = { label: string; title: string; fmt?: typeof formatBytes }
+const STATUS_LABELS: Record<string, StatusProperty> = {
+  fullscanStep: {
+    label: 'Full Scan Steps',
+    title:
+      'Number of steps that performed a full scan of a table or index, which is a common cause of slow queries.',
+  },
+  sort: {
+    label: 'Sorts',
+    title: 'Number of steps that performed a sort operation.',
+  },
+  autoindex: {
+    label: 'Autoindex Steps',
+    title: 'Number of steps that created an index automatically.',
+  },
+  vmStep: {
+    label: 'VM Steps',
+    title: 'Number of steps that involved virtual machine operations.',
+  },
+  reprepare: {
+    label: 'Reprepares',
+    title: 'Number of steps that reprepared a query plan.',
+  },
+  run: { label: 'Runs', title: 'Number of times a query was executed.' },
+  filterHit: {
+    label: 'Filter Hit',
+    title: 'Number of times a filter condition was satisfied.',
+  },
+  filterMiss: {
+    label: 'Filter Miss',
+    title: 'Number of times a filter condition was not satisfied.',
+  },
+  memused: {
+    label: 'Memory Used',
+    title: 'The approximate number of bytes of heap memory used.',
+    fmt: formatBytes,
+  },
 }
+
+const sortedMetrics = computed(
+  () => (metricsData.data || []).toSorted((a, b) => b.duration - a.duration),
+)
+
+const stats = computed(() => {
+  const metrics = sortedMetrics.value
+  return {
+    count: metrics.length,
+    maxDuration: metrics[0]?.duration || 0,
+    totalCalls: metrics.reduce((acc, m) => acc + (m.count || 0), 0),
+    totalDuration: metrics.reduce((acc, m) => acc + (m.duration || 0), 0),
+  }
+})
 
 function buildExplainTree(rows: MetricExplain): ExplainNode[] {
   const map = new Map<number, ExplainNode>()
@@ -1498,9 +1539,9 @@ function StatusCounters({ status }: StatusCountersProps) {
       </div>
       <div class='grid grid-cols-4 gap-2'>
         {Object.entries(status).map(([key, val]) => {
-          const fmt = MEMORY_STATUS_KEYS.has(key)
-            ? formatBytes(val)
-            : { value: String(val), unit: '' }
+          const match = STATUS_LABELS[key as keyof typeof STATUS_LABELS] ||
+            { label: key }
+          const { value, unit } = match.fmt?.(val) || { value: val }
           return (
             <div
               key={key}
@@ -1508,15 +1549,15 @@ function StatusCounters({ status }: StatusCountersProps) {
             >
               <div
                 class='text-[9px] font-medium text-base-content/35 uppercase tracking-wide truncate mb-0.5'
-                title={STATUS_LABELS[key] ?? key}
+                title={match.title}
               >
-                {STATUS_LABELS[key] ?? key}
+                {match.label}
               </div>
               <div class='font-mono text-sm font-semibold text-base-content/75 tabular-nums'>
-                {fmt.value}
-                {fmt.unit && (
+                {value}
+                {unit && (
                   <span class='text-[9px] text-base-content/35 ml-0.5'>
-                    {fmt.unit}
+                    {unit}
                   </span>
                 )}
               </div>
@@ -1528,16 +1569,14 @@ function StatusCounters({ status }: StatusCountersProps) {
   )
 }
 
-function StatCell(
-  {
-    label,
-    value,
-    unit,
-    valueClass = 'text-base-content/80',
-    unitClass = 'text-base-content/30',
-    width = 'w-24',
-  }: StatCellProps,
-) {
+function StatCell({
+  label,
+  value,
+  unit,
+  valueClass = 'text-base-content/80',
+  unitClass = 'text-base-content/30',
+  width = 'w-24',
+}: StatCellProps) {
   return (
     <div class={`${width} text-right px-2`}>
       <div class='text-[10px] font-medium text-base-content/35 uppercase tracking-wide'>
@@ -1553,9 +1592,7 @@ function StatCell(
 
 function MetricDetail() {
   const expandedIndex = Number(url.params.expanded)
-  const sorted = [...(metricsData.data || [])].sort((a, b) =>
-    b.duration - a.duration
-  )
+  const sorted = sortedMetrics.value
   const metric = sorted[expandedIndex]
   if (!metric) return null
   return (
@@ -1575,17 +1612,11 @@ function MetricDetail() {
 }
 
 function MetricRow({ metric, index }: MetricRowProps) {
-  const isExpanded = url.params.expanded === index.toString()
-  const maxDuration = Math.max(
-    ...(metricsData.data?.map((m) => m.duration || 0) ?? []),
-    1,
-  )
-  const avg = formatDuration(
-    metric.count > 0 ? metric.duration / metric.count : 0,
-  )
+  const isExpanded = url.params.expanded === String(index)
+  const avg = formatDuration(metric.count && (metric.duration / metric.count))
   const maxFmt = metric.max != null ? formatDuration(metric.max) : null
   const totalFmt = formatDuration(metric.duration)
-  const pct = (metric.duration / maxDuration) * 100
+  const pct = (metric.duration / stats.value.totalDuration) * 100
 
   return (
     <div>
@@ -1647,17 +1678,13 @@ function MetricRow({ metric, index }: MetricRowProps) {
 }
 
 function MetricsSummaryBar() {
-  const metrics = metricsData.data || []
-  const totalCalls = metrics.reduce((acc, m) => acc + (m.count || 0), 0)
-  const totalDuration = formatDuration(
-    metrics.reduce((acc, m) => acc + (m.duration || 0), 0),
-  )
+  const totalDuration = formatDuration(stats.value.totalDuration)
   return (
     <div class='flex items-center gap-6 px-5 py-3 border-b border-base-200 shrink-0 bg-base-100'>
       <div class='flex items-center gap-2 text-sm'>
         <Activity class='w-4 h-4 text-base-content/40' />
         <span class='font-semibold text-base-content'>
-          {totalCalls.toLocaleString()}
+          {stats.value.totalCalls.toLocaleString()}
         </span>
         <span class='text-base-content/40'>total calls</span>
       </div>
@@ -1672,7 +1699,7 @@ function MetricsSummaryBar() {
       <div class='w-px h-4 bg-base-300' />
       <div class='flex items-center gap-2 text-sm'>
         <BarChart2 class='w-4 h-4 text-base-content/40' />
-        <span class='font-semibold text-base-content'>{metrics.length}</span>
+        <span class='font-semibold text-base-content'>{stats.value.count}</span>
         <span class='text-base-content/40'>unique queries</span>
       </div>
     </div>
@@ -1700,9 +1727,8 @@ function MetricsEmpty() {
 // ─── MetricsViewer ──────────────────────────────────────────────────────────
 
 function MetricsViewer() {
-  const metrics = metricsData.data || []
   const isPending = metricsData.pending
-  const sorted = [...metrics].sort((a, b) => b.duration - a.duration)
+  const sorted = sortedMetrics.value
 
   return (
     <div class='flex flex-col h-full min-h-0 relative bg-base-100'>
