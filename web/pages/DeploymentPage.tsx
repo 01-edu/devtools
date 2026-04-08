@@ -39,7 +39,7 @@ import { computed, effect, Signal, untracked } from '@preact/signals'
 import { api, type ApiOutput } from '../lib/api.ts'
 import { QueryHistory } from '../components/QueryHistory.tsx'
 
-import { JSX } from 'preact'
+import type { ComponentChildren } from 'preact'
 import {
   deployments,
   querier,
@@ -86,9 +86,12 @@ effect(() => {
   dep && schema.fetch({ url: dep })
 })
 
+const tabNames = ['tables', 'queries', 'logs', 'metrics'] as const
+type TabName = (typeof tabNames)[number]
+
 const activeTab = computed(() => {
-  const tab = url.params.tab as (keyof typeof TabViews)
-  return tab in TabViews ? tab : 'tables'
+  const tab = url.params.tab as TabName
+  return tabNames.includes(tab) ? tab : 'tables'
 })
 
 effect(() => {
@@ -1035,7 +1038,7 @@ const InfoBlock = (
 }
 
 // Recursive JSON value renderer with syntax highlighting
-const JsonValue = ({ value }: { value: unknown }): JSX.Element => {
+const JsonValue = ({ value }: { value: unknown }) => {
   if (typeof value === 'object' && value !== null) {
     if (Object.keys(value).length === 0) {
       return <span class='text-base-content/40 italic'>empty object</span>
@@ -1341,7 +1344,7 @@ const TabViews = {
   logs: <LogsViewer />,
   metrics: <MetricsViewer />,
   // Add other tab views here as needed
-}
+} satisfies Record<TabName, ComponentChildren>
 
 effect(() => {
   const { dep, tab } = url.params
@@ -2277,14 +2280,14 @@ const InsertRow = () => {
 }
 
 type DrawerTab = 'history' | 'insert' | 'view-row' | 'view-log'
-const drawerViews: Record<DrawerTab, JSX.Element> = {
+const drawerViews: Record<DrawerTab, ComponentChildren> = {
   history: <QueryHistory />,
   insert: <InsertRow />,
   'view-row': <RowDetails />,
   'view-log': <LogDetails />,
 } as const
 
-const Drawer = ({ children }: { children: JSX.Element }) => (
+const Drawer = ({ children }: { children: ComponentChildren }) => (
   <div class='drawer h-full relative' dir='rtl'>
     <input
       id='drawer-right'

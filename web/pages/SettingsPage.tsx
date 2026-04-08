@@ -17,7 +17,7 @@ import {
   X,
 } from 'lucide-preact'
 import { DialogModal } from '../components/Dialog.tsx'
-import type { TargetedEvent } from 'preact'
+import type { ComponentChildren, TargetedEvent } from 'preact'
 import { effect, signal } from '@preact/signals'
 
 // API Signals
@@ -108,9 +108,9 @@ const Layout = ({
 }: {
   title: string
   desc: string
-  actions?: preact.ComponentChildren
+  actions?: ComponentChildren
   error?: string | null
-  children: preact.ComponentChildren
+  children: ComponentChildren
 }) => (
   <div class='flex flex-col h-full min-h-0 pb-16'>
     <div class='border-b border-base-300 bg-base-100 px-8 py-6 flex items-center justify-between gap-4'>
@@ -137,8 +137,8 @@ const Layout = ({
 const Card = (
   { title, action, children }: {
     title: string
-    action?: preact.ComponentChildren
-    children: preact.ComponentChildren
+    action?: ComponentChildren
+    children: ComponentChildren
   },
 ) => (
   <div class='bg-base-200 rounded-lg border border-base-300'>
@@ -155,7 +155,7 @@ const EditCard = (
     title: string
     editKey: string
     saving?: boolean
-    children: preact.ComponentChildren
+    children: ComponentChildren
   },
 ) => (
   <div class='bg-base-200 rounded-lg border border-base-300'>
@@ -306,7 +306,7 @@ const Accordion = ({
   editKey: string
   urlKey: string
   hideOnEdit?: boolean
-  children: preact.ComponentChildren
+  children: ComponentChildren
 }) => {
   const param = url.params[urlKey]
   const enabled = param != null ? param === 'true' : value
