@@ -35,7 +35,7 @@ import {
   SortMenu,
   toggleSort,
 } from '../components/Filtre.tsx'
-import { computed, effect, Signal } from '@preact/signals'
+import { computed, effect, Signal, untracked } from '@preact/signals'
 import { api, type ApiOutput } from '../lib/api.ts'
 import { QueryHistory } from '../components/QueryHistory.tsx'
 
@@ -93,7 +93,7 @@ const activeTab = computed(() => {
 
 effect(() => {
   activeTab.value // clear expanded when params.tab change
-  navigate({ params: { expanded: null }, replace: true })
+  untracked(() => navigate({ params: { expanded: null }, replace: true }))
 })
 
 async function sha(message: string) {
