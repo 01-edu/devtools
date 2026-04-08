@@ -1,11 +1,11 @@
-import type { HTMLAttributes } from 'preact'
+import type { ComponentChildren, HTMLAttributes } from 'preact'
 import { useState } from 'preact/hooks'
 
 import { navigate, url } from '@01edu/signal-router'
 
 type DialogProps = {
   id: string
-  children: preact.ComponentChildren
+  children: ComponentChildren
 } & HTMLAttributes<HTMLDialogElement>
 
 export const Dialog = ({
