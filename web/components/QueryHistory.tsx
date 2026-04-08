@@ -1,6 +1,7 @@
 import { ChevronRight, Clock, Play, Search, Trash2 } from 'lucide-preact'
 import { A, navigate, url } from '@01edu/signal-router'
 import { queriesHistory, runQuery } from '../lib/shared.tsx'
+import { highlightSQL } from '../lib/highlight-sql.ts'
 
 const deleteQuery = (hash: string) => {
   const updatedHistory = { ...queriesHistory.value }
@@ -58,8 +59,12 @@ export const QueryHistory = () => {
                   <Clock class='w-3 h-3' />
                   {new Date(item.timestamp).toLocaleString()}
                 </div>
-                <p class='font-mono text-sm truncate mt-1' title={item.query}>
-                  {item.query}
+                <p
+                  class='font-mono text-sm truncate mt-1'
+                  title={item.query}
+                  ref={highlightSQL}
+                >
+                  item.query
                 </p>
                 <div class='text-xs text-base-content/60 mt-1'>
                   {item.columns} columns, {item.rows} rows
