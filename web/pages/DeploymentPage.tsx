@@ -62,6 +62,7 @@ const toastSignal = new Signal<
 >(
   null,
 )
+
 function toast(message: string, type: 'info' | 'error' = 'info') {
   toastSignal.value = { message, type }
   setTimeout(() => (toastSignal.value = null), 3000)
@@ -85,38 +86,31 @@ effect(() => {
   dep && schema.fetch({ url: dep })
 })
 
+const activeTab = computed(() => {
+  const tab = url.params.tab as (keyof typeof TabViews)
+  return tab in TabViews ? tab : 'tables'
+})
+
 effect(() => {
-  url.params.tab // clear expanded when params.tab change
+  activeTab.value // clear expanded when params.tab change
   navigate({ params: { expanded: null }, replace: true })
 })
+
+async function sha(message: string) {
+  const data = new TextEncoder().encode(message)
+  const buff = await crypto.subtle.digest('SHA-1', data)
+  return new Uint8Array(buff).toHex()
+}
 
 const queryHash = new Signal<string>('')
 effect(() => {
   const query = (url.params.q || '').trim()
   if (query) {
-    hashQuery(query).then((hash) => {
-      queryHash.value = hash
-    })
+    sha(query).then((hash) => queryHash.value = hash)
   } else {
     queryHash.value = ''
   }
 })
-
-function sha(message: string) {
-  const data = new TextEncoder().encode(message)
-  return crypto.subtle.digest('SHA-1', data)
-}
-
-function hashQuery(query: string) {
-  const hash = sha(query).then((hashBuffer) => {
-    const hashArray = Array.from(new Uint8Array(hashBuffer))
-    const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join(
-      '',
-    )
-    return hashHex
-  })
-  return hash
-}
 
 const onSave = () => {
   const query = (url.params.q || '').trim()
@@ -814,17 +808,15 @@ const TabButton = (
   </A>
 )
 
-function TabNavigation({
-  activeTab = 'tables',
-}: { activeTab?: 'tables' | 'queries' | 'logs' | 'metrics' }) {
+function TabNavigation() {
   // Get column names from the currently selected table for tables tab
+  const tab = activeTab.value
   const selectedTableName = url.params.table || schema.data?.tables?.[0]?.table
   const selectedTable = schema.data?.tables?.find((t) =>
     t.table === selectedTableName
   )
   const tableColumnNames = selectedTable?.columns.map((c) => c.name) || []
-
-  const filterKeyOptions = activeTab === 'tables' ? tableColumnNames : [
+  const filterKeyOptions = tab === 'tables' ? tableColumnNames : [
     'timestamp',
     'trace_id',
     'span_id',
@@ -850,7 +842,7 @@ function TabNavigation({
         </div>
 
         <div class='flex flex-wrap items-center gap-2 shrink-0'>
-          {(activeTab === 'tables' || activeTab === 'logs') && (
+          {(tab === 'tables' || tab === 'logs') && (
             <label class='input input-sm min-w-0 w-full sm:w-64'>
               <Search class='opacity-50' />
               <input
@@ -868,29 +860,29 @@ function TabNavigation({
               />
             </label>
           )}
-          {activeTab !== 'logs' && (
+          {tab !== 'logs' && (
             <A
-              params={{ drawer: activeTab === 'tables' ? 'insert' : null }}
-              onClick={activeTab === 'queries'
+              params={{ drawer: tab === 'tables' ? 'insert' : null }}
+              onClick={tab === 'queries'
                 ? () => runQuery(url.params.q || '')
                 : undefined}
               class='btn btn-primary btn-sm'
             >
-              {activeTab === 'queries'
+              {tab === 'queries'
                 ? <Play class='h-4 w-4' />
                 : <Plus class='h-4 w-4' />}
               <span class='hidden sm:inline'>
-                {activeTab === 'queries' ? 'Run query' : 'Insert row'}
+                {tab === 'queries' ? 'Run query' : 'Insert row'}
               </span>
             </A>
           )}
-          {activeTab !== 'queries' && activeTab !== 'metrics' && (
+          {tab !== 'queries' && tab !== 'metrics' && (
             <>
-              <FilterMenu filterKeyOptions={filterKeyOptions} tag={activeTab} />
-              <SortMenu sortKeyOptions={filterKeyOptions} tag={activeTab} />
+              <FilterMenu filterKeyOptions={filterKeyOptions} tag={tab} />
+              <SortMenu sortKeyOptions={filterKeyOptions} tag={tab} />
             </>
           )}
-          {activeTab === 'queries' && (
+          {tab === 'queries' && (
             <>
               <button
                 disabled={querySaved}
@@ -1387,7 +1379,7 @@ type StatCellProps = {
   width?: string
 }
 
-type MetricRowProps = { metric: Metric; index: number }
+type MetricRowProps = { metric: Metric & { id: string } }
 type StatusCountersProps = { status: MetricStatus }
 type QueryPlanProps = { explain: MetricExplain }
 
@@ -1453,9 +1445,17 @@ const STATUS_LABELS: Record<string, StatusProperty> = {
   },
 }
 
-const sortedMetrics = computed(
-  () => (metricsData.data || []).toSorted((a, b) => b.duration - a.duration),
-)
+const sortedMetrics = new Signal<(Metric & { id: string })[]>([])
+
+effect(() => {
+  Promise.all((metricsData.data || []).map(async (metric) => {
+    const id = (await sha(metric.query)).slice(0, 8)
+    return { ...metric, id }
+  })).then((metrics) => {
+    metrics.sort((a, b) => a.duration - b.duration)
+    sortedMetrics.value = metrics
+  })
+})
 
 const stats = computed(() => {
   const metrics = sortedMetrics.value
@@ -1591,10 +1591,13 @@ function StatCell({
 }
 
 function MetricDetail() {
-  const expandedIndex = Number(url.params.expanded)
+  const expanded = url.params.expanded
   const sorted = sortedMetrics.value
-  const metric = sorted[expandedIndex]
-  if (!metric) return null
+  const metric = expanded && sorted.find((metric) => metric.id === expanded)
+  if (!metric) {
+    expanded && navigate({ params: { expanded: null }, replace: true })
+    return null
+  }
   return (
     <div class='px-5 pb-5 pt-4 bg-base-200/20 border-t border-base-200 space-y-5'>
       <div>
@@ -1611,8 +1614,8 @@ function MetricDetail() {
   )
 }
 
-function MetricRow({ metric, index }: MetricRowProps) {
-  const isExpanded = url.params.expanded === String(index)
+function MetricRow({ metric }: MetricRowProps) {
+  const isExpanded = url.params.expanded === metric.id
   const avg = formatDuration(metric.count && (metric.duration / metric.count))
   const maxFmt = metric.max != null ? formatDuration(metric.max) : null
   const totalFmt = formatDuration(metric.duration)
@@ -1624,7 +1627,7 @@ function MetricRow({ metric, index }: MetricRowProps) {
         class={`px-5 py-3 flex items-center gap-4 cursor-pointer hover:bg-base-200/40 transition-colors ${
           isExpanded ? 'bg-base-200/30' : ''
         }`}
-        params={{ expanded: isExpanded ? null : index }}
+        params={{ expanded: isExpanded ? null : metric.id }}
       >
         <div class='flex-1 min-w-0'>
           <div class='font-mono text-[13px] text-base-content/85 truncate'>
@@ -1729,7 +1732,6 @@ function MetricsEmpty() {
 function MetricsViewer() {
   const isPending = metricsData.pending
   const sorted = sortedMetrics.value
-
   return (
     <div class='flex flex-col h-full min-h-0 relative bg-base-100'>
       {!!isPending && (
@@ -1739,9 +1741,7 @@ function MetricsViewer() {
       )}
       <MetricsSummaryBar />
       <div class='flex-1 min-h-0 overflow-y-auto divide-y divide-base-200'>
-        {sorted.map((metric, index) => (
-          <MetricRow key={index} metric={metric} index={index} />
-        ))}
+        {sorted.map((metric) => <MetricRow key={metric.id} metric={metric} />)}
         {sorted.length === 0 && !isPending && <MetricsEmpty />}
       </div>
     </div>
@@ -2341,24 +2341,21 @@ const Drawer = ({ children }: { children: JSX.Element }) => (
 )
 
 export const DeploymentPage = () => {
-  const tab = (url.params.tab as 'tables' | 'queries' | 'logs') || 'tables'
-  const view = TabViews[tab]
-  if (!view) {
-    navigate({ params: { tab: 'tables' }, replace: true })
-  }
-  if (!url.params.sbi) {
-    navigate({ params: { sbi: 'deployment' }, replace: true })
-  }
+  const tab = activeTab.value
+  const params = new Map<string, string>()
+  url.params.tab === tab || params.set('tab', tab)
+  url.params.sbi || params.set('sbi', 'deployment')
+  params.size && navigate({ params: Object.fromEntries(params), replace: true })
   return (
     <div class='h-screen flex flex-col'>
       <Header />
       <div class='flex flex-1 min-h-0 pb-15'>
         <main class='flex-1 flex flex-col h-full'>
-          <TabNavigation activeTab={tab} />
+          <TabNavigation />
           <section class='flex-1 h-full overflow-hidden'>
             <Drawer>
               <div class='h-full bg-base-100 border border-base-300 overflow-hidden flex flex-col lg:flex'>
-                {view}
+                {TabViews[tab]}
               </div>
             </Drawer>
           </section>
