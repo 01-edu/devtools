@@ -15,7 +15,7 @@ import {
   UNION,
 } from '@01edu/api/validator'
 
-const LogSchema = OBJ({
+export const LogSchema = OBJ({
   timestamp: NUM('The timestamp of the log event'),
   trace_id: NUM('A float64 representation of the trace ID'),
   span_id: optional(NUM('A float64 representation of the span ID')),
@@ -41,7 +41,7 @@ export const LogSchemaOutput = OBJ({
   service_instance_id: optional(STR('Service instance ID')),
 }, 'A log event')
 
-const LogsInputSchema = UNION(
+export const LogsInputSchema = UNION(
   LogSchema,
   ARR(LogSchema, 'An array of log events'),
 )
@@ -49,7 +49,7 @@ const LogsInputSchema = UNION(
 type Log = Asserted<typeof LogSchemaOutput>
 type LogsInput = Asserted<typeof LogsInputSchema>
 
-const client = createClient({
+export const client = createClient({
   url: CLICKHOUSE_HOST,
   username: CLICKHOUSE_USER,
   password: CLICKHOUSE_PASSWORD,
@@ -79,10 +79,7 @@ const numberToHex128 = (() => {
   }
 })()
 
-async function insertLogs(
-  service_name: string,
-  data: LogsInput,
-) {
+export async function insertLogs(service_name: string, data: LogsInput) {
   const logsToInsert = Array.isArray(data) ? data : [data]
   if (logsToInsert.length === 0) throw respond.NoContent()
 
@@ -202,7 +199,7 @@ function inferParamType(key: string, value: string): string {
   return 'String'
 }
 
-async function getLogs(dep: string, data: FetchTablesParams) {
+export async function getLogs(dep: string, data: FetchTablesParams) {
   const { query, params } = buildLogsQuery(dep, data)
   try {
     const rs = await client.query({
@@ -240,4 +237,39 @@ async function getLogs(dep: string, data: FetchTablesParams) {
 //   }
 // }
 
-export { client, getLogs, insertLogs, LogSchema, LogsInputSchema }
+export const initLogTable = async () => {
+  await client.ping()
+  await client.command({
+    query: `
+    CREATE TABLE IF NOT EXISTS logs (
+      id UUID DEFAULT generateUUIDv4(),
+      -- Flattened resource fields
+      service_name LowCardinality(String),
+      service_version LowCardinality(String),
+      service_instance_id String,
+
+      timestamp DateTime64(3, 'UTC') DEFAULT now64(3, 'UTC'),
+      observed_timestamp DateTime64(3, 'UTC') DEFAULT now64(3, 'UTC'),
+      trace_id FixedString(16),
+      span_id FixedString(16),
+      severity_number UInt8,
+      -- derived column, computed by DB from severity_number
+      severity_text LowCardinality(String) MATERIALIZED CASE
+        WHEN severity_number > 4 AND severity_number <= 8 THEN 'DEBUG'
+        WHEN severity_number > 8 AND severity_number <= 12 THEN 'INFO'
+        WHEN severity_number > 12 AND severity_number <= 16 THEN 'WARN'
+        WHEN severity_number > 20 AND severity_number <= 24 THEN 'FATAL'
+        ELSE 'ERROR'
+      END,
+      -- Often empty, but kept for OTEL spec compliance
+      body Nullable(String),
+      attributes JSON,
+      event_name LowCardinality(String)
+    )
+    ENGINE = MergeTree
+    PARTITION BY toYYYYMMDD(timestamp)
+    ORDER BY (service_name, timestamp, trace_id)
+    SETTINGS index_granularity = 8192, min_bytes_for_wide_part = 0;
+  `,
+  })
+}

@@ -8,6 +8,7 @@ import {
   STR,
 } from '@01edu/api/validator'
 import { createCollection } from '/api/lib/json_store.ts'
+import { isLocal } from '/api/lib/env.ts'
 
 export const UserDef = OBJ({
   id: STR('The user ID'),

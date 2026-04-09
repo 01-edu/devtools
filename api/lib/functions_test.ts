@@ -105,5 +105,4 @@ Deno.test('Functions Module - Pipeline & Config', async () => {
     // Skipped
   }
   await new Promise((r) => setTimeout(r, 500))
-  functions.stopWatcher()
 })
