@@ -122,7 +122,7 @@ const EmptyState = (
 const ProjectCard = (
   { project, members }: { project: Project; members: string[] },
 ) => {
-  const isMember = members.includes(user.data?.id || '')
+  const isMember = user.data?.isAdmin || members.includes(user.data?.id || '')
   return (
     <A
       key={project.slug}

@@ -584,31 +584,12 @@ const defs = {
   'GET/api/deployment/query': route({
     authorize: withUserSession,
     fn: async (ctx, { deployment, sql }) => {
-      const dep = DeploymentsCollection.get(deployment)
-
-      if (!dep) {
-        throw new respond.NotFoundError({ message: 'Deployment not found' })
-      }
-
-      if (!dep.databaseEnabled) {
-        throw new respond.BadRequestError({
-          message: 'Database not enabled for deployment',
-        })
-      }
-
-      const project = ProjectsCollection.get(dep.projectId)
-      if (!project) throw respond.NotFound({ message: 'Project not found' })
-      if (!project.isPublic && !ctx.session.isAdmin) {
-        if (!(await userInTeam(project.teamId, ctx.session.email))) {
-          throw new respond.ForbiddenError({
-            message: 'Access to project queries denied',
-          })
-        }
-      }
-
-      const { sqlEndpoint, sqlToken } = dep
+      const { sqlEndpoint, sqlToken } = await withDeploymentTableAccess(
+        ctx,
+        deployment,
+      )
       if (!sqlEndpoint || !sqlToken) {
-        throw new respond.BadRequestError({
+        throw respond.BadRequest({
           message: 'SQL endpoint or token not configured for deployment',
         })
       }
@@ -649,26 +630,10 @@ const defs = {
   'GET/api/deployment/metrics-sql': route({
     authorize: withUserSession,
     fn: async (ctx, { deployment }) => {
-      const dep = DeploymentsCollection.get(deployment)
-      if (!dep) throw respond.NotFound({ message: 'Deployment not found' })
-
-      if (!dep.databaseEnabled) {
-        throw respond.BadRequest({
-          message: 'Database not enabled for deployment',
-        })
-      }
-
-      const project = ProjectsCollection.get(dep.projectId)
-      if (!project) throw respond.NotFound({ message: 'Project not found' })
-      if (!project.isPublic && !ctx.session.isAdmin) {
-        if (!(await userInTeam(project.teamId, ctx.session.email))) {
-          throw respond.Forbidden({
-            message: 'Access to project metrics denied',
-          })
-        }
-      }
-
-      const { sqlEndpoint, sqlToken } = dep
+      const { sqlEndpoint, sqlToken } = await withDeploymentTableAccess(
+        ctx,
+        deployment,
+      )
       if (!sqlEndpoint || !sqlToken) {
         throw respond.BadRequest({
           message: 'SQL endpoint or token not configured for deployment',
