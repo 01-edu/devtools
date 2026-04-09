@@ -1,5 +1,6 @@
-import { ENV } from '@01edu/api/env'
+import { ENV, APP_ENV } from '@01edu/api/env'
 
+export { APP_ENV }
 export const PORT = Number(ENV('PORT', '2119'))
 export const PICTURE_DIR = ENV('PICTURE_DIR', './.picture')
 export const GOOGLE_CLIENT_ID = ENV('GOOGLE_CLIENT_ID', '')

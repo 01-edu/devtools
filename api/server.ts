@@ -1,22 +1,21 @@
 import { serveDir } from '@std/http/file-server'
-import { APP_ENV } from '@01edu/api/env'
 import { server } from '@01edu/api/server'
 import { Log } from '@01edu/api/log'
 import { routeHandler } from '/api/routes.ts'
-import { PORT } from './lib/env.ts'
+import { PORT, APP_ENV, isLocal } from '/api/lib/env.ts'
 import { init } from '/api/lib/functions.ts'
 import { initLogTable } from '/api/clickhouse-client.ts'
-import { startSchemaRefreshLoop } from './sql.ts'
+import { startLocalPingServer } from '/api/lib/local_ipc.ts'
+import { startSchemaRefreshLoop } from '/api/sql.ts'
 
 await initLogTable()
 await init()
 startSchemaRefreshLoop()
+isLocal && (await startLocalPingServer())
 
 const fetch = server({ log: console as unknown as Log, routeHandler })
 export default {
-  fetch(req: Request) {
-    return fetch(req, new URL(req.url))
-  },
+  fetch: (req: Request) => fetch(req, new URL(req.url)),
 }
 
 if (APP_ENV === 'prod') {
