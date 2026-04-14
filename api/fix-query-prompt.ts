@@ -123,5 +123,5 @@ optimization is justified, say so.
 
 Now analyze this data:
 
-{{QUERY_METRICS_JSON}}
+{{QUERY_DETAILS_JSON}}
 `

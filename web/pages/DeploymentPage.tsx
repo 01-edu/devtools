@@ -1504,135 +1504,15 @@ effect(() => {
 effect(() => {
   const data = fixQueryApi.data
   if (!data) return
-  untracked(() => {
-    if (!analysisCache.value.has(data.id)) {
-      analysisCache.value = new Map(analysisCache.value).set(
-        data.id,
-        data.analysis,
-      )
-    }
-  })
-})
+  const cashe = analysisCache.peek()
 
-type MdBlock =
-  | { type: 'code'; text: string }
-  | { type: 'h2' | 'h3' | 'li-disc' | 'li-decimal' | 'p'; text: string }
-  | { type: 'blank' }
-
-function parseMd(raw: string): MdBlock[] {
-  const blocks: MdBlock[] = []
-  const lines = raw.split('\n')
-  let i = 0
-  while (i < lines.length) {
-    const line = lines[i++]
-    if (line.startsWith('```')) {
-      const code: string[] = []
-      while (i < lines.length && !lines[i].startsWith('```')) {
-        code.push(lines[i++])
-      }
-      i++ // consume closing ```
-      blocks.push({ type: 'code', text: code.join('\n') })
-    } else if (line.startsWith('## ')) {
-      blocks.push({ type: 'h2', text: line.slice(3) })
-    } else if (line.startsWith('### ')) {
-      blocks.push({ type: 'h3', text: line.slice(4) })
-    } else if (line.startsWith('- ') || line.startsWith('* ')) {
-      blocks.push({ type: 'li-disc', text: line.slice(2) })
-    } else if (/^\d+\. /.test(line)) {
-      blocks.push({ type: 'li-decimal', text: line.replace(/^\d+\. /, '') })
-    } else if (line.trim() === '') blocks.push({ type: 'blank' })
-    else blocks.push({ type: 'p', text: line })
+  if (!cashe.has(data.id)) {
+    analysisCache.value = new Map(cashe).set(
+      data.id,
+      data.analysis,
+    )
   }
-  return blocks
-}
-
-function AiInline({ text }: { text: string }) {
-  return (
-    <>
-      {text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((part, i) => {
-        if (part.startsWith('**') && part.endsWith('**')) {
-          return <strong key={i}>{part.slice(2, -2)}</strong>
-        }
-        if (part.startsWith('`') && part.endsWith('`')) {
-          return (
-            <code key={i} class='bg-base-200 px-1 rounded text-xs font-mono'>
-              {part.slice(1, -1)}
-            </code>
-          )
-        }
-        return part
-      })}
-    </>
-  )
-}
-
-function AiMarkdown() {
-  const expanded = url.params.expanded
-  const analysis = (expanded && analysisCache.value.get(expanded)) || ''
-  const blocks = parseMd(analysis)
-  return (
-    <div class='space-y-0.5'>
-      {blocks.map((block, i) => {
-        switch (block.type) {
-          case 'code':
-            return (
-              <pre
-                key={i}
-                class='bg-base-200 rounded-lg p-3 my-2 overflow-x-auto text-xs font-mono whitespace-pre'
-              >{block.text}</pre>
-            )
-          case 'h2':
-            return (
-              <h2
-                key={i}
-                class='text-base font-bold mt-5 mb-1 border-b border-base-300 pb-1'
-              >
-                {block.text}
-              </h2>
-            )
-          case 'h3':
-            return (
-              <h3
-                key={i}
-                class='text-sm font-bold mt-4 mb-1 text-primary'
-              >
-                {block.text}
-              </h3>
-            )
-          case 'li-disc':
-            return (
-              <li
-                key={i}
-                class='ml-5 list-disc text-base-content/80'
-              >
-                <AiInline text={block.text} />
-              </li>
-            )
-          case 'li-decimal':
-            return (
-              <li
-                key={i}
-                class='ml-5 list-decimal text-base-content/80'
-              >
-                <AiInline text={block.text} />
-              </li>
-            )
-          case 'blank':
-            return <div key={i} class='h-2' />
-          case 'p':
-            return (
-              <p
-                key={i}
-                class='text-base-content/80'
-              >
-                <AiInline text={block.text} />
-              </p>
-            )
-        }
-      })}
-    </div>
-  )
-}
+})
 
 function AiAnalysisDialog() {
   const expanded = url.params.expanded
@@ -1657,9 +1537,16 @@ function AiAnalysisDialog() {
           </div>
         )}
         {cached && (
-          <div class='overflow-y-auto max-h-[65vh] text-base-content text-sm leading-relaxed'>
-            <AiMarkdown />
-          </div>
+          <div
+            class='overflow-y-auto max-h-[65vh] text-sm leading-relaxed
+              [&_h2]:text-base [&_h2]:font-bold [&_h2]:mt-5 [&_h2]:mb-1 [&_h2]:border-b [&_h2]:border-base-300 [&_h2]:pb-1
+              [&_h3]:text-sm [&_h3]:font-bold [&_h3]:mt-4 [&_h3]:mb-1 [&_h3]:text-primary
+              [&_pre]:bg-base-200 [&_pre]:rounded-lg [&_pre]:p-3 [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:text-xs [&_pre]:font-mono [&_pre]:whitespace-pre
+              [&_code]:bg-base-200 [&_code]:px-1 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono
+              [&_li]:ml-5 [&_li]:text-base-content/80 [&_ul]:list-disc [&_ol]:list-decimal
+              [&_p]:text-base-content/80 [&_p]:my-0.5'
+            dangerouslySetInnerHTML={{ __html: cached }}
+          />
         )}
       </div>
     </DialogModal>
