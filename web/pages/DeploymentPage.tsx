@@ -24,6 +24,7 @@ import {
   RefreshCw,
   Save,
   Search,
+  Sparkles,
   Table,
   Timer,
   XCircle,
@@ -38,6 +39,7 @@ import {
 import { computed, effect, Signal, untracked } from '@preact/signals'
 import { api, type ApiOutput } from '../lib/api.ts'
 import { QueryHistory } from '../components/QueryHistory.tsx'
+import { DialogModal } from '../components/Dialog.tsx'
 
 import type { ComponentChildren } from 'preact'
 import {
@@ -1482,6 +1484,188 @@ function buildExplainTree(rows: MetricExplain): ExplainNode[] {
   return roots
 }
 
+// ─── Fix with AI components ──────────────────────────────────────────────────
+
+const fixQueryApi = api['POST/api/deployment/fix-query'].signal()
+const analysisCache = new Signal(new Map<string, string>())
+
+// Fetch when opening dialog for an uncached metric
+effect(() => {
+  const { expanded, dep, tab, dialog } = url.params
+  if (!dep || tab !== 'metrics' || dialog !== 'fix-with-ai') return
+  if (!expanded || analysisCache.value.has(expanded)) return
+  const sorted = sortedMetrics.value
+  const metric = sorted.find((m) => m.id === expanded)
+  if (!metric) return
+  fixQueryApi.fetch({ id: metric.id, deployment: dep, metric })
+})
+
+// Populate cache using fetchingFor — not url.params.expanded which may have changed
+effect(() => {
+  const data = fixQueryApi.data
+  if (!data) return
+  untracked(() => {
+    if (!analysisCache.value.has(data.id)) {
+      analysisCache.value = new Map(analysisCache.value).set(
+        data.id,
+        data.analysis,
+      )
+    }
+  })
+})
+
+type MdBlock =
+  | { type: 'code'; text: string }
+  | { type: 'h2' | 'h3' | 'li-disc' | 'li-decimal' | 'p'; text: string }
+  | { type: 'blank' }
+
+function parseMd(raw: string): MdBlock[] {
+  const blocks: MdBlock[] = []
+  const lines = raw.split('\n')
+  let i = 0
+  while (i < lines.length) {
+    const line = lines[i++]
+    if (line.startsWith('```')) {
+      const code: string[] = []
+      while (i < lines.length && !lines[i].startsWith('```')) {
+        code.push(lines[i++])
+      }
+      i++ // consume closing ```
+      blocks.push({ type: 'code', text: code.join('\n') })
+    } else if (line.startsWith('## ')) {
+      blocks.push({ type: 'h2', text: line.slice(3) })
+    } else if (line.startsWith('### ')) {
+      blocks.push({ type: 'h3', text: line.slice(4) })
+    } else if (line.startsWith('- ') || line.startsWith('* ')) {
+      blocks.push({ type: 'li-disc', text: line.slice(2) })
+    } else if (/^\d+\. /.test(line)) {
+      blocks.push({ type: 'li-decimal', text: line.replace(/^\d+\. /, '') })
+    } else if (line.trim() === '') blocks.push({ type: 'blank' })
+    else blocks.push({ type: 'p', text: line })
+  }
+  return blocks
+}
+
+function AiInline({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong key={i}>{part.slice(2, -2)}</strong>
+        }
+        if (part.startsWith('`') && part.endsWith('`')) {
+          return (
+            <code key={i} class='bg-base-200 px-1 rounded text-xs font-mono'>
+              {part.slice(1, -1)}
+            </code>
+          )
+        }
+        return part
+      })}
+    </>
+  )
+}
+
+function AiMarkdown() {
+  const expanded = url.params.expanded
+  const analysis = (expanded && analysisCache.value.get(expanded)) || ''
+  const blocks = parseMd(analysis)
+  return (
+    <div class='space-y-0.5'>
+      {blocks.map((block, i) => {
+        switch (block.type) {
+          case 'code':
+            return (
+              <pre
+                key={i}
+                class='bg-base-200 rounded-lg p-3 my-2 overflow-x-auto text-xs font-mono whitespace-pre'
+              >{block.text}</pre>
+            )
+          case 'h2':
+            return (
+              <h2
+                key={i}
+                class='text-base font-bold mt-5 mb-1 border-b border-base-300 pb-1'
+              >
+                {block.text}
+              </h2>
+            )
+          case 'h3':
+            return (
+              <h3
+                key={i}
+                class='text-sm font-bold mt-4 mb-1 text-primary'
+              >
+                {block.text}
+              </h3>
+            )
+          case 'li-disc':
+            return (
+              <li
+                key={i}
+                class='ml-5 list-disc text-base-content/80'
+              >
+                <AiInline text={block.text} />
+              </li>
+            )
+          case 'li-decimal':
+            return (
+              <li
+                key={i}
+                class='ml-5 list-decimal text-base-content/80'
+              >
+                <AiInline text={block.text} />
+              </li>
+            )
+          case 'blank':
+            return <div key={i} class='h-2' />
+          case 'p':
+            return (
+              <p
+                key={i}
+                class='text-base-content/80'
+              >
+                <AiInline text={block.text} />
+              </p>
+            )
+        }
+      })}
+    </div>
+  )
+}
+
+function AiAnalysisDialog() {
+  const expanded = url.params.expanded
+  const cached = expanded ? analysisCache.value.get(expanded) : undefined
+  return (
+    <DialogModal id='fix-with-ai' class='modal'>
+      <div class='w-full max-w-2xl'>
+        <h3 class='text-lg font-bold mb-4 flex items-center gap-2'>
+          <Sparkles class='w-5 h-5 text-primary' />
+          AI Query Optimization
+        </h3>
+        {!cached && fixQueryApi.pending && (
+          <div class='flex flex-col items-center justify-center py-12 gap-3'>
+            <span class='loading loading-spinner loading-lg text-primary' />
+            <span class='text-sm text-base-content/50'>Analyzing query…</span>
+          </div>
+        )}
+        {!cached && fixQueryApi.error && (
+          <div class='alert alert-error text-sm mt-2'>
+            <AlertCircle class='w-4 h-4 shrink-0' />
+            <span>{fixQueryApi.error.message}</span>
+          </div>
+        )}
+        {cached && (
+          <div class='overflow-y-auto max-h-[65vh] text-base-content text-sm leading-relaxed'>
+            <AiMarkdown />
+          </div>
+        )}
+      </div>
+    </DialogModal>
+  )
+}
+
 // ─── Metrics sub-components ─────────────────────────────────────────────────
 
 function ExplainTreeNode(
@@ -1612,6 +1796,15 @@ function MetricDetail() {
       <div class='grid grid-cols-1 lg:grid-cols-2 gap-5'>
         {metric.status && <StatusCounters status={metric.status} />}
         {metric.explain?.length > 0 && <QueryPlan explain={metric.explain} />}
+      </div>
+      <div class='flex justify-end'>
+        <A
+          class='btn btn-sm btn-primary gap-2'
+          params={{ dialog: 'fix-with-ai' }}
+        >
+          <Sparkles class='w-4 h-4' />
+          Fix with AI
+        </A>
       </div>
     </div>
   )
@@ -1747,6 +1940,7 @@ function MetricsViewer() {
         {sorted.map((metric) => <MetricRow key={metric.id} metric={metric} />)}
         {sorted.length === 0 && !isPending && <MetricsEmpty />}
       </div>
+      <AiAnalysisDialog />
     </div>
   )
 }
