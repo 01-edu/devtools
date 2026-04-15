@@ -169,7 +169,7 @@ const LineNumbers = () => {
 }
 
 const handleInput = (e: Event) => {
-  const v = (e.target as HTMLTextAreaElement).value
+  const v = ((e.target as HTMLElement).firstChild as Text)?.data ?? ''
   navigate({ params: { q: v }, replace: true })
 }
 
@@ -179,12 +179,20 @@ const handleKeyDown = (e: KeyboardEvent) => {
   runQuery(url.params.q || '')
 }
 
+const sqlEditorRef = (el: HTMLElement | null) => {
+  if (!el) return
+  if (!el.textContent) {
+    el.textContent = url.peek().searchParams.get('q') || 'SELECT * FROM users WHERE active = true;'
+  }
+  return highlightSQL(el)
+}
+
 const SQLEditor = () => (
   <div class='resize-y min-h-[120px] max-h-[80vh] overflow-hidden border border-base-300 rounded-lg bg-base-100'>
     <div class='relative h-full bg-base-100 rounded-lg overflow-hidden focus-within:border-primary/50 transition-colors'>
       <LineNumbers />
       <pre
-        ref={highlightSQL}
+        ref={sqlEditorRef}
         onInput={handleInput}
         onKeyDown={handleKeyDown}
         class='w-full h-full font-mono text-sm leading-6 pl-12 pr-4 py-3 bg-transparent border-0 focus:outline-none focus:ring-0 text-base-content caret-primary resize-none tracking-wide placeholder:text-base-content/40'
@@ -192,7 +200,7 @@ const SQLEditor = () => (
         spellcheck={false}
         autocapitalize='off'
         contenteditable='plaintext-only'
-      >{url.params.q || 'SELECT * FROM users WHERE active = true;'}</pre>
+      />
     </div>
   </div>
 )

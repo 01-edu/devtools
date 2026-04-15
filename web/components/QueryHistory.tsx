@@ -64,7 +64,7 @@ export const QueryHistory = () => {
                   title={item.query}
                   ref={highlightSQL}
                 >
-                  item.query
+                  {item.query}
                 </p>
                 <div class='text-xs text-base-content/60 mt-1'>
                   {item.columns} columns, {item.rows} rows
