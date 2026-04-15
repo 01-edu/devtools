@@ -37,6 +37,7 @@ import {
 } from '../components/Filtre.tsx'
 import { computed, effect, Signal, untracked } from '@preact/signals'
 import { api, type ApiOutput } from '../lib/api.ts'
+import { highlightSQL } from '../lib/highlight-sql.ts'
 import { QueryHistory } from '../components/QueryHistory.tsx'
 
 import type { ComponentChildren } from 'preact'
@@ -59,9 +60,7 @@ export const metricsData = api['GET/api/deployment/metrics-sql'].signal()
 
 const toastSignal = new Signal<
   { message: string; type: 'info' | 'error' } | null
->(
-  null,
-)
+>(null)
 
 function toast(message: string, type: 'info' | 'error' = 'info') {
   toastSignal.value = { message, type }
@@ -170,7 +169,7 @@ const LineNumbers = () => {
 }
 
 const handleInput = (e: Event) => {
-  const v = (e.target as HTMLTextAreaElement).value
+  const v = ((e.target as HTMLElement).firstChild as Text)?.data ?? ''
   navigate({ params: { q: v }, replace: true })
 }
 
@@ -180,20 +179,27 @@ const handleKeyDown = (e: KeyboardEvent) => {
   runQuery(url.params.q || '')
 }
 
+const sqlEditorRef = (el: HTMLElement | null) => {
+  if (!el) return
+  if (!el.textContent) {
+    el.textContent = url.peek().searchParams.get('q') || 'SELECT * FROM users WHERE active = true;'
+  }
+  return highlightSQL(el)
+}
+
 const SQLEditor = () => (
   <div class='resize-y min-h-[120px] max-h-[80vh] overflow-hidden border border-base-300 rounded-lg bg-base-100'>
     <div class='relative h-full bg-base-100 rounded-lg overflow-hidden focus-within:border-primary/50 transition-colors'>
       <LineNumbers />
-      <textarea
-        value={url.params.q || ''}
+      <pre
+        ref={sqlEditorRef}
         onInput={handleInput}
         onKeyDown={handleKeyDown}
         class='w-full h-full font-mono text-sm leading-6 pl-12 pr-4 py-3 bg-transparent border-0 focus:outline-none focus:ring-0 text-base-content caret-primary resize-none tracking-wide placeholder:text-base-content/40'
-        placeholder='SELECT * FROM users WHERE active = true;'
         aria-label='SQL editor'
         spellcheck={false}
         autocapitalize='off'
-        autocomplete='off'
+        contenteditable='plaintext-only'
       />
     </div>
   </div>
@@ -1607,7 +1613,10 @@ function MetricDetail() {
         <div class='text-[10px] font-bold uppercase tracking-widest text-base-content/40 mb-2 flex items-center gap-1.5'>
           <Database class='w-3.5 h-3.5' /> Query
         </div>
-        <pre class='font-mono text-[12px] text-base-content/80 bg-base-100 rounded-lg border border-base-200 p-3 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed'>{metric.query}</pre>
+        <pre
+          ref={highlightSQL}
+          class='font-mono text-[12px] text-base-content/80 bg-base-100 rounded-lg border border-base-200 p-3 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed'
+        >{metric.query}</pre>
       </div>
       <div class='grid grid-cols-1 lg:grid-cols-2 gap-5'>
         {metric.status && <StatusCounters status={metric.status} />}
@@ -1633,7 +1642,10 @@ function MetricRow({ metric }: MetricRowProps) {
         params={{ expanded: isExpanded ? null : metric.id }}
       >
         <div class='flex-1 min-w-0'>
-          <div class='font-mono text-[13px] text-base-content/85 truncate'>
+          <div
+            ref={highlightSQL}
+            class='font-mono text-[13px] text-base-content/85 truncate'
+          >
             {metric.query}
           </div>
           <div class='mt-1.5 h-1 bg-base-200 rounded-full overflow-hidden max-w-[200px]'>
