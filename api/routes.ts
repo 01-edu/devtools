@@ -41,6 +41,33 @@ import {
 } from '/api/sql.ts'
 import { Log } from '@01edu/api/log'
 import { get, getOne } from './lmdb-store.ts'
+import { analyzeQueryWithAI } from '/api/fix-query.ts'
+
+const MetricSchema = OBJ({
+  query: STR('The SQL query text'),
+  count: NUM('How many times the query has run'),
+  duration: NUM('Total time spent running the query in milliseconds'),
+  max: NUM('Longest single query execution in milliseconds'),
+  explain: ARR(
+    OBJ({
+      id: NUM('Query plan node id'),
+      parent: NUM('Parent query plan node id'),
+      detail: STR('Human-readable query plan detail'),
+    }),
+    'SQLite EXPLAIN QUERY PLAN rows',
+  ),
+  status: OBJ({
+    fullscanStep: NUM('Number of full table scan steps'),
+    sort: NUM('Number of sort operations'),
+    autoindex: NUM('Rows inserted into transient auto-indices'),
+    vmStep: NUM('Number of virtual machine operations'),
+    reprepare: NUM('Number of automatic statement reprepares'),
+    run: NUM('Number of statement runs'),
+    filterHit: NUM('Bloom filter bypass hits'),
+    filterMiss: NUM('Bloom filter misses'),
+    memused: NUM('Peak memory usage in bytes'),
+  }, 'SQLite sqlite3_stmt_status counters'),
+})
 
 const withUserSession = async ({ cookies }: RequestContext) => {
   const session = await decodeSession(cookies.session)
@@ -658,35 +685,34 @@ const defs = {
     input: OBJ({
       deployment: STR("The deployment's URL"),
     }),
-    output: ARR(
-      OBJ({
-        query: STR('The SQL query text'),
-        count: NUM('How many times the query has run'),
-        duration: NUM('Total time spent running the query in milliseconds'),
-        max: NUM('Longest single query execution in milliseconds'),
-        explain: ARR(
-          OBJ({
-            id: NUM('Query plan node id'),
-            parent: NUM('Parent query plan node id'),
-            detail: STR('Human-readable query plan detail'),
-          }),
-          'SQLite EXPLAIN QUERY PLAN rows',
-        ),
-        status: OBJ({
-          fullscanStep: NUM('Number of full table scan steps'),
-          sort: NUM('Number of sort operations'),
-          autoindex: NUM('Rows inserted into transient auto-indices'),
-          vmStep: NUM('Number of virtual machine operations'),
-          reprepare: NUM('Number of automatic statement reprepares'),
-          run: NUM('Number of statement runs'),
-          filterHit: NUM('Bloom filter bypass hits'),
-          filterMiss: NUM('Bloom filter misses'),
-          memused: NUM('Peak memory usage in bytes'),
-        }, 'SQLite sqlite3_stmt_status counters'),
-      }),
-      'Collected query metrics',
-    ),
+    output: ARR(MetricSchema, 'Collected query metrics'),
     description: 'Get SQL metrics from the deployment',
+  }),
+  'POST/api/deployment/fix-query': route({
+    authorize: withUserSession,
+    fn: async (ctx, { id, deployment, metric }) => {
+      await withDeploymentTableAccess(ctx, deployment)
+      const schema = DatabaseSchemasCollection.get(deployment)
+      try {
+        const analysis = await analyzeQueryWithAI(metric, schema)
+        return { id, analysis }
+      } catch (err) {
+        throw respond.InternalServerError({
+          message: err instanceof Error ? err.message : String(err),
+        })
+      }
+    },
+    input: OBJ({
+      id: STR('The metric ID'),
+      deployment: STR("The deployment's URL"),
+      metric: MetricSchema,
+    }),
+    output: OBJ({
+      id: STR('The metric ID'),
+      analysis: STR('AI-generated markdown analysis of the query'),
+    }),
+    description:
+      'Analyze a SQL query metric with Gemini AI and suggest optimizations',
   }),
 } as const
 

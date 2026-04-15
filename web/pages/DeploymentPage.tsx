@@ -24,6 +24,7 @@ import {
   RefreshCw,
   Save,
   Search,
+  Sparkles,
   Table,
   Timer,
   XCircle,
@@ -39,6 +40,7 @@ import { computed, effect, Signal, untracked } from '@preact/signals'
 import { api, type ApiOutput } from '../lib/api.ts'
 import { highlightSQL } from '../lib/highlight-sql.ts'
 import { QueryHistory } from '../components/QueryHistory.tsx'
+import { DialogModal } from '../components/Dialog.tsx'
 
 import type { ComponentChildren } from 'preact'
 import {
@@ -1488,6 +1490,75 @@ function buildExplainTree(rows: MetricExplain): ExplainNode[] {
   return roots
 }
 
+// ─── Fix with AI components ──────────────────────────────────────────────────
+
+const fixQueryApi = api['POST/api/deployment/fix-query'].signal()
+const analysisCache = new Signal(new Map<string, string>())
+
+// Fetch when opening dialog for an uncached metric
+effect(() => {
+  const { expanded, dep, tab, dialog } = url.params
+  if (!dep || tab !== 'metrics' || dialog !== 'fix-with-ai') return
+  if (!expanded || analysisCache.value.has(expanded)) return
+  const sorted = sortedMetrics.value
+  const metric = sorted.find((m) => m.id === expanded)
+  if (!metric) return
+  fixQueryApi.fetch({ id: metric.id, deployment: dep, metric })
+})
+
+// Populate cache using fetchingFor — not url.params.expanded which may have changed
+effect(() => {
+  const data = fixQueryApi.data
+  if (!data) return
+  const cashe = analysisCache.peek()
+
+  if (!cashe.has(data.id)) {
+    analysisCache.value = new Map(cashe).set(
+      data.id,
+      data.analysis,
+    )
+  }
+})
+
+function AiAnalysisDialog() {
+  const expanded = url.params.expanded
+  const cached = expanded ? analysisCache.value.get(expanded) : undefined
+  return (
+    <DialogModal id='fix-with-ai' class='modal'>
+      <div class='w-full max-w-2xl'>
+        <h3 class='text-lg font-bold mb-4 flex items-center gap-2'>
+          <Sparkles class='w-5 h-5 text-primary' />
+          AI Query Optimization
+        </h3>
+        {!cached && fixQueryApi.pending && (
+          <div class='flex flex-col items-center justify-center py-12 gap-3'>
+            <span class='loading loading-spinner loading-lg text-primary' />
+            <span class='text-sm text-base-content/50'>Analyzing query…</span>
+          </div>
+        )}
+        {!cached && fixQueryApi.error && (
+          <div class='alert alert-error text-sm mt-2'>
+            <AlertCircle class='w-4 h-4 shrink-0' />
+            <span>{fixQueryApi.error.message}</span>
+          </div>
+        )}
+        {cached && (
+          <div
+            class='overflow-y-auto max-h-[65vh] text-sm leading-relaxed
+              [&_h2]:text-base [&_h2]:font-bold [&_h2]:mt-5 [&_h2]:mb-1 [&_h2]:border-b [&_h2]:border-base-300 [&_h2]:pb-1
+              [&_h3]:text-sm [&_h3]:font-bold [&_h3]:mt-4 [&_h3]:mb-1 [&_h3]:text-primary
+              [&_pre]:bg-base-200 [&_pre]:rounded-lg [&_pre]:p-3 [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:text-xs [&_pre]:font-mono [&_pre]:whitespace-pre
+              [&_code]:bg-base-200 [&_code]:px-1 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono
+              [&_li]:ml-5 [&_li]:text-base-content/80 [&_ul]:list-disc [&_ol]:list-decimal
+              [&_p]:text-base-content/80 [&_p]:my-0.5'
+            dangerouslySetInnerHTML={{ __html: cached }}
+          />
+        )}
+      </div>
+    </DialogModal>
+  )
+}
+
 // ─── Metrics sub-components ─────────────────────────────────────────────────
 
 function ExplainTreeNode(
@@ -1621,6 +1692,15 @@ function MetricDetail() {
       <div class='grid grid-cols-1 lg:grid-cols-2 gap-5'>
         {metric.status && <StatusCounters status={metric.status} />}
         {metric.explain?.length > 0 && <QueryPlan explain={metric.explain} />}
+      </div>
+      <div class='flex justify-end'>
+        <A
+          class='btn btn-sm btn-primary gap-2'
+          params={{ dialog: 'fix-with-ai' }}
+        >
+          <Sparkles class='w-4 h-4' />
+          Fix with AI
+        </A>
       </div>
     </div>
   )
@@ -1759,6 +1839,7 @@ function MetricsViewer() {
         {sorted.map((metric) => <MetricRow key={metric.id} metric={metric} />)}
         {sorted.length === 0 && !isPending && <MetricsEmpty />}
       </div>
+      <AiAnalysisDialog />
     </div>
   )
 }

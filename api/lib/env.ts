@@ -23,3 +23,10 @@ export const DB_SCHEMA_REFRESH_MS = Number(
 
 export const STORE_URL = ENV('STORE_URL')
 export const STORE_SECRET = ENV('STORE_SECRET')
+
+export const GEMINI_API_KEY = ENV('GEMINI_API_KEY')
+
+export const GEMINI_MODEL = ENV(
+  'GEMINI_MODEL',
+  'gemini-3.1-flash-lite-preview',
+)
