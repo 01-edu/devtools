@@ -184,7 +184,8 @@ const handleKeyDown = (e: KeyboardEvent) => {
 const sqlEditorRef = (el: HTMLElement | null) => {
   if (!el) return
   if (!el.textContent) {
-    el.textContent = url.peek().searchParams.get('q') || 'SELECT * FROM users WHERE active = true;'
+    el.textContent = url.peek().searchParams.get('q') ||
+      'SELECT * FROM users WHERE active = true;'
   }
   return highlightSQL(el)
 }
@@ -226,14 +227,33 @@ const QueryStatus = () => (
   </div>
 )
 
+const sqlErrorLabels: Record<string, string> = {
+  'bad-query': 'Bad query',
+  'timeout': 'Timeout',
+  'service-error': 'Service error',
+  'unexpected': 'Unexpected',
+} as const
+
 function ErrorDisplay() {
   if (!querier.error) return null
 
+  const error = querier.error as Error & { data?: { type?: string } }
+  const type = error.data?.type
+  const label = type ? sqlErrorLabels[type] : null
+
   return (
     <div class='flex items-center gap-2 bg-error/10 border border-error/20 rounded-lg px-3 py-1.5'>
-      <AlertTriangle class='h-4 w-4 text-error' />
-      <span class='text-xs text-error font-medium'>
-        {querier.error.message}
+      <AlertTriangle class='h-4 w-4 text-error shrink-0' />
+      {label && (
+        <span class='text-[10px] uppercase tracking-wide font-semibold text-error/80 bg-error/15 rounded px-1.5 py-0.5 shrink-0'>
+          {label}
+        </span>
+      )}
+      <span
+        class='text-xs text-error font-medium truncate'
+        title={error.message}
+      >
+        {error.message}
       </span>
     </div>
   )
