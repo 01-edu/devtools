@@ -631,17 +631,16 @@ const defs = {
         }
       } catch (error) {
         if (error instanceof SQLQueryError) {
-          if (error.type === 'bad-query') {
-            throw respond.BadRequest({
-              message: `SQL Query Error: ${error.sqlMessage}`,
-            })
-          } else if (error.type === 'timeout') {
-            throw respond.BadRequest({
-              message: `SQL Query Timeout: ${error.sqlMessage}`,
-            })
-          }
+          const { type, sqlMessage } = error
+          throw new respond.BadRequestError({
+            type,
+            message: sqlMessage ||
+              `SQL query error: ${type || 'Unknown error'}`,
+          })
         }
-        throw respond.InternalServerError()
+        throw new respond.InternalServerErrorError({
+          message: error instanceof Error ? error.message : 'Unexpected error',
+        })
       }
     },
     input: OBJ({
