@@ -1218,6 +1218,19 @@ const Hex128 = ({ hex, type }: { hex: string; type: 'trace' | 'span' }) => {
   )
 }
 
+const logsMeasureRef = new Signal<HTMLTableRowElement | null>(null)
+const logItemHeight = computed(() => {
+  if (!logsMeasureRef.value) return 0
+  return logsMeasureRef.value.getBoundingClientRect().height
+})
+const logRowStyle = computed<Record<string, string>>(() => {
+  const h = logItemHeight.value
+  return {
+    contentVisibility: 'auto',
+    containIntrinsicSize: h ? `auto ${h}px` : 'auto',
+  }
+})
+
 function LogsViewer() {
   const filteredLogs = logData.data || []
   const isPending = logData.pending
@@ -1245,7 +1258,7 @@ function LogsViewer() {
               }[]}
             />
             <tbody>
-              {filteredLogs.map((log) => {
+              {filteredLogs.map((log: any, index: number) => {
                 const serverityNum = log.severity_number
                 const severity = getSeverityText(
                   serverityNum,
@@ -1266,6 +1279,8 @@ function LogsViewer() {
                   >
                     <tr
                       key={log.id}
+                      ref={(el: HTMLTableRowElement | null) => { if (index === 0 && el) logsMeasureRef.value = el; }}
+                      style={logRowStyle.value}
                       class='hover:bg-base-200/50 border-b border-base-300/50 cursor-pointer transition-colors'
                     >
                       <RowNumberCell index={logData.data?.indexOf(log) ?? 0} />
