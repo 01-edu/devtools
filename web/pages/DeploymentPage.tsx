@@ -594,8 +594,9 @@ const DataTable = () => {
       )}
       <div class='flex-1 min-h-0 overflow-hidden'>
         <div
-          class={`w-full overflow-x-auto overflow-y-auto h-full transition-all duration-200 ease-in-out ${isPending ? 'opacity-60 scale-[0.998]' : 'opacity-100 scale-100'
-            }`}
+          class={`w-full overflow-x-auto overflow-y-auto h-full transition-all duration-200 ease-in-out ${
+            isPending ? 'opacity-60 scale-[0.998]' : 'opacity-100 scale-100'
+          }`}
         >
           <TableContent rows={rows} />
         </div>
@@ -686,8 +687,8 @@ function SchemaPanel() {
               {schema.pending
                 ? 'Loading...'
                 : schema.error
-                  ? 'Error loading schema'
-                  : `Tables (${schema.data?.tables?.length || 0})`}
+                ? 'Error loading schema'
+                : `Tables (${schema.data?.tables?.length || 0})`}
             </div>
             <div class='flex items-center gap-2'>
               {dep && (
@@ -737,10 +738,11 @@ function SchemaPanel() {
                   return (
                     <div
                       key={table.table}
-                      class={`rounded-md overflow-hidden border ${isSelected
+                      class={`rounded-md overflow-hidden border ${
+                        isSelected
                           ? 'border-primary bg-primary/5'
                           : 'border-base-300/50'
-                        }`}
+                      }`}
                     >
                       <div class='flex items-center gap-2 p-2 hover:bg-base-200 w-full text-left transition-colors'>
                         <A
@@ -828,8 +830,9 @@ const TabButton = (
   <A
     params={{ tab: tabName }}
     role='tab'
-    class={`tab whitespace-nowrap capitalize ${url.params.tab === tabName ? 'tab-active' : ''
-      }`}
+    class={`tab whitespace-nowrap capitalize ${
+      url.params.tab === tabName ? 'tab-active' : ''
+    }`}
   >
     {tabName}
   </A>
@@ -1048,8 +1051,9 @@ const InfoBlock = (
       </div>
       <div class='flex items-center justify-between gap-2 overflow-hidden'>
         <div
-          class={`text-sm break-all ${mono ? 'font-mono text-xs' : 'font-medium'
-            }`}
+          class={`text-sm break-all ${
+            mono ? 'font-mono text-xs' : 'font-medium'
+          }`}
           title={displayValue}
         >
           {displayValue}
@@ -1085,8 +1089,8 @@ const JsonValue = ({ value }: { value: unknown }) => {
   const colorClass = isNumber
     ? 'text-blue-500'
     : isBool
-      ? 'text-secondary'
-      : 'text-base-content'
+    ? 'text-secondary'
+    : 'text-base-content'
   return <span class={`font-mono break-all ${colorClass}`}>{valStr}</span>
 }
 
@@ -1137,8 +1141,9 @@ const SeverityBlock = (
 
   return (
     <div
-      class={`group rounded-lg p-3 border ${config?.bg || 'bg-base-100'} ${config?.color || ''
-        }`}
+      class={`group rounded-lg p-3 border ${config?.bg || 'bg-base-100'} ${
+        config?.color || ''
+      }`}
     >
       <div class='text-[10px] font-bold uppercase tracking-wider mb-2 opacity-60'>
         Severity
