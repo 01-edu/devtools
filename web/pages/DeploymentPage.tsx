@@ -218,12 +218,12 @@ const QueryStatus = () => (
         </div>
       )
       : (querier.data?.rows.length ?? 0) > 0
-        ? (
-          <span class='text-xs text-base-content/60'>
-            {querier.data?.rows.length} rows
-          </span>
-        )
-        : null}
+      ? (
+        <span class='text-xs text-base-content/60'>
+          {querier.data?.rows.length} rows
+        </span>
+      )
+      : null}
   </div>
 )
 
