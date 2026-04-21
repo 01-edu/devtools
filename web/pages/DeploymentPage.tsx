@@ -218,12 +218,12 @@ const QueryStatus = () => (
         </div>
       )
       : (querier.data?.rows.length ?? 0) > 0
-      ? (
-        <span class='text-xs text-base-content/60'>
-          {querier.data?.rows.length} rows
-        </span>
-      )
-      : null}
+        ? (
+          <span class='text-xs text-base-content/60'>
+            {querier.data?.rows.length} rows
+          </span>
+        )
+        : null}
   </div>
 )
 
@@ -527,8 +527,7 @@ const TableFooter = ({ rows }: { rows: AnyRecord[] }) => {
       <div class='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-base-content/60'>
         <span class='font-medium'>
           {rows.length > 0
-            ? `${rows.length.toLocaleString()} row${
-              rows.length !== 1 ? 's' : ''
+            ? `${rows.length.toLocaleString()} row${rows.length !== 1 ? 's' : ''
             }`
             : 'No rows'}
         </span>
@@ -583,8 +582,8 @@ const DataTable = () => {
   const rows = tab === 'tables'
     ? tableData.data?.rows || []
     : tab === 'queries'
-    ? querier.data?.rows || []
-    : []
+      ? querier.data?.rows || []
+      : []
 
   return (
     <div class='flex flex-col h-full min-h-0 grow-1 relative'>
@@ -595,9 +594,8 @@ const DataTable = () => {
       )}
       <div class='flex-1 min-h-0 overflow-hidden'>
         <div
-          class={`w-full overflow-x-auto overflow-y-auto h-full transition-all duration-200 ease-in-out ${
-            isPending ? 'opacity-60 scale-[0.998]' : 'opacity-100 scale-100'
-          }`}
+          class={`w-full overflow-x-auto overflow-y-auto h-full transition-all duration-200 ease-in-out ${isPending ? 'opacity-60 scale-[0.998]' : 'opacity-100 scale-100'
+            }`}
         >
           <TableContent rows={rows} />
         </div>
@@ -688,8 +686,8 @@ function SchemaPanel() {
               {schema.pending
                 ? 'Loading...'
                 : schema.error
-                ? 'Error loading schema'
-                : `Tables (${schema.data?.tables?.length || 0})`}
+                  ? 'Error loading schema'
+                  : `Tables (${schema.data?.tables?.length || 0})`}
             </div>
             <div class='flex items-center gap-2'>
               {dep && (
@@ -739,11 +737,10 @@ function SchemaPanel() {
                   return (
                     <div
                       key={table.table}
-                      class={`rounded-md overflow-hidden border ${
-                        isSelected
+                      class={`rounded-md overflow-hidden border ${isSelected
                           ? 'border-primary bg-primary/5'
                           : 'border-base-300/50'
-                      }`}
+                        }`}
                     >
                       <div class='flex items-center gap-2 p-2 hover:bg-base-200 w-full text-left transition-colors'>
                         <A
@@ -831,9 +828,8 @@ const TabButton = (
   <A
     params={{ tab: tabName }}
     role='tab'
-    class={`tab whitespace-nowrap capitalize ${
-      url.params.tab === tabName ? 'tab-active' : ''
-    }`}
+    class={`tab whitespace-nowrap capitalize ${url.params.tab === tabName ? 'tab-active' : ''
+      }`}
   >
     {tabName}
   </A>
@@ -1052,9 +1048,8 @@ const InfoBlock = (
       </div>
       <div class='flex items-center justify-between gap-2 overflow-hidden'>
         <div
-          class={`text-sm break-all ${
-            mono ? 'font-mono text-xs' : 'font-medium'
-          }`}
+          class={`text-sm break-all ${mono ? 'font-mono text-xs' : 'font-medium'
+            }`}
           title={displayValue}
         >
           {displayValue}
@@ -1090,8 +1085,8 @@ const JsonValue = ({ value }: { value: unknown }) => {
   const colorClass = isNumber
     ? 'text-blue-500'
     : isBool
-    ? 'text-secondary'
-    : 'text-base-content'
+      ? 'text-secondary'
+      : 'text-base-content'
   return <span class={`font-mono break-all ${colorClass}`}>{valStr}</span>
 }
 
@@ -1142,9 +1137,8 @@ const SeverityBlock = (
 
   return (
     <div
-      class={`group rounded-lg p-3 border ${config?.bg || 'bg-base-100'} ${
-        config?.color || ''
-      }`}
+      class={`group rounded-lg p-3 border ${config?.bg || 'bg-base-100'} ${config?.color || ''
+        }`}
     >
       <div class='text-[10px] font-bold uppercase tracking-wider mb-2 opacity-60'>
         Severity
@@ -1244,11 +1238,10 @@ function LogsViewer() {
       )}
       <div class='flex-1 min-h-0 overflow-hidden'>
         <div
-          class={`w-full overflow-x-auto overflow-y-auto h-full transition-all duration-300 ease-in-out pb-4 ${
-            isPending
+          class={`w-full overflow-x-auto overflow-y-auto h-full transition-all duration-300 ease-in-out pb-4 ${isPending
               ? 'opacity-50 grayscale-[0.5] scale-[0.995]'
               : 'opacity-100 scale-100'
-          }`}
+            }`}
         >
           <table class='table table-zebra w-full'>
             <TableHeader
@@ -1258,7 +1251,7 @@ function LogsViewer() {
               }[]}
             />
             <tbody>
-              {filteredLogs.map((log: any, index: number) => {
+              {filteredLogs.map((log, index) => {
                 const serverityNum = log.severity_number
                 const severity = getSeverityText(
                   serverityNum,
@@ -1611,9 +1604,8 @@ function ExplainTreeNode(
           </span>
         )}
         <span
-          class={`font-mono text-[12px] leading-relaxed text-base-content/80 ${
-            depth === 0 ? 'font-medium' : ''
-          }`}
+          class={`font-mono text-[12px] leading-relaxed text-base-content/80 ${depth === 0 ? 'font-medium' : ''
+            }`}
         >
           {node.detail}
         </span>
@@ -1751,9 +1743,8 @@ function MetricRow({ metric }: MetricRowProps) {
   return (
     <div>
       <A
-        class={`px-5 py-3 flex items-center gap-4 cursor-pointer hover:bg-base-200/40 transition-colors ${
-          isExpanded ? 'bg-base-200/30' : ''
-        }`}
+        class={`px-5 py-3 flex items-center gap-4 cursor-pointer hover:bg-base-200/40 transition-colors ${isExpanded ? 'bg-base-200/30' : ''
+          }`}
         params={{ expanded: isExpanded ? null : metric.id }}
       >
         <div class='flex-1 min-w-0'>
@@ -1765,13 +1756,12 @@ function MetricRow({ metric }: MetricRowProps) {
           </div>
           <div class='mt-1.5 h-1 bg-base-200 rounded-full overflow-hidden max-w-[200px]'>
             <div
-              class={`h-full rounded-full ${
-                pct > 66
+              class={`h-full rounded-full ${pct > 66
                   ? 'bg-error/70'
                   : pct > 33
-                  ? 'bg-warning/70'
-                  : 'bg-success/70'
-              }`}
+                    ? 'bg-warning/70'
+                    : 'bg-success/70'
+                }`}
               style={{ width: `${Math.max(2, pct)}%` }}
             />
           </div>
@@ -2038,20 +2028,20 @@ const RowDetails = () => {
                 {isObject
                   ? <ObjectInput name={key} defaultValue={value} />
                   : isBoolean
-                  ? <BooleanInput name={key} defaultChecked={Boolean(value)} />
-                  : isDate
-                  ? (
-                    <DateInput
-                      name={key}
-                      defaultValue={typeof value === 'number'
-                        ? new Date(value < 10000000000 ? value * 1000 : value)
-                          .toISOString()
-                        : String(value)}
-                    />
-                  )
-                  : isNumber
-                  ? <NumberInput name={key} defaultValue={value as number} />
-                  : <TextInput name={key} defaultValue={String(value ?? '')} />}
+                    ? <BooleanInput name={key} defaultChecked={Boolean(value)} />
+                    : isDate
+                      ? (
+                        <DateInput
+                          name={key}
+                          defaultValue={typeof value === 'number'
+                            ? new Date(value < 10000000000 ? value * 1000 : value)
+                              .toISOString()
+                            : String(value)}
+                        />
+                      )
+                      : isNumber
+                        ? <NumberInput name={key} defaultValue={value as number} />
+                        : <TextInput name={key} defaultValue={String(value ?? '')} />}
               </div>
             )
           })}
@@ -2082,9 +2072,8 @@ const ObjectInput = (
   return (
     <textarea
       name={name}
-      class={`textarea textarea-bordered font-mono text-sm min-h-32 resize-y ${
-        readOnly ? 'bg-base-200/50' : ''
-      }`}
+      class={`textarea textarea-bordered font-mono text-sm min-h-32 resize-y ${readOnly ? 'bg-base-200/50' : ''
+        }`}
       defaultValue={stringified}
       readOnly={readOnly}
     />
@@ -2120,9 +2109,8 @@ const NumberInput = (
   <input
     type='number'
     name={name}
-    class={`input input-bordered font-mono text-sm ${
-      readOnly ? 'bg-base-200/50' : ''
-    }`}
+    class={`input input-bordered font-mono text-sm ${readOnly ? 'bg-base-200/50' : ''
+      }`}
     defaultValue={defaultValue}
     readOnly={readOnly}
   />
@@ -2138,9 +2126,8 @@ const DateInput = (
   <input
     type='datetime-local'
     name={name}
-    class={`input input-bordered font-mono text-sm ${
-      readOnly ? 'bg-base-200/50' : ''
-    }`}
+    class={`input input-bordered font-mono text-sm ${readOnly ? 'bg-base-200/50' : ''
+      }`}
     defaultValue={String(defaultValue || '').slice(0, 16)}
     readOnly={readOnly}
   />
@@ -2156,9 +2143,8 @@ const TextInput = (
   <input
     type='text'
     name={name}
-    class={`input input-bordered font-mono text-sm ${
-      readOnly ? 'bg-base-200/50' : ''
-    }`}
+    class={`input input-bordered font-mono text-sm ${readOnly ? 'bg-base-200/50' : ''
+      }`}
     defaultValue={defaultValue}
     readOnly={readOnly}
   />
@@ -2222,14 +2208,13 @@ const LogDetails = () => {
       <div class='px-4 py-3 border-b border-base-300 flex items-center justify-between sticky top-0 bg-base-100/95 backdrop-blur z-20'>
         <div class='flex items-center gap-2'>
           <div
-            class={`badge badge-sm ${
-              severityConfig[
+            class={`badge badge-sm ${severityConfig[
                 getSeverityText(
                   log.severity_number,
                   log.severity_text,
                 ) as keyof typeof severityConfig
               ]?.color || 'badge-ghost'
-            }`}
+              }`}
           >
             {getSeverityText(log.severity_number, log.severity_text)}
           </div>
@@ -2263,7 +2248,7 @@ const LogDetails = () => {
             value={safeFormatTimestamp(
               new Date(
                 (log as AnyRecord).observed_timestamp as string ||
-                  log.timestamp,
+                log.timestamp,
               ),
             )}
             mono
@@ -2386,12 +2371,12 @@ const InsertRow = () => {
                 {isObject
                   ? <ObjectInput name={key} />
                   : isBoolean
-                  ? <BooleanInput name={key} />
-                  : isDate
-                  ? <DateInput name={key} />
-                  : isNumber
-                  ? <NumberInput name={key} />
-                  : <TextInput name={key} />}
+                    ? <BooleanInput name={key} />
+                    : isDate
+                      ? <DateInput name={key} />
+                      : isNumber
+                        ? <NumberInput name={key} />
+                        : <TextInput name={key} />}
               </div>
             )
           })}
