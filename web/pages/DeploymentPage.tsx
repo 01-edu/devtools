@@ -975,7 +975,7 @@ const fetchLogs = async (reset = false) => {
     }
 
     logsHasMore.value = data.length === 100
-  } catch (err) {
+  } catch {
     toast('Failed to fetch logs', 'error')
   } finally {
     logsPending.value = false
@@ -983,7 +983,7 @@ const fetchLogs = async (reset = false) => {
 }
 
 effect(() => {
-  const { dep, lq, sbi, lf, ls } = url.params
+  const { dep, sbi } = url.params
   if (dep && sbi === 'deployment') {
     untracked(() => {
       fetchLogs(true)
