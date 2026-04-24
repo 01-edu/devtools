@@ -1259,6 +1259,9 @@ const Hex128 = ({ hex, type }: { hex: string; type: 'trace' | 'span' }) => {
 }
 
 const logsMeasureRef = new Signal<HTMLTableRowElement | null>(null)
+const setLogsMeasureRef = (index: number) => (el: HTMLTableRowElement | null) => {
+  if (index === 0 && el) logsMeasureRef.value = el;
+}
 const logItemHeight = computed(() => {
   if (!logsMeasureRef.value) return 0
   return logsMeasureRef.value.getBoundingClientRect().height
@@ -1320,7 +1323,7 @@ function LogsViewer() {
                   >
                     <tr
                       key={log.id}
-                      ref={(el: HTMLTableRowElement | null) => { if (index === 0 && el) logsMeasureRef.value = el; }}
+                      ref={setLogsMeasureRef(index)}
                       style={logRowStyle.value}
                       class='hover:bg-base-200/50 border-b border-base-300/50 cursor-pointer transition-colors'
                     >
