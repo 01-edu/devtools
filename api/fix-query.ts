@@ -5,7 +5,42 @@ import { GEMINI_API_KEY, GEMINI_MODEL } from '/api/lib/env.ts'
 const GEMINI_URL =
   `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=json&key=${GEMINI_API_KEY}`
 
-export async function analyzeQueryWithAI(metric: unknown, schema: unknown) {
+// In-memory cache keyed by SHA-1 of (deployment + query + explain + status).
+// Survives for the lifetime of the server process.
+const analysisCache = new Map<string, string>()
+const encoder = new TextEncoder()
+async function sha(message: string) {
+  const data = encoder.encode(message)
+  const buff = await crypto.subtle.digest('SHA-1', data)
+  return new Uint8Array(buff).toHex()
+}
+
+function cacheKey(
+  deployment: string,
+  metric: { query: string; explain: unknown; status: unknown },
+) {
+  return sha(
+    JSON.stringify({
+      deployment,
+      query: metric.query,
+      explain: metric.explain,
+      status: metric.status,
+    }),
+  )
+}
+
+export async function analyzeQueryWithAI(
+  deployment: string,
+  metric: { query: string; explain: unknown; status: unknown },
+  schema: unknown,
+  forceRefresh = false,
+) {
+  const key = await cacheKey(deployment, metric)
+  if (!forceRefresh) {
+    const cached = analysisCache.get(key)
+    if (cached) return cached
+  }
+
   const payload = JSON.stringify({ schema, metrics: [metric] }, null, 2)
   const prompt = promptTemplate.replace('{{QUERY_DETAILS_JSON}}', payload)
 
@@ -36,5 +71,7 @@ export async function analyzeQueryWithAI(metric: unknown, schema: unknown) {
     .map((part) => part.text ?? '')
     .join('')
 
-  return render(markdown)
+  const analysis = render(markdown)
+  analysisCache.set(key, analysis)
+  return analysis
 }
