@@ -932,33 +932,73 @@ function TabNavigation() {
   )
 }
 
-const logData = api['POST/api/deployment/logs'].signal()
-effect(() => {
+const logsList = new Signal<ApiOutput['POST/api/deployment/logs']>([])
+const logsHasMore = new Signal(true)
+const logsPending = new Signal(false)
+
+const fetchLogs = async (reset = false) => {
   const { dep, lq, sbi } = url.params
-  if (dep && sbi === 'deployment') {
-    const filterRows = parseFilters('l').filter((r) =>
-      r.key !== 'key' && r.value
-    ).map((r) => ({
-      key: r.key,
-      comparator: comparators[r.op as keyof typeof comparators],
-      value: r.value,
-    }))
-    const sortRows = parseSort('l').filter((r) =>
-      r.key !== 'key' && r.key && r.dir
-    ).map((r) => ({
-      key: r.key,
-      order: r.dir === 'asc' ? 'ASC' : 'DESC' as Order,
-    }))
-    logData.fetch({
+  if (!dep || sbi !== 'deployment') return
+  if (logsPending.value) return
+  if (!reset && !logsHasMore.value) return
+
+  logsPending.value = true
+  const filterRows = parseFilters('l').filter((r) =>
+    r.key !== 'key' && r.value
+  ).map((r) => ({
+    key: r.key,
+    comparator: comparators[r.op as keyof typeof comparators],
+    value: r.value,
+  }))
+  const sortRows = parseSort('l').filter((r) =>
+    r.key !== 'key' && r.key && r.dir
+  ).map((r) => ({
+    key: r.key,
+    order: r.dir === 'asc' ? 'ASC' : 'DESC' as Order,
+  }))
+
+  const offset = reset ? 0 : logsList.value.length
+  try {
+    const data = await api['POST/api/deployment/logs'].fetch({
       deployment: dep || '',
       filter: filterRows,
       sort: sortRows,
       search: lq || '',
       limit: 100,
-      offset: 0,
+      offset: offset,
+    })
+
+    if (reset) {
+      logsList.value = data
+    } else {
+      logsList.value = [...logsList.value, ...data]
+    }
+
+    logsHasMore.value = data.length === 100
+  } catch {
+    toast('Failed to fetch logs', 'error')
+  } finally {
+    logsPending.value = false
+  }
+}
+
+effect(() => {
+  const { dep, sbi } = url.params
+  if (dep && sbi === 'deployment') {
+    untracked(() => {
+      fetchLogs(true)
     })
   }
 })
+
+const onScrollLogs = (e: Event) => {
+  const target = e.target as HTMLElement
+  if (target.scrollHeight - target.scrollTop <= target.clientHeight * 1.5) {
+    if (!logsPending.value && logsHasMore.value) {
+      fetchLogs(false)
+    }
+  }
+}
 
 const parseHex128 = (() => {
   const alphabet = new TextEncoder().encode('0123456789abcdef')
@@ -1218,9 +1258,25 @@ const Hex128 = ({ hex, type }: { hex: string; type: 'trace' | 'span' }) => {
   )
 }
 
+const logsMeasureRef = new Signal<HTMLTableRowElement | null>(null)
+const setLogsMeasureRef = (index: number) => (el: HTMLTableRowElement | null) => {
+  if (index === 0 && el) logsMeasureRef.value = el;
+}
+const logItemHeight = computed(() => {
+  if (!logsMeasureRef.value) return 0
+  return logsMeasureRef.value.getBoundingClientRect().height
+})
+const logRowStyle = computed<Record<string, string>>(() => {
+  const h = logItemHeight.value
+  return {
+    contentVisibility: 'auto',
+    containIntrinsicSize: h ? `auto ${h}px` : 'auto',
+  }
+})
+
 function LogsViewer() {
-  const filteredLogs = logData.data || []
-  const isPending = logData.pending
+  const filteredLogs = logsList.value
+  const isPending = logsPending.value
 
   return (
     <div class='flex flex-col h-full min-h-0 relative'>
@@ -1231,8 +1287,9 @@ function LogsViewer() {
       )}
       <div class='flex-1 min-h-0 overflow-hidden'>
         <div
+          onScroll={onScrollLogs}
           class={`w-full overflow-x-auto overflow-y-auto h-full transition-all duration-300 ease-in-out pb-4 ${
-            isPending
+            isPending && filteredLogs.length === 0
               ? 'opacity-50 grayscale-[0.5] scale-[0.995]'
               : 'opacity-100 scale-100'
           }`}
@@ -1245,7 +1302,7 @@ function LogsViewer() {
               }[]}
             />
             <tbody>
-              {filteredLogs.map((log) => {
+              {filteredLogs.map((log, index) => {
                 const serverityNum = log.severity_number
                 const severity = getSeverityText(
                   serverityNum,
@@ -1266,9 +1323,11 @@ function LogsViewer() {
                   >
                     <tr
                       key={log.id}
+                      ref={setLogsMeasureRef(index)}
+                      style={logRowStyle.value}
                       class='hover:bg-base-200/50 border-b border-base-300/50 cursor-pointer transition-colors'
                     >
-                      <RowNumberCell index={logData.data?.indexOf(log) ?? 0} />
+                      <RowNumberCell index={filteredLogs.indexOf(log) ?? 0} />
                       <td class='p-0 pl-1 font-mono text-xs text-base-content/70 tabular-nums w-44 shrink-0 border-r border-base-300/30 text-left'>
                         <div class='flex items-center gap-2 text-xs'>
                           <Clock class='w-3 h-3 shrink-0 opacity-50' />
@@ -1333,6 +1392,11 @@ function LogsViewer() {
               })}
             </tbody>
           </table>
+          {isPending && filteredLogs.length > 0 && (
+            <div class='flex justify-center p-4 py-8 text-primary'>
+              <span class='loading loading-spinner loading-md'></span>
+            </div>
+          )}
         </div>
       </div>
 
