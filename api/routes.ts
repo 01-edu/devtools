@@ -689,11 +689,16 @@ const defs = {
   }),
   'POST/api/deployment/fix-query': route({
     authorize: withUserSession,
-    fn: async (ctx, { id, deployment, metric }) => {
+    fn: async (ctx, { id, deployment, metric, forceRefresh }) => {
       await withDeploymentTableAccess(ctx, deployment)
       const schema = DatabaseSchemasCollection.get(deployment)
       try {
-        const analysis = await analyzeQueryWithAI(metric, schema)
+        const analysis = await analyzeQueryWithAI(
+          deployment,
+          metric,
+          schema,
+          !!forceRefresh,
+        )
         return { id, analysis }
       } catch (err) {
         throw respond.InternalServerError({
@@ -705,6 +710,7 @@ const defs = {
       id: STR('The metric ID'),
       deployment: STR("The deployment's URL"),
       metric: MetricSchema,
+      forceRefresh: optional(BOOL('Force bypass of server-side cache')),
     }),
     output: OBJ({
       id: STR('The metric ID'),
