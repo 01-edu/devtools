@@ -1,13 +1,11 @@
 import { render } from '@deno/gfm'
 import { promptTemplate } from '/api/fix-query-prompt.ts'
 import { GEMINI_API_KEY, GEMINI_MODEL } from '/api/lib/env.ts'
+import { AIAnalysisCacheCollection } from '/api/schema.ts'
 
 const GEMINI_URL =
   `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=json&key=${GEMINI_API_KEY}`
 
-// In-memory cache keyed by SHA-1 of (deployment + query + explain + status).
-// Survives for the lifetime of the server process.
-const analysisCache = new Map<string, string>()
 const encoder = new TextEncoder()
 async function sha(message: string) {
   const data = encoder.encode(message)
@@ -15,10 +13,9 @@ async function sha(message: string) {
   return new Uint8Array(buff).toHex()
 }
 
-function cacheKey(
-  deployment: string,
-  metric: { query: string; explain: unknown; status: unknown },
-) {
+type Metric = { query: string; explain: unknown; status: unknown }
+
+function cacheKey(deployment: string, metric: Metric) {
   return sha(
     JSON.stringify({
       deployment,
@@ -29,19 +26,7 @@ function cacheKey(
   )
 }
 
-export async function analyzeQueryWithAI(
-  deployment: string,
-  metric: { query: string; explain: unknown; status: unknown },
-  schema: unknown,
-  forceRefresh = false,
-) {
-  const key = await cacheKey(deployment, metric)
-  if (!forceRefresh) {
-    const cached = analysisCache.get(key)
-    if (cached) return cached
-  }
-
-  const payload = JSON.stringify({ schema, metrics: [metric] }, null, 2)
+async function callGemini(payload: string, thinkingLevel: string) {
   const prompt = promptTemplate.replace('{{QUERY_DETAILS_JSON}}', payload)
 
   const res = await fetch(GEMINI_URL, {
@@ -49,9 +34,7 @@ export async function analyzeQueryWithAI(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: {
-        thinkingConfig: { thinkingLevel: 'MINIMAL' },
-      },
+      generationConfig: { thinkingConfig: { thinkingLevel } },
     }),
   })
 
@@ -71,7 +54,27 @@ export async function analyzeQueryWithAI(
     .map((part) => part.text ?? '')
     .join('')
 
-  const analysis = render(markdown)
-  analysisCache.set(key, analysis)
+  return render(markdown)
+}
+
+export async function analyzeQueryWithAI(
+  deployment: string,
+  metric: Metric,
+  schema: unknown,
+  forceRefresh = false,
+) {
+  const key = await cacheKey(deployment, metric)
+  const cached = !forceRefresh && AIAnalysisCacheCollection.get(key)
+  if (cached) return cached.analysis
+
+  const payload = JSON.stringify({ schema, metrics: [metric] }, null, 2)
+  const analysis = await callGemini(payload, forceRefresh ? 'HIGH' : 'MINIMAL')
+
+  const existing = AIAnalysisCacheCollection.get(key)
+  if (existing) {
+    AIAnalysisCacheCollection.update(key, { analysis })
+  } else {
+    AIAnalysisCacheCollection.insert({ cacheKey: key, analysis })
+  }
   return analysis
 }
