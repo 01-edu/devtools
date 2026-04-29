@@ -104,3 +104,14 @@ export const DatabaseSchemasCollection = await createCollection<
   DatabaseSchema,
   'deploymentUrl'
 >({ name: 'db_schemas', primaryKey: 'deploymentUrl' })
+
+export const AIAnalysisCacheDef = OBJ({
+  cacheKey: STR('SHA-1 hash of deployment + query + explain + status'),
+  analysis: STR('HTML-rendered AI analysis (high-quality, from forceRefresh)'),
+}, 'Persistent AI analysis cache — written only on forceRefresh')
+export type AIAnalysisCache = Asserted<typeof AIAnalysisCacheDef>
+
+export const AIAnalysisCacheCollection = await createCollection<
+  AIAnalysisCache,
+  'cacheKey'
+>({ name: 'ai_analysis_cache', primaryKey: 'cacheKey' })
