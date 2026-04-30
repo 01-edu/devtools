@@ -1,6 +1,7 @@
-import { HardDrive, ListTodo } from 'lucide-preact'
+import { Book, HardDrive, ListTodo } from 'lucide-preact'
 import { api } from './api.ts'
 import { DeploymentPage } from '../pages/DeploymentPage.tsx'
+import { ApiDocPage } from '../pages/project/ApiDocPage.tsx'
 import { SidebarItem } from '../components/SideBar.tsx'
 import { url } from '@01edu/signal-router'
 import { Signal } from '@preact/signals'
@@ -19,6 +20,11 @@ export const sidebarItems: Record<string, SidebarItem> = {
     icon: HardDrive,
     label: 'Deployment',
     component: DeploymentPage,
+  },
+  'api-docs': {
+    icon: Book,
+    label: 'API Docs',
+    component: ApiDocPage,
   },
   'tasks': { icon: ListTodo, label: 'Tasks', component: DeploymentPage },
 } as const
