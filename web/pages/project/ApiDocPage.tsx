@@ -28,7 +28,7 @@ type Method = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
 
 const InlineDescription = ({ description }: { description?: string }) => {
   if (!description) return null
-  return <span style={{ color: '#6A9955' }}>{`// ${description}`}</span>
+  return <span class='text-c-comment'>{`// ${description}`}</span>
 }
 
 const ObjectDefinition = ({
@@ -47,13 +47,11 @@ const ObjectDefinition = ({
   return (
     <>
       <div class='mb-4'>
-        {description && (
-          <div style={{ color: '#6A9955' }}>{`// ${description}`}</div>
-        )}
+        {description && <div class='text-c-comment'>{`// ${description}`}</div>}
         <div>
-          <span style={{ color: '#569CD6' }}>type</span>{' '}
-          <span style={{ color: '#FFD700' }}>{name}</span>{' '}
-          <span style={{ color: '#D4D4D4' }}>= {'{'}</span>
+          <span class='text-c-keyword'>type</span>{' '}
+          <span class='text-c-type'>{name}</span>{' '}
+          <span class='text-c-punct'>= {'{'}</span>
         </div>
         {Object.entries(properties).map(([key, prop]) => {
           const nestedTypeName = prop && prop.type === 'object'
@@ -90,31 +88,31 @@ const ObjectDefinition = ({
 
           return (
             <div key={key} style={{ marginLeft: (level + 1) * 20 }}>
-              <span style={{ color: '#9CDCFE' }}>{key}</span>
-              {prop?.optional && <span style={{ color: '#D4D4D4' }}>?</span>}
-              <span style={{ color: '#D4D4D4' }}>:</span>{' '}
+              <span class='text-c-prop'>{key}</span>
+              {prop?.optional && <span class='text-c-punct'>?</span>}
+              <span class='text-c-punct'>:</span>{' '}
               {prop?.type === 'union' && prop.union
                 ? (
-                  <span style={{ color: '#D4D4D4' }}>
+                  <span class='text-c-punct'>
                     {prop.union.map((u, i) => (
                       <span key={i}>
-                        {i > 0 && <span style={{ color: '#C586C0' }}>|</span>}
-                        <span style={{ color: '#C586C0' }}>{u.type}</span>
+                        {i > 0 && <span class='text-c-builtin'>|</span>}
+                        <span class='text-c-builtin'>{u.type}</span>
                       </span>
                     ))}
                   </span>
                 )
                 : prop?.type === 'list' && prop.values
                 ? (
-                  <span style={{ color: '#CE9178' }}>
+                  <span class='text-c-string'>
                     {prop.values.map((v) => `'${v}'`).join(' | ')}
                   </span>
                 )
                 : prop?.type === 'object'
-                ? <span style={{ color: '#FFD700' }}>{nestedTypeName}</span>
+                ? <span class='text-c-type'>{nestedTypeName}</span>
                 : prop?.type === 'array'
                 ? (
-                  <span style={{ color: '#FFD700' }}>
+                  <span class='text-c-type'>
                     {prop.items?.type === 'object'
                       ? `${nestedTypeName}[]`
                       : prop.items?.type === 'list' && prop.items.values
@@ -127,7 +125,7 @@ const ObjectDefinition = ({
                   </span>
                 )
                 : (
-                  <span style={{ color: '#C586C0' }}>
+                  <span class='text-c-builtin'>
                     {prop?.type || 'any'}
                   </span>
                 )} <InlineDescription description={prop?.description} />
@@ -135,7 +133,7 @@ const ObjectDefinition = ({
           )
         })}
         <div>
-          <span style={{ color: '#D4D4D4' }}>{'}'}</span>
+          <span class='text-c-punct'>{'}'}</span>
         </div>
       </div>
       {nestedTypes}
@@ -153,12 +151,12 @@ const TypeDefinition = ({
   if (!doc) {
     return (
       <div>
-        <span style={{ color: '#569CD6' }}>type</span>{' '}
-        <span style={{ color: '#FFD700' }}>{typeName}</span>{' '}
-        <span style={{ color: '#D4D4D4' }}>=</span>{' '}
-        <span style={{ color: '#C586C0' }}>null</span>{' '}
-        <span style={{ color: '#D4D4D4' }}>|</span>{' '}
-        <span style={{ color: '#C586C0' }}>undefined</span>{' '}
+        <span class='text-c-keyword'>type</span>{' '}
+        <span class='text-c-type'>{typeName}</span>{' '}
+        <span class='text-c-punct'>=</span>{' '}
+        <span class='text-c-builtin'>null</span>{' '}
+        <span class='text-c-punct'>|</span>{' '}
+        <span class='text-c-builtin'>undefined</span>{' '}
         <InlineDescription description='Documentation not provided' />
       </div>
     )
@@ -181,10 +179,10 @@ const TypeDefinition = ({
     return (
       <div>
         <div>
-          <span style={{ color: '#569CD6' }}>type</span>{' '}
-          <span style={{ color: '#FFD700' }}>{typeName}</span>{' '}
-          <span style={{ color: '#D4D4D4' }}>=</span>{' '}
-          <span style={{ color: '#C586C0' }}>{itemTypeName}[]</span>{' '}
+          <span class='text-c-keyword'>type</span>{' '}
+          <span class='text-c-type'>{typeName}</span>{' '}
+          <span class='text-c-punct'>=</span>{' '}
+          <span class='text-c-builtin'>{itemTypeName}[]</span>{' '}
           <InlineDescription description={doc.description} />
         </div>
         {isObjectArray && (
@@ -201,10 +199,10 @@ const TypeDefinition = ({
   if (doc.type === 'list' && doc.values) {
     return (
       <div>
-        <span style={{ color: '#569CD6' }}>type</span>{' '}
-        <span style={{ color: '#FFD700' }}>{typeName}</span>{' '}
-        <span style={{ color: '#D4D4D4' }}>=</span>{' '}
-        <span style={{ color: '#CE9178' }}>
+        <span class='text-c-keyword'>type</span>{' '}
+        <span class='text-c-type'>{typeName}</span>{' '}
+        <span class='text-c-punct'>=</span>{' '}
+        <span class='text-c-string'>
           {doc.values.map((v) => `'${v}'`).join(' | ')}
         </span>{' '}
         <InlineDescription description={doc.description} />
@@ -215,14 +213,14 @@ const TypeDefinition = ({
   if (doc.type === 'union' && doc.union) {
     return (
       <div>
-        <span style={{ color: '#569CD6' }}>type</span>{' '}
-        <span style={{ color: '#FFD700' }}>{typeName}</span>{' '}
-        <span style={{ color: '#D4D4D4' }}>=</span>{' '}
-        <span style={{ color: '#D4D4D4' }}>
+        <span class='text-c-keyword'>type</span>{' '}
+        <span class='text-c-type'>{typeName}</span>{' '}
+        <span class='text-c-punct'>=</span>{' '}
+        <span class='text-c-punct'>
           {doc.union.map((u, i) => (
             <span key={i}>
-              {i > 0 && <span style={{ color: '#C586C0' }}>|</span>}
-              <span style={{ color: '#C586C0' }}>{u.type}</span>
+              {i > 0 && <span class='text-c-builtin'>|</span>}
+              <span class='text-c-builtin'>{u.type}</span>
             </span>
           ))}
         </span>{' '}
@@ -233,10 +231,10 @@ const TypeDefinition = ({
 
   return (
     <div>
-      <span style={{ color: '#569CD6' }}>type</span>{' '}
-      <span style={{ color: '#FFD700' }}>{typeName}</span>{' '}
-      <span style={{ color: '#D4D4D4' }}>=</span>{' '}
-      <span style={{ color: '#C586C0' }}>{doc.type}</span>{' '}
+      <span class='text-c-keyword'>type</span>{' '}
+      <span class='text-c-type'>{typeName}</span>{' '}
+      <span class='text-c-punct'>=</span>{' '}
+      <span class='text-c-builtin'>{doc.type}</span>{' '}
       <InlineDescription description={doc.description} />
     </div>
   )
