@@ -26,4 +26,6 @@ COPY --from=builder /app/dist/api /app/server
 EXPOSE 3021
 
 # Run the compiled executable
+ARG BASE_URL=/
+ENV BASE_URL=${BASE_URL}
 CMD ["/app/server", "--env=prod"]
