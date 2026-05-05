@@ -40,15 +40,9 @@ import { computed, effect, Signal, untracked } from '@preact/signals'
 import { api, type ApiOutput } from '../lib/api.ts'
 import { highlightSQL } from '../lib/highlight-sql.ts'
 import { QueryHistory } from '../components/QueryHistory.tsx'
-
+import { DeploymentHeader } from '../components/DeploymentHeader.tsx'
 import type { ComponentChildren } from 'preact'
-import {
-  deployments,
-  querier,
-  queriesHistory,
-  runQuery,
-  sidebarItems,
-} from '../lib/shared.tsx'
+import { querier, queriesHistory, runQuery } from '../lib/shared.tsx'
 
 type AnyRecord = Record<string, unknown>
 // API signals for schema and table data
@@ -604,58 +598,17 @@ const DataTable = () => {
   )
 }
 
-function Header() {
-  const item = sidebarItems[url.params.sbi || Object.keys(sidebarItems)[0]]
-  const dep = url.params.dep
-  if (!dep && deployments.data?.length) {
-    navigate({ params: { dep: deployments.data[0].url }, replace: true })
-  }
-
-  const onChangeDeployment = (e: Event) => {
-    const v = (e.target as HTMLSelectElement).value
-    navigate({
-      params: { dep: v, table: null, ft: null, st: null, qt: null },
-      replace: true,
-    })
-  }
-
-  return (
-    <div class='navbar bg-base-100 border-b border-base-300 sticky top-0'>
-      <div class='flex-1 min-w-0'>
-        <div class='flex items-center gap-4 md:gap-6'>
-          <div class='flex items-center gap-3 min-w-0'>
-            <item.icon class='h-6 w-6 text-orange-500 shrink-0' />
-            <span class='text-base md:text-lg font-semibold truncate'>
-              {item.label}
-            </span>
-          </div>
-          <div class='min-w-[12rem]'>
-            <select
-              class='select select-sm md:select-md w-full'
-              value={dep || ''}
-              onChange={onChangeDeployment}
-            >
-              {deployments.data?.map((deployment) => (
-                <option value={deployment.url} key={deployment.url}>
-                  {deployment.url}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </div>
-      <div class='flex-none'>
-        <A
-          params={{ drawer: 'history' }}
-          class='btn btn-outline btn-xs md:btn-sm drawer-button'
-        >
-          <FileText class='h-4 w-4 mr-2' />
-          <span class='hidden sm:inline'>Saved Queries</span>
-        </A>
-      </div>
-    </div>
-  )
-}
+const Header = () => (
+  <DeploymentHeader>
+    <A
+      params={{ drawer: 'history' }}
+      class='btn btn-outline btn-xs md:btn-sm drawer-button'
+    >
+      <FileText class='h-4 w-4 mr-2' />
+      <span class='hidden sm:inline'>Saved Queries</span>
+    </A>
+  </DeploymentHeader>
+)
 
 function SchemaPanel() {
   const dep = url.params.dep

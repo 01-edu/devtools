@@ -1,6 +1,16 @@
 @import 'tailwindcss';
 @plugin 'daisyui/index.js';
 
+@theme {
+  --color-c-keyword: var(--c-keyword);
+  --color-c-type: var(--c-type);
+  --color-c-punct: var(--c-punct);
+  --color-c-prop: var(--c-prop);
+  --color-c-builtin: var(--c-builtin);
+  --color-c-string: var(--c-string);
+  --color-c-comment: var(--c-comment);
+}
+
 @plugin 'daisyui/theme' {
   name: 'light';
   default: true;
@@ -34,6 +44,13 @@
   --border: 1px;
   --depth: 0;
   --noise: 0;
+  --c-keyword: #0070c1;
+  --c-type: #267f99;
+  --c-punct: #000000;
+  --c-prop: #001080;
+  --c-builtin: #af00db;
+  --c-string: #a31515;
+  --c-comment: #008000;
 }
 
 @plugin 'daisyui/theme' {
@@ -69,4 +86,11 @@
   --border: 1px;
   --depth: 0;
   --noise: 0;
+  --c-keyword: #569cd6;
+  --c-type: #ffd700;
+  --c-punct: #d4d4d4;
+  --c-prop: #9cdcfe;
+  --c-builtin: #c586c0;
+  --c-string: #ce9178;
+  --c-comment: #6a9955;
 }

@@ -148,6 +148,19 @@ const projectOutput = OBJ({
   updatedAt: optional(NUM('The last update date of the project')),
 })
 
+const apiDocOutputDef = ARR(
+  OBJ({
+    method: LIST(['GET', 'POST', 'PUT', 'DELETE', 'PATCH'], 'HTTP method'),
+    path: STR('API endpoint path'),
+    requiresAuth: BOOL('whether authentication is required'),
+    authFunction: optional(STR('name of the authorization function')),
+    description: optional(STR('Endpoint description')),
+    input: optional(OBJ({}, 'Input documentation structure')),
+    output: optional(OBJ({}, 'Output documentation structure')),
+  }, 'API documentation object structure'),
+  'API documentation array',
+)
+
 const userNameCache = new Map<string, string>()
 const getUserName = async (userId: string) => {
   if (userNameCache.has(userId)) return userNameCache.get(userId)
@@ -674,6 +687,38 @@ const defs = {
     input: OBJ({ deployment: STR("The deployment's URL") }),
     output: ARR(MetricSchema, 'Collected query metrics'),
     description: 'Get SQL metrics from the deployment',
+  }),
+  'GET/api/deployment/doc': route({
+    authorize: withUserSession,
+    fn: async (_ctx, { deployment }) => {
+      const dep = DeploymentsCollection.get(deployment)
+      if (!dep) throw respond.NotFound({ message: 'Deployment not found' })
+      console.log('Fetching API documentation from deployment', {
+        url: dep.url,
+      })
+      try {
+        const urlStr = dep.url.startsWith('http')
+          ? dep.url
+          : `https://${dep.url}`
+        const res = await fetch(`${urlStr}/api/doc`, {
+          method: 'GET',
+        })
+        if (!res.ok) throw new Error(`Status ${res.status}`)
+        return await res.json()
+      } catch (_err) {
+        console.error('Error fetching API documentation', {
+          error: _err instanceof Error ? _err.stack : String(_err),
+        })
+        throw respond.InternalServerError({
+          message: 'Failed to fetch API documentation',
+        })
+      }
+    },
+    input: OBJ({
+      deployment: STR("The deployment's URL"),
+    }),
+    output: apiDocOutputDef,
+    description: 'Get API documentation from the deployment',
   }),
   'POST/api/deployment/fix-query': route({
     authorize: withUserSession,
