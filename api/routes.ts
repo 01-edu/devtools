@@ -669,9 +669,7 @@ const defs = {
       try {
         const res = await fetch(`${sqlEndpoint}/metrics`, {
           method: 'GET',
-          headers: {
-            Authorization: `Bearer ${sqlToken}`,
-          },
+          headers: { Authorization: `Bearer ${sqlToken}` },
         })
         if (!res.ok) throw new Error(`Status ${res.status}`)
         return await res.json()
@@ -681,9 +679,7 @@ const defs = {
         })
       }
     },
-    input: OBJ({
-      deployment: STR("The deployment's URL"),
-    }),
+    input: OBJ({ deployment: STR("The deployment's URL") }),
     output: ARR(MetricSchema, 'Collected query metrics'),
     description: 'Get SQL metrics from the deployment',
   }),
@@ -722,4 +718,6 @@ const defs = {
 } as const
 
 export type RouteDefinitions = typeof defs
-export const routeHandler = makeRouter(console as unknown as Log, defs)
+export const routeHandler = makeRouter(defs, {
+  log: console as unknown as Log,
+})
