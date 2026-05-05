@@ -38,7 +38,7 @@ import {
 } from '../components/Filtre.tsx'
 import { computed, effect, Signal, untracked } from '@preact/signals'
 import { api, type ApiOutput } from '../lib/api.ts'
-import { highlightSQL, useHighlight } from '../lib/highlight-sql.ts'
+import { highlightSQL } from '../lib/highlight-sql.ts'
 import { QueryHistory } from '../components/QueryHistory.tsx'
 
 import type { ComponentChildren } from 'preact'
@@ -180,21 +180,19 @@ const handleKeyDown = (e: KeyboardEvent) => {
   runQuery(url.params.q || '')
 }
 
-const sqlEditorRef = (el: HTMLElement | null) => {
-  if (!el) return
-  if (!el.textContent) {
-    el.textContent = url.peek().searchParams.get('q') ||
-      'SELECT * FROM users WHERE active = true;'
-  }
-  return highlightSQL(el)
-}
-
 const SQLEditor = () => (
   <div class='resize-y min-h-[120px] max-h-[80vh] overflow-hidden border border-base-300 rounded-lg bg-base-100'>
     <div class='relative h-full bg-base-100 rounded-lg overflow-hidden focus-within:border-primary/50 transition-colors'>
       <LineNumbers />
       <pre
-        ref={sqlEditorRef}
+        ref={(el: HTMLElement | null) => {
+          if (!el) return
+          if (!el.textContent) {
+            el.textContent = url.peek().searchParams.get('q') ||
+              'SELECT * FROM users WHERE active = true;'
+          }
+          return highlightSQL(el)
+        }}
         onInput={handleInput}
         onKeyDown={handleKeyDown}
         class='w-full h-full font-mono text-sm leading-6 pl-12 pr-4 py-3 bg-transparent border-0 focus:outline-none focus:ring-0 text-base-content caret-primary resize-none tracking-wide placeholder:text-base-content/40'
@@ -1546,7 +1544,7 @@ effect(() => {
     const id = (await sha(metric.query)).slice(0, 8)
     return { ...metric, id }
   })).then((metrics) => {
-    metrics.sort((a, b) => a.duration - b.duration)
+    metrics.sort((a, b) => b.duration - a.duration)
     sortedMetrics.value = metrics
   })
 })
@@ -1767,7 +1765,6 @@ function MetricDetail() {
   const expanded = url.params.expanded
   const sorted = sortedMetrics.value
   const metric = expanded && sorted.find((metric) => metric.id === expanded)
-  const highlight = useHighlight()
   if (!metric) {
     expanded && navigate({ params: { expanded: null }, replace: true })
     return null
@@ -1779,7 +1776,7 @@ function MetricDetail() {
           <Database class='w-3.5 h-3.5' /> Query
         </div>
         <pre
-          ref={highlight}
+          ref={(e) => highlightSQL(e)}
           class='font-mono text-[12px] text-base-content/80 bg-base-100 rounded-lg border border-base-200 p-3 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed'
         >{metric.query}</pre>
       </div>
@@ -1809,7 +1806,7 @@ function MetricRow({ metric }: MetricRowProps) {
       >
         <div class='flex-1 min-w-0'>
           <div
-            ref={useHighlight()}
+            ref={(e) => highlightSQL(e)}
             class='font-mono text-[13px] text-base-content/85 truncate'
           >
             {metric.query}

@@ -70,11 +70,7 @@ export const DatabaseSchemaDef = OBJ({
   dialect: STR('Detected SQL dialect'),
   refreshedAt: STR('ISO datetime of last refresh'),
   tables: ARR(OBJ({
-    columns: ARR(OBJ({
-      name: STR(),
-      type: STR(),
-      ordinal: NUM(),
-    })),
+    columns: ARR(OBJ({ name: STR(), type: STR(), ordinal: NUM() })),
     columnsMap: optional(OBJ({})),
     schema: optional(STR()),
     table: STR(),
@@ -89,16 +85,12 @@ export const AdminsCollection = await createCollection<User, 'id'>(
 export const ProjectsCollection = await createCollection<
   Project,
   'slug'
->(
-  { name: 'projects', primaryKey: 'slug' },
-)
+>({ name: 'projects', primaryKey: 'slug' })
 
 export const DeploymentsCollection = await createCollection<
   Deployment & { tokenSalt: string },
   'url'
->(
-  { name: 'deployments', primaryKey: 'url' },
-)
+>({ name: 'deployments', primaryKey: 'url' })
 
 export const DatabaseSchemasCollection = await createCollection<
   DatabaseSchema,
