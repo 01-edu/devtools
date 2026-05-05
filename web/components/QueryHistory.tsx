@@ -1,7 +1,7 @@
 import { ChevronRight, Clock, Play, Search, Trash2 } from 'lucide-preact'
 import { A, navigate, url } from '@01edu/signal-router'
 import { queriesHistory, runQuery } from '../lib/shared.tsx'
-import { highlightSQL } from '../lib/highlight-sql.ts'
+import { useHighlight } from '../lib/highlight-sql.ts'
 
 const deleteQuery = (hash: string) => {
   const updatedHistory = { ...queriesHistory.value }
@@ -62,7 +62,7 @@ export const QueryHistory = () => {
                 <p
                   class='font-mono text-sm truncate mt-1'
                   title={item.query}
-                  ref={highlightSQL}
+                  ref={useHighlight()}
                 >
                   {item.query}
                 </p>

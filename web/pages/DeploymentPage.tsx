@@ -38,7 +38,7 @@ import {
 } from '../components/Filtre.tsx'
 import { computed, effect, Signal, untracked } from '@preact/signals'
 import { api, type ApiOutput } from '../lib/api.ts'
-import { highlightSQL } from '../lib/highlight-sql.ts'
+import { highlightSQL, useHighlight } from '../lib/highlight-sql.ts'
 import { QueryHistory } from '../components/QueryHistory.tsx'
 
 import type { ComponentChildren } from 'preact'
@@ -942,13 +942,12 @@ const fetchLogs = async (reset = false) => {
   if (!reset && !logsHasMore.value) return
 
   logsPending.value = true
-  const filterRows = parseFilters('l').filter((r) =>
-    r.key !== 'key' && r.value
-  ).map((r) => ({
-    key: r.key,
-    comparator: comparators[r.op as keyof typeof comparators],
-    value: r.value,
-  }))
+  const filterRows = parseFilters('l').filter((r) => r.key !== 'key' && r.value)
+    .map((r) => ({
+      key: r.key,
+      comparator: comparators[r.op as keyof typeof comparators],
+      value: r.value,
+    }))
   const sortRows = parseSort('l').filter((r) =>
     r.key !== 'key' && r.key && r.dir
   ).map((r) => ({
@@ -1258,9 +1257,10 @@ const Hex128 = ({ hex, type }: { hex: string; type: 'trace' | 'span' }) => {
 }
 
 const logsMeasureRef = new Signal<HTMLTableRowElement | null>(null)
-const setLogsMeasureRef = (index: number) => (el: HTMLTableRowElement | null) => {
-  if (index === 0 && el) logsMeasureRef.value = el;
-}
+const setLogsMeasureRef =
+  (index: number) => (el: HTMLTableRowElement | null) => {
+    if (index === 0 && el) logsMeasureRef.value = el
+  }
 const logItemHeight = computed(() => {
   if (!logsMeasureRef.value) return 0
   return logsMeasureRef.value.getBoundingClientRect().height
@@ -1767,6 +1767,7 @@ function MetricDetail() {
   const expanded = url.params.expanded
   const sorted = sortedMetrics.value
   const metric = expanded && sorted.find((metric) => metric.id === expanded)
+  const highlight = useHighlight()
   if (!metric) {
     expanded && navigate({ params: { expanded: null }, replace: true })
     return null
@@ -1778,7 +1779,7 @@ function MetricDetail() {
           <Database class='w-3.5 h-3.5' /> Query
         </div>
         <pre
-          ref={highlightSQL}
+          ref={highlight}
           class='font-mono text-[12px] text-base-content/80 bg-base-100 rounded-lg border border-base-200 p-3 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed'
         >{metric.query}</pre>
       </div>
@@ -1808,7 +1809,7 @@ function MetricRow({ metric }: MetricRowProps) {
       >
         <div class='flex-1 min-w-0'>
           <div
-            ref={highlightSQL}
+            ref={useHighlight()}
             class='font-mono text-[13px] text-base-content/85 truncate'
           >
             {metric.query}
