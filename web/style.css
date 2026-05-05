@@ -11,6 +11,37 @@
   --color-c-comment: var(--c-comment);
 }
 
+::highlight(comment) {
+  color: var(--c-comment);
+}
+::highlight(string) {
+  color: var(--c-string);
+}
+::highlight(number) {
+  color: var(--color-warning-content);
+}
+::highlight(id-quoted) {
+  color: var(--c-type);
+}
+::highlight(id) {
+  color: var(--c-type);
+}
+::highlight(param-named) {
+  color: var(--c-prop);
+}
+::highlight(param-qmark) {
+  color: var(--c-prop);
+}
+::highlight(operator) {
+  color: var(--c-builtin);
+}
+::highlight(punct) {
+  color: var(--c-punct);
+}
+::highlight(keyword) {
+  color: var(--c-keyword);
+}
+
 @plugin 'daisyui/theme' {
   name: 'light';
   default: true;

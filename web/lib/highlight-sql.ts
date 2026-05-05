@@ -50,49 +50,4 @@ export function highlightSQL(elem: HTMLElement | null): (() => void) | void {
   }
 }
 
-// Setup the style and register the highligths
-const css = String.raw
-const style = document.createElement('style')
-style.innerHTML = css`
-  ::highlight(comment) {
-    color: #a6acb9;
-  }
-  ::highlight(string) {
-    color: #5c99d6;
-  }
-  ::highlight(number) {
-    color: #c594c5;
-  }
-  ::highlight(id-quoted) {
-    color: #99c794;
-  }
-  ::highlight(id) {
-    color: #5fb4b4;
-  }
-  ::highlight(param-named) {
-    color: #f7f7f7;
-  }
-  ::highlight(param-qmark) {
-    color: #f9ae58;
-  }
-  ::highlight(operator) {
-    color: #f97b58;
-  }
-  ::highlight(punct) {
-    color: #596878;
-  }
-  ::highlight(keyword) {
-    color: #c695c6;
-  }
-`
-// Unused theme colors:
-// normal #D8DEE9
-// end #F9AE58
-// error #EC5F66
-// selection --background=#3E4347
-// search_match --background=#596673
-// option #5FB4B4
-// host_remote #A3CE9E
-document.head.append(style)
-
 for (const { hl, type } of defs) CSS.highlights.set(type, hl)
