@@ -433,7 +433,7 @@ const DataRow = (
                   <A
                     params={{
                       drawer: 'view-row',
-                      rt: colDef.relation.table,
+                      rt: colDef.relation?.table,
                       'row-id': String(row[key]),
                     }}
                     class='flex items-center gap-1 group/rel link link-primary no-underline px-1 py-0.5'

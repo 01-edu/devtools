@@ -1,4 +1,5 @@
 import {
+  DatabaseSchema,
   DatabaseSchemasCollection,
   Deployment,
   DeploymentsCollection,
@@ -92,32 +93,24 @@ const INTROSPECTION: Record<string, string> = {
     `SELECT table_schema, table_name, column_name, data_type, ordinal_position FROM information_schema.columns ORDER BY table_schema, table_name, ordinal_position`,
 }
 
+type STANDARD_COLUMNS = {
+  table_schema: string | null
+  table_name: string
+  column_name: string
+  data_type: string
+  ordinal_position: number
+  ref_table?: string
+  ref_column?: string
+}[]
+
 async function fetchSchema(endpoint: string, token: string, dialect: string) {
   const sql = INTROSPECTION[dialect] ?? INTROSPECTION.unknown
   try {
-    return await runSQL(endpoint, token, sql) as {
-      table_schema: string | null
-      table_name: string
-      column_name: string
-      data_type: string
-      ordinal_position: number
-      ref_table?: string
-      ref_column?: string
-    }[]
+    return await runSQL(endpoint, token, sql) as STANDARD_COLUMNS
   } catch { /* ignore */ }
 }
 
-export type ColumnInfo = {
-  name: string
-  type: string
-  ordinal: number
-  relation?: {
-    table: string
-    column: string
-    labelColumn?: string
-    type: 'enum' | 'table'
-  }
-}
+export type ColumnInfo = DatabaseSchema['tables'][number]['columns'][number]
 type TableInfo = {
   schema: string | undefined
   table: string
@@ -132,6 +125,7 @@ export async function refreshOneSchema(
   try {
     const dialect = await detectDialect(dep.sqlEndpoint, dep.sqlToken)
     const rows = await fetchSchema(dep.sqlEndpoint, dep.sqlToken, dialect)
+    if (!rows || !rows.length) return
     const tableMap = new Map<string, TableInfo>()
     for (const r of rows) {
       const schema = (r.table_schema as string) || undefined
@@ -146,12 +140,14 @@ export async function refreshOneSchema(
         name: String(r.column_name),
         type: String(r.data_type || ''),
         ordinal: Number(r.ordinal_position || 0),
+        relation: undefined,
       }
 
       if (r.ref_table && r.ref_column) {
         column.relation = {
           table: r.ref_table,
           column: r.ref_column,
+          labelColumn: undefined,
           type: 'table', // Default
         }
       }
