@@ -2,6 +2,7 @@ import {
   ARR,
   type Asserted,
   BOOL,
+  LIST,
   NUM,
   OBJ,
   optional,
@@ -70,7 +71,17 @@ export const DatabaseSchemaDef = OBJ({
   dialect: STR('Detected SQL dialect'),
   refreshedAt: STR('ISO datetime of last refresh'),
   tables: ARR(OBJ({
-    columns: ARR(OBJ({ name: STR(), type: STR(), ordinal: NUM() })),
+    columns: ARR(OBJ({
+      name: STR(),
+      type: STR(),
+      ordinal: NUM(),
+      relation: optional(OBJ({
+        table: STR('Target table'),
+        column: STR('Target column'),
+        labelColumn: optional(STR('Column to use for inlining')),
+        type: LIST(['enum', 'table'], 'Relation type'),
+      })),
+    })),
     columnsMap: optional(OBJ({})),
     schema: optional(STR()),
     table: STR(),

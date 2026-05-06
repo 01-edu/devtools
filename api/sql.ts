@@ -75,8 +75,19 @@ async function detectDialect(endpoint: string, token: string): Promise<string> {
 // Introspection queries per dialect returning columns list
 // Standardized output fields: table_schema (nullable), table_name, column_name, data_type, ordinal_position
 const INTROSPECTION: Record<string, string> = {
-  sqlite:
-    `SELECT NULL AS table_schema, m.name AS table_name, p.name AS column_name, p.type AS data_type, p.cid + 1 AS ordinal_position FROM sqlite_master m JOIN pragma_table_info(m.name) p WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' ORDER BY m.name, p.cid`,
+  sqlite: `SELECT 
+      NULL AS table_schema, 
+      m.name AS table_name, 
+      p.name AS column_name, 
+      p.type AS data_type, 
+      p.cid + 1 AS ordinal_position,
+      f."table" AS ref_table,
+      f."to" AS ref_column
+    FROM sqlite_master m 
+    JOIN pragma_table_info(m.name) p 
+    LEFT JOIN pragma_foreign_key_list(m.name) f ON f."from" = p.name
+    WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' 
+    ORDER BY m.name, p.cid`,
   unknown:
     `SELECT table_schema, table_name, column_name, data_type, ordinal_position FROM information_schema.columns ORDER BY table_schema, table_name, ordinal_position`,
 }
@@ -84,11 +95,29 @@ const INTROSPECTION: Record<string, string> = {
 async function fetchSchema(endpoint: string, token: string, dialect: string) {
   const sql = INTROSPECTION[dialect] ?? INTROSPECTION.unknown
   try {
-    return await runSQL(endpoint, token, sql)
+    return await runSQL(endpoint, token, sql) as {
+      table_schema: string | null
+      table_name: string
+      column_name: string
+      data_type: string
+      ordinal_position: number
+      ref_table?: string
+      ref_column?: string
+    }[]
   } catch { /* ignore */ }
 }
 
-export type ColumnInfo = { name: string; type: string; ordinal: number }
+export type ColumnInfo = {
+  name: string
+  type: string
+  ordinal: number
+  relation?: {
+    table: string
+    column: string
+    labelColumn?: string
+    type: 'enum' | 'table'
+  }
+}
 type TableInfo = {
   schema: string | undefined
   table: string
@@ -103,7 +132,6 @@ export async function refreshOneSchema(
   try {
     const dialect = await detectDialect(dep.sqlEndpoint, dep.sqlToken)
     const rows = await fetchSchema(dep.sqlEndpoint, dep.sqlToken, dialect)
-    // group rows
     const tableMap = new Map<string, TableInfo>()
     for (const r of rows) {
       const schema = (r.table_schema as string) || undefined
@@ -113,11 +141,41 @@ export async function refreshOneSchema(
       if (!tableMap.has(key)) {
         tableMap.set(key, { schema, table, columns: [], columnsMap: new Map() })
       }
-      tableMap.get(key)!.columns.push({
+
+      const column: ColumnInfo = {
         name: String(r.column_name),
         type: String(r.data_type || ''),
         ordinal: Number(r.ordinal_position || 0),
-      })
+      }
+
+      if (r.ref_table && r.ref_column) {
+        column.relation = {
+          table: r.ref_table,
+          column: r.ref_column,
+          type: 'table', // Default
+        }
+      }
+
+      tableMap.get(key)!.columns.push(column)
+    }
+
+    // Classify relations
+    for (const t of tableMap.values()) {
+      for (const col of t.columns) {
+        if (col.relation) {
+          const ref = tableMap.get(col.relation.table)
+          if (ref?.columns.length === 2) {
+            col.relation.type = 'enum'
+            // Find the column that is NOT the ID column
+            const labelCol = ref.columns.find((c) =>
+              c.name !== col.relation?.column
+            )
+            if (labelCol) {
+              col.relation.labelColumn = labelCol.name
+            }
+          }
+        }
+      }
     }
     const tables = [...tableMap.values()].map((t) => ({
       ...t,
@@ -245,8 +303,23 @@ export const fetchTablesData = async (
     }
   }
 
-  const query =
-    `SELECT * FROM ${params.table} ${whereClause} ${orderByClause} ${limitOffsetClause}`
+  const selectColumns = ['t.*']
+  const joins: string[] = []
+
+  for (const col of columnsMap.values()) {
+    if (col.relation?.type === 'enum' && col.relation.labelColumn) {
+      const { table, column, labelColumn } = col.relation
+      const alias = `inline_${col.name}`
+      selectColumns.push(`${table}.${labelColumn} AS ${alias}`)
+      joins.push(
+        `LEFT JOIN ${table} ON t.${col.name} = ${table}.${column}`,
+      )
+    }
+  }
+
+  const query = `SELECT ${selectColumns.join(', ')} FROM ${params.table} t ${
+    joins.join(' ')
+  } ${whereClause} ${orderByClause} ${limitOffsetClause}`
   const countQuery =
     `SELECT COUNT(*) as count FROM ${params.table} ${whereClause}`
   const rows = await runSQL(sqlEndpoint, sqlToken, query)

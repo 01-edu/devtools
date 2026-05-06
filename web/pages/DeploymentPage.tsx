@@ -403,8 +403,9 @@ const DataRow = (
   { row, columns, index }: { row: AnyRecord; columns: string[]; index: number },
 ) => {
   const tableName = url.params.table || schema.data?.tables?.[0]?.table
-  const tableDef = schema.data?.tables?.find((t) => t.table === tableName)
-  const pk = tableDef?.columns?.[0]?.name
+  const columnsDef = schema.data?.tables?.find((t) => t.table === tableName)
+    ?.columns
+  const pk = columnsDef?.[0]?.name
   const rowId = pk ? String(row[pk]) : undefined
 
   return (
@@ -414,11 +415,38 @@ const DataRow = (
     >
       <tr class='hover:bg-base-200/50 cursor-pointer transition-colors border-b border-base-200/50 last:border-b-0'>
         <RowNumberCell index={index} />
-        {columns.map((key) => (
-          <td class='align-top min-w-[6rem] p-0 pl-1 border-r border-base-300/30 font-normal text-left'>
-            <TableCell value={row[key]} />
-          </td>
-        ))}
+        {columns.map((key) => {
+          const colDef = columnsDef?.find((c) => c.name === key)
+          const value = colDef?.relation?.type === 'enum'
+            ? (row[`inline_${key}`] ?? row[key])
+            : row[key]
+
+          const isTableRel = colDef?.relation?.type === 'table'
+
+          return (
+            <td
+              key={key}
+              class='align-top min-w-[6rem] p-0 border-r border-base-300/30 font-normal text-left'
+            >
+              {isTableRel
+                ? (
+                  <A
+                    params={{
+                      drawer: 'view-row',
+                      rt: colDef.relation.table,
+                      'row-id': String(row[key]),
+                    }}
+                    class='flex items-center gap-1 group/rel link link-primary no-underline px-1 py-0.5'
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <TableCell value={value} />
+                    <Link2 class='h-3 w-3 opacity-0 group-hover/rel:opacity-100 transition-opacity shrink-0' />
+                  </A>
+                )
+                : <TableCell value={value} />}
+            </td>
+          )
+        })}
       </tr>
     </A>
   )
@@ -1882,9 +1910,11 @@ function MetricsViewer() {
 effect(() => {
   const rowId = url.params['row-id']
   const dep = url.params.dep
+  const relTable = url.params.rt
 
   if (dep && rowId) {
-    const tableName = url.params.table || schema.data?.tables?.[0]?.table
+    const tableName = relTable || url.params.table ||
+      schema.data?.tables?.[0]?.table
     const tableDef = schema.data?.tables?.find((t) => t.table === tableName)
     const pk = tableDef?.columns?.[0]?.name
 
@@ -1937,7 +1967,9 @@ const RowDetails = () => {
     e.preventDefault()
     const row = rowDetailsData.data?.rows?.[0] as AnyRecord | undefined
     if (!row) return
-    const tableName = url.params.table || schema.data?.tables?.[0]?.table
+    const tableName = url.params.rt || url.params.table ||
+      schema.data?.tables?.[0]?.table
+    console.log('tableName', tableName)
     const tableDef = schema.data?.tables?.find((t) => t.table === tableName)
     const pk = tableDef?.columns?.[0]?.name
     if (!tableName || !pk) {
@@ -1983,7 +2015,7 @@ const RowDetails = () => {
       })
       toast('Row updated successfully')
       tableData.fetch()
-      navigate({ params: { drawer: null, 'row-id': null } })
+      navigate({ params: { drawer: null, 'row-id': null, rt: null } })
     } catch (err) {
       toast(err instanceof Error ? err.message : String(err), 'error')
     }
@@ -1992,9 +2024,11 @@ const RowDetails = () => {
   return (
     <div class='flex flex-col h-full bg-base-100'>
       <div class='p-4 border-b border-base-300 flex items-center justify-between sticky top-0 bg-base-100 z-10'>
-        <h3 class='font-semibold text-lg'>Row Details</h3>
+        <h3 class='font-semibold text-lg'>
+          {url.params.rt ? `Related: ${url.params.rt}` : 'Row Details'}
+        </h3>
         <A
-          params={{ drawer: null, 'row-id': null }}
+          params={{ drawer: null, 'row-id': null, rt: null }}
           replace
           class='btn btn-ghost btn-sm btn-circle'
         >
@@ -2005,7 +2039,7 @@ const RowDetails = () => {
       <form onSubmit={onUpdateRow} class='flex-1 flex flex-col min-h-0'>
         <div class='flex-1 overflow-y-auto p-4 space-y-4'>
           {Object.entries(row).map(([key, value]) => {
-            const tableName = url.params.table ||
+            const tableName = url.params.rt || url.params.table ||
               schema.data?.tables?.[0]?.table
             const tableDef = schema.data?.tables?.find((t) =>
               t.table === tableName

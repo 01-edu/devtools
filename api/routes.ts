@@ -459,6 +459,11 @@ const defs = {
           name: STR('Column name'),
           type: STR('Column data type'),
           ordinal: NUM('Column ordinal position'),
+          relation: optional(OBJ({
+            table: STR('Target table'),
+            column: STR('Target column'),
+            type: LIST(['enum', 'table'], 'Relation type'),
+          })),
         })),
         schema: optional(STR('Schema name')),
         table: STR('Table name'),
