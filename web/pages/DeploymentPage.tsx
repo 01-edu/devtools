@@ -79,25 +79,10 @@ type ColumnDef = NonNullable<
 >[number]['columns'][number]
 
 const COLUMN_STYLES = {
-  pk: {
-    color: 'text-warning',
-    bg: 'bg-warning/5',
-    icon: Hash,
-    font: 'font-bold',
-  },
-  enum: {
-    color: 'text-success',
-    bg: 'bg-success/5',
-    icon: Hash,
-    font: 'font-medium',
-  },
-  table: {
-    color: 'text-info',
-    bg: 'bg-info/5',
-    icon: Link2,
-    font: 'font-medium',
-  },
-  default: { color: 'text-base-content/50', bg: '', icon: Columns, font: '' },
+  pk: { color: 'text-warning', icon: Hash },
+  enum: { color: 'text-success', icon: Hash },
+  table: { color: 'text-info', icon: Link2 },
+  default: { color: 'text-base-content/80', icon: Columns },
 } as const
 
 const getColumnConfig = (col?: ColumnDef) => {
@@ -106,14 +91,45 @@ const getColumnConfig = (col?: ColumnDef) => {
     COLUMN_STYLES.default
 }
 
-const ColumnLabel = (
-  { col, row, type, name }: {
-    col?: ColumnDef
-    row?: AnyRecord
-    type?: string
-    name: string
-  },
-) => {
+const isDateColumn = (col?: ColumnDef, value?: unknown) => {
+  const type = col?.type || ''
+  const name = col?.name || ''
+  return type.includes('Date') || type.includes('Time') ||
+    (name.endsWith('At') &&
+      (typeof value === 'number' ||
+        (typeof value === 'string' && value.length > 0 &&
+          !isNaN(Number(value)))))
+}
+
+const toSafeDate = (value: unknown) => {
+  if (value instanceof Date) return value
+  const num = typeof value === 'number' ? value : Number(value)
+  if (!isNaN(num) && value !== '' && value !== null) {
+    const correctTime = num < 1e12 ? num * 1000 : num
+    return new Date(correctTime)
+  }
+  return new Date(String(value))
+}
+
+const formatCellValue = (value: unknown, col?: ColumnDef) => {
+  const isObj = typeof value === 'object' && value !== null
+  if (!value || !isDateColumn(col, value)) {
+    return isObj ? JSON.stringify(value) : String(value ?? '')
+  }
+
+  const date = toSafeDate(value)
+  if (isNaN(date.getTime())) return String(value)
+
+  return date.toLocaleString([], {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+const ColumnLabel = ({ col, row }: { col: ColumnDef; row?: AnyRecord }) => {
   const config = getColumnConfig(col)
   return (
     <label class='label py-1'>
@@ -121,20 +137,52 @@ const ColumnLabel = (
         <span
           class={`label-text text-xs font-semibold uppercase tracking-wider ${config.color}`}
         >
-          {name}
+          {col?.name}
         </span>
         <config.icon class={`h-3 w-3 ${config.color}`} />
         {col?.relation?.type === 'enum' && row &&
-          row[`inline_${name}`] !== undefined && (
+          row[`inline_${col.name}`] !== undefined && (
           <span class='badge badge-success badge-outline badge-xs opacity-70'>
-            {String(row[`inline_${name}`])}
+            {String(row[`inline_${col.name}`])}
           </span>
         )}
       </div>
       <span class='label-text-alt text-[10px] opacity-50'>
-        {type || col?.type || ''}
+        {col?.type || ''}
       </span>
     </label>
+  )
+}
+
+const DataCell = (
+  { col, row, name }: { col?: ColumnDef; row: AnyRecord; name: string },
+) => {
+  const config = getColumnConfig(col)
+  const isEnum = col?.relation?.type === 'enum'
+  const isTableRel = col?.relation?.type === 'table'
+  const rawValue = row[name]
+
+  const value = isEnum ? (row[`inline_${name}`] ?? rawValue) : rawValue
+
+  return (
+    <td class='align-top min-w-[6rem] p-0 border-r border-base-300/30 font-normal text-left'>
+      {isTableRel && !!rawValue
+        ? (
+          <A
+            params={{
+              drawer: 'view-row',
+              rt: col.relation?.table,
+              'row-id': String(rawValue),
+            }}
+            class={`relative z-20 flex items-center gap-1 group/rel link no-underline ${config.color}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <TableCell value={value} col={col} />
+            <Link2 class='h-3 w-3 opacity-0 group-hover/rel:opacity-100 transition-opacity shrink-0' />
+          </A>
+        )
+        : <TableCell value={value} col={col} />}
+    </td>
   )
 }
 
@@ -421,11 +469,11 @@ const RowNumberCell = ({ index }: { index: number }) => (
 const TableCell = ({ value, col }: { value: unknown; col?: ColumnDef }) => {
   const config = getColumnConfig(col)
   const isObj = typeof value === 'object' && value !== null
-  const stringValue = isObj ? JSON.stringify(value) : String(value ?? '')
-  const isTooLong = stringValue.length > 100
+  const displayValue = formatCellValue(value, col)
+  const isTooLong = displayValue.length > 100
 
   return (
-    <div class={`px-1 py-0.5 ${config.color} ${config.font}`}>
+    <div class={`px-1 py-0.5 ${config.color}`}>
       {value === null || value === undefined || value === ''
         ? (
           <span class='text-sm text-base-content/30 italic select-none text-left block w-full'>
@@ -436,17 +484,17 @@ const TableCell = ({ value, col }: { value: unknown; col?: ColumnDef }) => {
         ? (
           <code
             class='font-mono text-sm text-base-content/70 block overflow-hidden text-ellipsis whitespace-nowrap max-w-md text-left w-full'
-            title={isTooLong ? stringValue : undefined}
+            title={isTooLong ? displayValue : undefined}
           >
-            {stringValue}
+            {displayValue}
           </code>
         )
         : (
           <span
             class='block overflow-hidden text-ellipsis whitespace-nowrap text-sm max-w-md text-left w-full'
-            title={isTooLong ? stringValue : undefined}
+            title={isTooLong ? displayValue : undefined}
           >
-            {stringValue}
+            {displayValue}
           </span>
         )}
     </div>
@@ -476,46 +524,21 @@ const DataRow = (
   const rowId = pk ? String(row[pk]) : undefined
 
   return (
-    <A
-      params={{ drawer: 'view-row', 'row-id': rowId }}
-      class='contents'
+    <tr
+      class='hover:bg-base-200/50 cursor-pointer transition-colors border-b border-base-200/50 last:border-b-0'
+      onClick={() =>
+        navigate({ params: { drawer: 'view-row', 'row-id': rowId, rt: null } })}
     >
-      <tr class='hover:bg-base-200/50 cursor-pointer transition-colors border-b border-base-200/50 last:border-b-0'>
-        <RowNumberCell index={index} />
-        {columns.map((key) => {
-          const colDef = columnsDef?.find((c) => c.name === key)
-          const config = getColumnConfig(colDef)
-          const isEnum = colDef?.relation?.type === 'enum'
-          const isTableRel = colDef?.relation?.type === 'table'
-
-          const value = isEnum ? (row[`inline_${key}`] ?? row[key]) : row[key]
-
-          return (
-            <td
-              key={key}
-              class={`align-top min-w-[6rem] p-0 border-r border-base-300/30 font-normal text-left ${config.bg}`}
-            >
-              {isTableRel
-                ? (
-                  <A
-                    params={{
-                      drawer: 'view-row',
-                      rt: colDef.relation?.table,
-                      'row-id': String(row[key]),
-                    }}
-                    class={`flex items-center gap-1 group/rel link no-underline ${config.color}`}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <TableCell value={value} col={colDef} />
-                    <Link2 class='h-3 w-3 opacity-0 group-hover/rel:opacity-100 transition-opacity shrink-0' />
-                  </A>
-                )
-                : <TableCell value={value} col={colDef} />}
-            </td>
-          )
-        })}
-      </tr>
-    </A>
+      <RowNumberCell index={index} />
+      {columns.map((key) => (
+        <DataCell
+          key={key}
+          name={key}
+          row={row}
+          col={columnsDef?.find((c) => c.name === key)}
+        />
+      ))}
+    </tr>
   )
 }
 
@@ -845,9 +868,7 @@ function SchemaPanel() {
                               return (
                                 <div
                                   key={idx}
-                                  class={`flex items-center gap-2 px-2 py-1 text-xs hover:bg-base-200 rounded ${config.color} ${
-                                    col.isPrimaryKey ? 'font-semibold' : ''
-                                  }`}
+                                  class={`flex items-center gap-2 px-2 py-1 text-xs hover:bg-base-200 rounded ${config.color}`}
                                 >
                                   <config.icon class='h-3 w-3' />
                                   <span
@@ -1093,11 +1114,10 @@ const dateFmtConfig = {
   fractionalSecondDigits: 3,
 } as const
 
-const safeFormatTimestamp = (timestamp: Date) => {
-  // If timestamp is close to epoch (1970), assume it's in seconds and convert to ms
-  const time = timestamp.getTime()
-  const correctTime = time < 1000000000000 ? time * 1000 : time // 1e12 ms is roughly year 2001, 1e10 sec is year 2286
-  return new Date(correctTime).toLocaleString('en-UK', dateFmtConfig)
+const safeFormatTimestamp = (timestamp: Date | number | string) => {
+  const date = toSafeDate(timestamp)
+  if (isNaN(date.getTime())) return String(timestamp)
+  return date.toLocaleString('en-UK', dateFmtConfig)
     .split(', ').reverse().join(' ')
 }
 
@@ -2037,14 +2057,14 @@ const RowDetails = () => {
     )
   }
 
+  const tableName = url.params.rt || url.params.table ||
+    schema.data?.tables?.[0]?.table
+  const tableDef = schema.data?.tables?.find((t) => t.table === tableName)
+
   const onUpdateRow = async (e: Event) => {
     e.preventDefault()
     const row = rowDetailsData.data?.rows?.[0] as AnyRecord | undefined
     if (!row) return
-    const tableName = url.params.rt || url.params.table ||
-      schema.data?.tables?.[0]?.table
-    console.log('tableName', tableName)
-    const tableDef = schema.data?.tables?.find((t) => t.table === tableName)
     const pk = tableDef?.columns?.[0]?.name
     if (!tableName || !pk) {
       toast('Could not identify table or primary key', 'error')
@@ -2112,62 +2132,54 @@ const RowDetails = () => {
 
       <form onSubmit={onUpdateRow} class='flex-1 flex flex-col min-h-0'>
         <div class='flex-1 overflow-y-auto p-4 space-y-4'>
-          {Object.entries(row).filter(([key]) => !key.startsWith('inline_'))
-            .map(([key, value]) => {
-              const tableName = url.params.rt || url.params.table ||
-                schema.data?.tables?.[0]?.table
-              const tableDef = schema.data?.tables?.find((t) =>
-                t.table === tableName
-              )
-              const colDef = tableDef?.columns?.find((c) => c.name === key)
-              const type = colDef?.type || 'String'
-              const isObject =
-                (type.includes('Map') || type.includes('Array') ||
-                  type.includes('Tuple') || type.includes('Nested') ||
-                  type.includes('JSON') ||
-                  type.toLowerCase().includes('blob')) &&
-                (typeof value === 'object' || typeof value === 'string')
-              const isNumber = type.includes('Int') || type.includes('Float') ||
-                type.includes('Decimal')
-              const isBoolean = type.includes('Bool')
-              const isDate = type.includes('Date') || type.includes('Time') ||
-                (key.endsWith('At') &&
-                  (typeof value === 'number' || !isNaN(Number(value))))
+          {tableDef?.columns.map((col) => {
+            const key = col.name
+            const value = row[key]
+            const type = col.type
+            const isObject = (type.includes('Map') || type.includes('Array') ||
+              type.includes('Tuple') || type.includes('Nested') ||
+              type.includes('JSON') ||
+              type.toLowerCase().includes('blob')) &&
+              (typeof value === 'object' || typeof value === 'string')
+            const isNumber = type.includes('Int') || type.includes('Float') ||
+              type.includes('Decimal')
+            const isBoolean = type.includes('Bool')
+            const isDate = isDateColumn(col, value)
 
-              return (
-                <div key={key} class='form-control'>
-                  <ColumnLabel col={colDef} row={row} name={key} type={type} />
+            return (
+              <div key={key} class='form-control'>
+                <ColumnLabel col={col} row={row} />
 
-                  {isObject
-                    ? <ObjectInput name={key} defaultValue={value} />
-                    : isBoolean
-                    ? (
-                      <BooleanInput
-                        name={key}
-                        defaultChecked={Boolean(value)}
-                      />
-                    )
-                    : isDate
-                    ? (
-                      <DateInput
-                        name={key}
-                        defaultValue={typeof value === 'number'
-                          ? new Date(value < 10000000000 ? value * 1000 : value)
-                            .toISOString()
-                          : String(value)}
-                      />
-                    )
-                    : isNumber
-                    ? <NumberInput name={key} defaultValue={value as number} />
-                    : (
-                      <TextInput
-                        name={key}
-                        defaultValue={String(value ?? '')}
-                      />
-                    )}
-                </div>
-              )
-            })}
+                {isObject
+                  ? <ObjectInput name={key} defaultValue={value} />
+                  : isBoolean
+                  ? (
+                    <BooleanInput
+                      name={key}
+                      defaultChecked={Boolean(value)}
+                    />
+                  )
+                  : isDate
+                  ? (
+                    <DateInput
+                      name={key}
+                      defaultValue={typeof value === 'number'
+                        ? new Date(value < 10000000000 ? value * 1000 : value)
+                          .toISOString()
+                        : String(value)}
+                    />
+                  )
+                  : isNumber
+                  ? <NumberInput name={key} defaultValue={value as number} />
+                  : (
+                    <TextInput
+                      name={key}
+                      defaultValue={String(value ?? '')}
+                    />
+                  )}
+              </div>
+            )
+          })}
         </div>
 
         <div class='p-4 border-t border-base-300 sticky bottom-0 bg-base-100'>
