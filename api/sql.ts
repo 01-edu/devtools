@@ -82,6 +82,7 @@ const INTROSPECTION: Record<string, string> = {
       p.name AS column_name, 
       p.type AS data_type, 
       p.cid + 1 AS ordinal_position,
+      p.pk AS is_primary_key,
       f."table" AS ref_table,
       f."to" AS ref_column
     FROM sqlite_master m 
@@ -99,6 +100,7 @@ type STANDARD_COLUMNS = {
   column_name: string
   data_type: string
   ordinal_position: number
+  is_primary_key?: number
   ref_table?: string
   ref_column?: string
 }[]
@@ -141,6 +143,7 @@ export async function refreshOneSchema(
         type: String(r.data_type || ''),
         ordinal: Number(r.ordinal_position || 0),
         relation: undefined,
+        isPrimaryKey: r.is_primary_key ? true : false,
       }
 
       if (r.ref_table && r.ref_column) {
@@ -175,7 +178,11 @@ export async function refreshOneSchema(
     }
     const tables = [...tableMap.values()].map((t) => ({
       ...t,
-      columns: t.columns.sort((a, b) => a.ordinal - b.ordinal),
+      columns: t.columns.sort((a, b) => {
+        if (a.isPrimaryKey && !b.isPrimaryKey) return -1
+        if (!a.isPrimaryKey && b.isPrimaryKey) return 1
+        return a.ordinal - b.ordinal
+      }),
       columnsMap: t.columns.reduce((obj, col) => {
         obj[col.name] = col
         return obj

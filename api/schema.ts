@@ -81,6 +81,7 @@ export const DatabaseSchemaDef = OBJ({
         labelColumn: optional(STR('Column to use for inlining')),
         type: LIST(['enum', 'table'], 'Relation type'),
       })),
+      isPrimaryKey: optional(BOOL()),
     })),
     columnsMap: optional(OBJ({})),
     schema: optional(STR()),

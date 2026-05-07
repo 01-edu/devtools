@@ -74,6 +74,70 @@ const Toast = () => {
   )
 }
 
+type ColumnDef = NonNullable<
+  ApiOutput['GET/api/deployment/schema']['tables']
+>[number]['columns'][number]
+
+const COLUMN_STYLES = {
+  pk: {
+    color: 'text-warning',
+    bg: 'bg-warning/5',
+    icon: Hash,
+    font: 'font-bold',
+  },
+  enum: {
+    color: 'text-success',
+    bg: 'bg-success/5',
+    icon: Hash,
+    font: 'font-medium',
+  },
+  table: {
+    color: 'text-info',
+    bg: 'bg-info/5',
+    icon: Link2,
+    font: 'font-medium',
+  },
+  default: { color: 'text-base-content/50', bg: '', icon: Columns, font: '' },
+} as const
+
+const getColumnConfig = (col?: ColumnDef) => {
+  const key = col?.isPrimaryKey ? 'pk' : col?.relation?.type || 'default'
+  return COLUMN_STYLES[key as keyof typeof COLUMN_STYLES] ||
+    COLUMN_STYLES.default
+}
+
+const ColumnLabel = (
+  { col, row, type, name }: {
+    col?: ColumnDef
+    row?: AnyRecord
+    type?: string
+    name: string
+  },
+) => {
+  const config = getColumnConfig(col)
+  return (
+    <label class='label py-1'>
+      <div class='flex items-center gap-2'>
+        <span
+          class={`label-text text-xs font-semibold uppercase tracking-wider ${config.color}`}
+        >
+          {name}
+        </span>
+        <config.icon class={`h-3 w-3 ${config.color}`} />
+        {col?.relation?.type === 'enum' && row &&
+          row[`inline_${name}`] !== undefined && (
+          <span class='badge badge-success badge-outline badge-xs opacity-70'>
+            {String(row[`inline_${name}`])}
+          </span>
+        )}
+      </div>
+      <span class='label-text-alt text-[10px] opacity-50'>
+        {type || col?.type || ''}
+      </span>
+    </label>
+  )
+}
+
 // Effect to fetch schema when deployment URL changes
 effect(() => {
   const dep = url.params.dep
@@ -354,37 +418,38 @@ const RowNumberCell = ({ index }: { index: number }) => (
   </td>
 )
 
-const TableCell = ({ value }: { value: unknown }) => {
+const TableCell = ({ value, col }: { value: unknown; col?: ColumnDef }) => {
+  const config = getColumnConfig(col)
   const isObj = typeof value === 'object' && value !== null
   const stringValue = isObj ? JSON.stringify(value) : String(value ?? '')
   const isTooLong = stringValue.length > 100
 
-  if (value === null || value === undefined || value === '') {
-    return (
-      <span class='text-sm text-base-content/30 italic select-none text-left block w-full'>
-        null
-      </span>
-    )
-  }
-
-  if (isObj) {
-    return (
-      <code
-        class='font-mono text-sm text-base-content/70 block overflow-hidden text-ellipsis whitespace-nowrap max-w-md text-left w-full'
-        title={isTooLong ? stringValue : undefined}
-      >
-        {stringValue}
-      </code>
-    )
-  }
-
   return (
-    <span
-      class='block overflow-hidden text-ellipsis whitespace-nowrap text-sm max-w-md text-left w-full'
-      title={isTooLong ? stringValue : undefined}
-    >
-      {stringValue}
-    </span>
+    <div class={`px-1 py-0.5 ${config.color} ${config.font}`}>
+      {value === null || value === undefined || value === ''
+        ? (
+          <span class='text-sm text-base-content/30 italic select-none text-left block w-full'>
+            null
+          </span>
+        )
+        : isObj
+        ? (
+          <code
+            class='font-mono text-sm text-base-content/70 block overflow-hidden text-ellipsis whitespace-nowrap max-w-md text-left w-full'
+            title={isTooLong ? stringValue : undefined}
+          >
+            {stringValue}
+          </code>
+        )
+        : (
+          <span
+            class='block overflow-hidden text-ellipsis whitespace-nowrap text-sm max-w-md text-left w-full'
+            title={isTooLong ? stringValue : undefined}
+          >
+            {stringValue}
+          </span>
+        )}
+    </div>
   )
 }
 
@@ -400,11 +465,13 @@ const EmptyRow = ({ colSpan }: { colSpan: number }) => (
 )
 
 const DataRow = (
-  { row, columns, index }: { row: AnyRecord; columns: string[]; index: number },
+  { row, columns, index, columnsDef }: {
+    row: AnyRecord
+    columns: string[]
+    index: number
+    columnsDef?: ColumnDef[]
+  },
 ) => {
-  const tableName = url.params.table || schema.data?.tables?.[0]?.table
-  const columnsDef = schema.data?.tables?.find((t) => t.table === tableName)
-    ?.columns
   const pk = columnsDef?.[0]?.name
   const rowId = pk ? String(row[pk]) : undefined
 
@@ -417,16 +484,16 @@ const DataRow = (
         <RowNumberCell index={index} />
         {columns.map((key) => {
           const colDef = columnsDef?.find((c) => c.name === key)
-          const value = colDef?.relation?.type === 'enum'
-            ? (row[`inline_${key}`] ?? row[key])
-            : row[key]
-
+          const config = getColumnConfig(colDef)
+          const isEnum = colDef?.relation?.type === 'enum'
           const isTableRel = colDef?.relation?.type === 'table'
+
+          const value = isEnum ? (row[`inline_${key}`] ?? row[key]) : row[key]
 
           return (
             <td
               key={key}
-              class='align-top min-w-[6rem] p-0 border-r border-base-300/30 font-normal text-left'
+              class={`align-top min-w-[6rem] p-0 border-r border-base-300/30 font-normal text-left ${config.bg}`}
             >
               {isTableRel
                 ? (
@@ -436,14 +503,14 @@ const DataRow = (
                       rt: colDef.relation?.table,
                       'row-id': String(row[key]),
                     }}
-                    class='flex items-center gap-1 group/rel link link-primary no-underline px-1 py-0.5'
+                    class={`flex items-center gap-1 group/rel link no-underline ${config.color}`}
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <TableCell value={value} />
+                    <TableCell value={value} col={colDef} />
                     <Link2 class='h-3 w-3 opacity-0 group-hover/rel:opacity-100 transition-opacity shrink-0' />
                   </A>
                 )
-                : <TableCell value={value} />}
+                : <TableCell value={value} col={colDef} />}
             </td>
           )
         })}
@@ -563,13 +630,14 @@ const TableFooter = ({ rows }: { rows: AnyRecord[] }) => {
 const TableContent = ({ rows }: { rows: AnyRecord[] }) => {
   let columns = Object.keys(rows[0] || {})
 
+  const tableName = url.params.table || schema.data?.tables?.[0]?.table
+  const tableDef = schema.data?.tables?.find((t) => t.table === tableName)
+  const columnsDef = tableDef?.columns
+
   // If in tables view, use schema columns first
   if (url.params.tab === 'tables') {
-    const tableName = url.params.table || schema.data?.tables?.[0]?.table
-    const tableDef = schema.data?.tables?.find((t) => t.table === tableName)
-
-    if (tableDef?.columns) {
-      const schemaColumns = tableDef.columns.map((c) => c.name)
+    if (columnsDef) {
+      const schemaColumns = columnsDef.map((c) => c.name)
       // Add any extra columns found in rows that aren't in schema (e.g. virtual columns)
       const extraColumns = columns.filter((c) => !schemaColumns.includes(c))
       columns = [...schemaColumns, ...extraColumns]
@@ -588,6 +656,7 @@ const TableContent = ({ rows }: { rows: AnyRecord[] }) => {
                 row={row}
                 columns={columns}
                 index={index}
+                columnsDef={columnsDef}
               />
             ))
           )}
@@ -771,23 +840,28 @@ function SchemaPanel() {
                             Columns
                           </div>
                           <div class='space-y-0.5 max-h-64 overflow-y-auto'>
-                            {table.columns.map((col, idx) => (
-                              <div
-                                key={idx}
-                                class='flex items-center gap-2 px-2 py-1 text-xs hover:bg-base-200 rounded'
-                              >
-                                <Columns class='h-3 w-3 text-base-content/40' />
-                                <span
-                                  class='font-mono truncate'
-                                  title={col.name}
+                            {table.columns.map((col, idx) => {
+                              const config = getColumnConfig(col)
+                              return (
+                                <div
+                                  key={idx}
+                                  class={`flex items-center gap-2 px-2 py-1 text-xs hover:bg-base-200 rounded ${config.color} ${
+                                    col.isPrimaryKey ? 'font-semibold' : ''
+                                  }`}
                                 >
-                                  {col.name}
-                                </span>
-                                <span class='text-base-content/40 text-[10px] ml-auto'>
-                                  {col.type}
-                                </span>
-                              </div>
-                            ))}
+                                  <config.icon class='h-3 w-3' />
+                                  <span
+                                    class='font-mono truncate'
+                                    title={col.name}
+                                  >
+                                    {col.name}
+                                  </span>
+                                  <span class='text-base-content/40 text-[10px] ml-auto'>
+                                    {col.type}
+                                  </span>
+                                </div>
+                              )
+                            })}
                           </div>
                         </div>
                       )}
@@ -2038,57 +2112,62 @@ const RowDetails = () => {
 
       <form onSubmit={onUpdateRow} class='flex-1 flex flex-col min-h-0'>
         <div class='flex-1 overflow-y-auto p-4 space-y-4'>
-          {Object.entries(row).map(([key, value]) => {
-            const tableName = url.params.rt || url.params.table ||
-              schema.data?.tables?.[0]?.table
-            const tableDef = schema.data?.tables?.find((t) =>
-              t.table === tableName
-            )
-            const colDef = tableDef?.columns?.find((c) => c.name === key)
-            const type = colDef?.type || 'String'
+          {Object.entries(row).filter(([key]) => !key.startsWith('inline_'))
+            .map(([key, value]) => {
+              const tableName = url.params.rt || url.params.table ||
+                schema.data?.tables?.[0]?.table
+              const tableDef = schema.data?.tables?.find((t) =>
+                t.table === tableName
+              )
+              const colDef = tableDef?.columns?.find((c) => c.name === key)
+              const type = colDef?.type || 'String'
+              const isObject =
+                (type.includes('Map') || type.includes('Array') ||
+                  type.includes('Tuple') || type.includes('Nested') ||
+                  type.includes('JSON') ||
+                  type.toLowerCase().includes('blob')) &&
+                (typeof value === 'object' || typeof value === 'string')
+              const isNumber = type.includes('Int') || type.includes('Float') ||
+                type.includes('Decimal')
+              const isBoolean = type.includes('Bool')
+              const isDate = type.includes('Date') || type.includes('Time') ||
+                (key.endsWith('At') &&
+                  (typeof value === 'number' || !isNaN(Number(value))))
 
-            const isObject = (type.includes('Map') || type.includes('Array') ||
-              type.includes('Tuple') || type.includes('Nested') ||
-              type.includes('JSON') || type.toLowerCase().includes('blob')) &&
-              (typeof value === 'object' || typeof value === 'string')
-            const isNumber = type.includes('Int') || type.includes('Float') ||
-              type.includes('Decimal')
-            const isBoolean = type.includes('Bool')
-            const isDate = type.includes('Date') || type.includes('Time') ||
-              (key.endsWith('At') &&
-                (typeof value === 'number' || !isNaN(Number(value))))
+              return (
+                <div key={key} class='form-control'>
+                  <ColumnLabel col={colDef} row={row} name={key} type={type} />
 
-            return (
-              <div key={key} class='form-control'>
-                <label class='label py-1'>
-                  <span class='label-text text-xs font-semibold text-base-content/50 uppercase tracking-wider'>
-                    {key}
-                  </span>
-                  <span class='label-text-alt text-[10px] opacity-50'>
-                    {type}
-                  </span>
-                </label>
-
-                {isObject
-                  ? <ObjectInput name={key} defaultValue={value} />
-                  : isBoolean
-                  ? <BooleanInput name={key} defaultChecked={Boolean(value)} />
-                  : isDate
-                  ? (
-                    <DateInput
-                      name={key}
-                      defaultValue={typeof value === 'number'
-                        ? new Date(value < 10000000000 ? value * 1000 : value)
-                          .toISOString()
-                        : String(value)}
-                    />
-                  )
-                  : isNumber
-                  ? <NumberInput name={key} defaultValue={value as number} />
-                  : <TextInput name={key} defaultValue={String(value ?? '')} />}
-              </div>
-            )
-          })}
+                  {isObject
+                    ? <ObjectInput name={key} defaultValue={value} />
+                    : isBoolean
+                    ? (
+                      <BooleanInput
+                        name={key}
+                        defaultChecked={Boolean(value)}
+                      />
+                    )
+                    : isDate
+                    ? (
+                      <DateInput
+                        name={key}
+                        defaultValue={typeof value === 'number'
+                          ? new Date(value < 10000000000 ? value * 1000 : value)
+                            .toISOString()
+                          : String(value)}
+                      />
+                    )
+                    : isNumber
+                    ? <NumberInput name={key} defaultValue={value as number} />
+                    : (
+                      <TextInput
+                        name={key}
+                        defaultValue={String(value ?? '')}
+                      />
+                    )}
+                </div>
+              )
+            })}
         </div>
 
         <div class='p-4 border-t border-base-300 sticky bottom-0 bg-base-100'>

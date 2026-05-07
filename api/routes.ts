@@ -459,6 +459,7 @@ const defs = {
           name: STR('Column name'),
           type: STR('Column data type'),
           ordinal: NUM('Column ordinal position'),
+          isPrimaryKey: optional(BOOL('Is primary key')),
           relation: optional(OBJ({
             table: STR('Target table'),
             column: STR('Target column'),
