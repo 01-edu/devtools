@@ -160,25 +160,28 @@ const DataCell = (
   const config = getColumnConfig(col)
   const isEnum = col?.relation?.type === 'enum'
   const isTableRel = col?.relation?.type === 'table'
+  const isPK = col?.isPrimaryKey
   const rawValue = row[name]
 
   const value = isEnum ? (row[`inline_${name}`] ?? rawValue) : rawValue
 
   return (
     <td class='align-top min-w-[6rem] p-0 border-r border-base-300/30 font-normal text-left'>
-      {isTableRel && !!rawValue
+      {(isTableRel || isPK) && !!rawValue
         ? (
           <A
             params={{
               drawer: 'view-row',
-              rt: col.relation?.table,
+              rt: isPK ? null : col?.relation?.table,
               'row-id': String(rawValue),
             }}
-            class={`relative z-20 flex items-center gap-1 group/rel link no-underline ${config.color}`}
+            class={`relative z-20 flex itsem-center gap-1 group/rel link no-underline ${config.color}`}
             onClick={(e) => e.stopPropagation()}
           >
             <TableCell value={value} col={col} />
-            <Link2 class='h-3 w-3 opacity-0 group-hover/rel:opacity-100 transition-opacity shrink-0' />
+            {isTableRel && (
+              <Link2 class='h-3 w-3 opacity-0 group-hover/rel:opacity-100 transition-opacity shrink-0' />
+            )}
           </A>
         )
         : <TableCell value={value} col={col} />}
@@ -513,34 +516,23 @@ const EmptyRow = ({ colSpan }: { colSpan: number }) => (
 )
 
 const DataRow = (
-  { row, columns, index, columnsDef }: {
+  { row, columns, columnsDef }: {
     row: AnyRecord
     columns: string[]
-    index: number
     columnsDef?: ColumnDef[]
   },
-) => {
-  const pk = columnsDef?.[0]?.name
-  const rowId = pk ? String(row[pk]) : undefined
-
-  return (
-    <tr
-      class='hover:bg-base-200/50 cursor-pointer transition-colors border-b border-base-200/50 last:border-b-0'
-      onClick={() =>
-        navigate({ params: { drawer: 'view-row', 'row-id': rowId, rt: null } })}
-    >
-      <RowNumberCell index={index} />
-      {columns.map((key) => (
-        <DataCell
-          key={key}
-          name={key}
-          row={row}
-          col={columnsDef?.find((c) => c.name === key)}
-        />
-      ))}
-    </tr>
-  )
-}
+) => (
+  <tr class='hover:bg-base-200/50 transition-colors border-b border-base-200/50 last:border-b-0'>
+    {columns.map((key) => (
+      <DataCell
+        key={key}
+        name={key}
+        row={row}
+        col={columnsDef?.find((c) => c.name === key)}
+      />
+    ))}
+  </tr>
+)
 
 const TableHeader = (
   { columns }: { columns: (string | { key: string; label: string })[] },
@@ -551,11 +543,6 @@ const TableHeader = (
   return (
     <thead class='sticky top-0 bg-base-200/90 backdrop-blur-sm shadow-sm z-10 border-b-2 border-base-300'>
       <tr>
-        <th class='sticky left-0 bg-base-200 w-10 min-w-[2.5rem] p-0 pl-1 border-r border-base-300/50 text-left'>
-          <span class='text-xs font-bold text-base-content/80 uppercase tracking-wider'>
-            #
-          </span>
-        </th>
         {columns.length > 0
           ? (
             columns.map((col) => {
@@ -678,7 +665,6 @@ const TableContent = ({ rows }: { rows: AnyRecord[] }) => {
                 key={index}
                 row={row}
                 columns={columns}
-                index={index}
                 columnsDef={columnsDef}
               />
             ))
