@@ -1,6 +1,7 @@
 import { batch } from '/api/lib/json_store.ts'
 import { join } from '@std/path'
 import { ensureDir } from '@std/fs'
+import { log } from '/api/lib/logger.ts'
 
 // Define the function signatures
 export type FunctionContext = {
@@ -45,7 +46,7 @@ export async function init() {
 }
 
 async function loadAll() {
-  console.info('Loading project functions...')
+  log.info('loading-project-functions')
   for await (const entry of Deno.readDir(functionsDir)) {
     if (entry.isDirectory) {
       await reloadProjectFunctions(entry.name)
@@ -73,7 +74,11 @@ async function reloadProjectFunctions(slug: string) {
             loaded.push({ name: entry.name, module: fns })
           }
         } catch (e) {
-          console.error(`Failed to import ${entry.name} for ${slug}:`, e)
+          log.error('failed-to-import-function', {
+            file: entry.name,
+            project: slug,
+            error: e instanceof Error ? e.message : String(e),
+          })
         }
       }
     })
@@ -83,13 +88,19 @@ async function reloadProjectFunctions(slug: string) {
 
     if (loaded.length > 0) {
       functionsMap.set(slug, loaded)
-      console.info(`Loaded ${loaded.length} functions for project: ${slug}`)
+      log.info('loaded-project-functions', {
+        count: loaded.length,
+        project: slug,
+      })
     } else {
       functionsMap.delete(slug)
     }
   } catch (err) {
     if (!(err instanceof Deno.errors.NotFound)) {
-      console.error(`Failed to load functions for ${slug}:`, err)
+      log.error('failed-to-load-functions', {
+        project: slug,
+        error: err instanceof Error ? err.message : String(err),
+      })
     }
     functionsMap.delete(slug)
   }
@@ -97,7 +108,7 @@ async function reloadProjectFunctions(slug: string) {
 
 function startWatcher() {
   if (watcher) return
-  console.info(`Starting function watcher on ${functionsDir}`)
+  log.info('starting-function-watcher', { dir: functionsDir })
   watcher = Deno.watchFs(functionsDir, { recursive: true }) // Process events
   ;(async () => {
     for await (const event of watcher!) {

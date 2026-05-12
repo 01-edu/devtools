@@ -2,6 +2,7 @@
 import { join } from '@std/path'
 import { APP_ENV } from '@01edu/api/env'
 import { ensureDir } from '@std/fs'
+import { log } from '/api/lib/logger.ts'
 
 const DB_DIR = APP_ENV === 'test' ? './db_test' : './db'
 
@@ -49,7 +50,7 @@ export async function createCollection<
       const rec = JSON.parse(await Deno.readTextFile(recordFile(id))) as T
       records.set(id, rec)
     } catch {
-      // corrupted file, ignore
+      log.warn('json-store-corrupted-file', { collection: name, id })
     }
   })
 
@@ -65,7 +66,10 @@ export async function createCollection<
     async insert(data: T) {
       const id = data[primaryKey]
       if (!id) throw Error(`Missing primary key ${primaryKey}`)
-      if (records.has(id)) throw Error(`${id} already exists`)
+      if (records.has(id)) {
+        log.warn('json-store-insert-duplicate', { collection: name, id })
+        throw Error(`${id} already exists`)
+      }
       Object.assign(data, { createdAt: Date.now(), updatedAt: Date.now() })
       records.set(id, data)
       await saveRecord(data)
@@ -89,7 +93,10 @@ export async function createCollection<
       records.values().filter(predicate).toArray() as (T & BaseRecord)[],
     async update(id: T[K], changes: Partial<Omit<T, K>>) {
       const record = records.get(id)
-      if (!record) throw new Deno.errors.NotFound(`record ${id} not found`)
+      if (!record) {
+        log.warn('json-store-update-not-found', { collection: name, id })
+        throw new Deno.errors.NotFound(`record ${id} not found`)
+      }
       const updated = { ...record, ...changes, updatedAt: Date.now() } as T
       records.set(id, updated)
       await saveRecord(updated)
@@ -98,7 +105,10 @@ export async function createCollection<
 
     async delete(id: T[K]) {
       const record = records.get(id)
-      if (!record) return false
+      if (!record) {
+        log.debug('json-store-delete-not-found', { collection: name, id })
+        return false
+      }
       records.delete(id)
       await Deno.remove(recordFile(id))
       return true

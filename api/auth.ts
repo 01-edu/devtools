@@ -11,6 +11,7 @@ import { respond } from '@01edu/api/response'
 import { authenticateOauthUser } from '/api/user.ts'
 import { savePicture } from '/api/picture.ts'
 import type { RequestContext } from '@01edu/api/context'
+import { log } from '/api/lib/logger.ts'
 
 interface GoogleTokens {
   access_token: string
@@ -46,6 +47,7 @@ const GOOGLE_CONFIG = {
 export function initiateGoogleAuth() {
   const { state } = generateStateToken()
   const authUrl = getGoogleAuthUrl(state)
+  log.info('oauth-redirect-initiated', { state })
   return new Response(null, {
     status: 302,
     headers: { 'Location': authUrl },
@@ -59,6 +61,7 @@ export async function handleGoogleCallback(
   const state = ctx.url.searchParams.get('state')
 
   if (!code) {
+    log.warn('oauth-callback-missing-code')
     throw new respond.BadRequestError({
       message: 'Missing authorization code',
       details: 'The authorization code from Google OAuth is required',
@@ -67,6 +70,7 @@ export async function handleGoogleCallback(
 
   // Verify the state parameter
   if (!verifyState(state || undefined)) {
+    log.warn('oauth-callback-invalid-state', { state })
     throw new respond.UnauthorizedError({
       message: 'Invalid state parameter',
       details: 'The state parameter is invalid or has expired',
@@ -89,6 +93,11 @@ export async function handleGoogleCallback(
   })
 
   if (!tokenResponse.ok) {
+    const errorBody = await tokenResponse.text().catch(() => 'unknown')
+    log.error('oauth-token-exchange-failed', {
+      status: tokenResponse.status,
+      body: errorBody,
+    })
     throw new respond.UnauthorizedError({
       message: 'Failed to exchange authorization code',
       details: 'Could not obtain access token from Google',
@@ -102,6 +111,12 @@ export async function handleGoogleCallback(
   const userInfo = decodeGoogleJWT(tokens.id_token) as GoogleUserInfo
   userInfo.picture &&= await savePicture(userInfo.picture)
   const sessionId = await authenticateOauthUser(userInfo)
+
+  log.info('oauth-login-success', {
+    userId: userInfo.sub,
+    email: userInfo.email,
+    domain: userInfo.hd,
+  })
 
   // Return response with session cookie
   return new Response(null, {

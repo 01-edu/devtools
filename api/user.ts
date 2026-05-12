@@ -2,6 +2,7 @@ import { decodeBase64Url, encodeBase64Url } from '@std/encoding/base64url'
 import { SECRET } from '/api/lib/env.ts'
 import { getOne } from './lmdb-store.ts'
 import { GoogleUserInfo } from './auth.ts'
+import { log } from '/api/lib/logger.ts'
 
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
@@ -60,8 +61,10 @@ export async function decodeSession(sessionCode?: string) {
       fullName: user.name.fullName,
       picture: user.thumbnailPhotoUrl,
     }
-  } catch {
-    // Invalid session code
+  } catch (err) {
+    log.debug('session-decode-failed', {
+      error: err instanceof Error ? err.message : String(err),
+    })
   }
 }
 
