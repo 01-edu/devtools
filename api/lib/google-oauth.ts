@@ -74,13 +74,20 @@ export function getGoogleAuthUrl(state: string): string {
 }
 
 export async function verifyGoogleToken(idToken: string) {
-  const response = await fetch(
-    `https://oauth2.googleapis.com/tokeninfo?id_token=${idToken}`,
-  )
-  if (!response.ok) {
-    throw new Error('Invalid token')
+  try {
+    const response = await fetch(
+      `https://oauth2.googleapis.com/tokeninfo?id_token=${idToken}`,
+    )
+    if (!response.ok) {
+      throw new Error('Invalid token')
+    }
+    return response.json()
+  } catch (err) {
+    throw new Error(
+      'Google token verification failed',
+      { cause: err },
+    )
   }
-  return response.json()
 }
 
 export function decodeGoogleJWT(idToken: string) {

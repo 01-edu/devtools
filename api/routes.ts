@@ -73,7 +73,7 @@ const withUserSession = async ({ cookies }: RequestContext) => {
   const session = await decodeSession(cookies.session)
   if (!session) {
     log.warn('auth-missing-session')
-    throw Error('Missing user session')
+    throw new respond.UnauthorizedError({ message: 'Missing user session' })
   }
   const admin = AdminsCollection.get(session.id)
   return { ...session, isAdmin: !!admin }
@@ -83,7 +83,7 @@ const withAdminSession = async (ctx: RequestContext) => {
   const session = await withUserSession(ctx)
   if (!session || !session.isAdmin) {
     log.warn('auth-admin-required', { userId: session?.id })
-    throw Error('Admin access required')
+    throw new respond.ForbiddenError({ message: 'Admin access required' })
   }
 }
 
@@ -91,20 +91,28 @@ const withDeploymentSession = async (ctx: RequestContext) => {
   const token = ctx.req.headers.get('Authorization')?.replace(/^Bearer /i, '')
   if (!token) {
     log.warn('deployment-auth-missing-token')
-    throw Error('Missing token')
+    throw new respond.UnauthorizedError({ message: 'Missing token' })
   }
-  const message = await decryptMessage(token)
-  if (!message) {
-    log.warn('deployment-auth-invalid-token')
-    throw Error('Invalid token')
+  try {
+    const message = await decryptMessage(token)
+    if (!message) {
+      log.warn('deployment-auth-invalid-token')
+      throw new respond.UnauthorizedError({ message: 'Invalid token' })
+    }
+    const data = JSON.parse(message)
+    const dep = DeploymentsCollection.get(data?.url)
+    if (!dep || dep.tokenSalt !== data?.tokenSalt) {
+      log.warn('deployment-auth-token-mismatch', { url: data?.url })
+      throw new respond.UnauthorizedError({ message: 'Invalid token' })
+    }
+    return dep
+  } catch (err) {
+    if (err instanceof respond.ResponseError) throw err
+    log.warn('deployment-auth-token-error', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+    throw new respond.UnauthorizedError({ message: 'Invalid token' })
   }
-  const data = JSON.parse(message)
-  const dep = DeploymentsCollection.get(data?.url)
-  if (!dep || dep.tokenSalt !== data?.tokenSalt) {
-    log.warn('deployment-auth-token-mismatch', { url: data?.url })
-    throw Error('Invalid token')
-  }
-  return dep
 }
 
 const userInTeam = async (teamId: string, userId?: string) => {
@@ -121,19 +129,21 @@ const withDeploymentTableAccess = async (
   deployment: string,
 ) => {
   const dep = DeploymentsCollection.get(deployment)
-  if (!dep) throw respond.NotFound({ message: 'Deployment not found' })
+  if (!dep) throw new respond.NotFoundError({ message: 'Deployment not found' })
 
   if (!dep.databaseEnabled) {
-    throw respond.BadRequest({
+    throw new respond.BadRequestError({
       message: 'Database not enabled for deployment',
     })
   }
 
   const project = ProjectsCollection.get(dep.projectId)
-  if (!project) throw respond.NotFound({ message: 'Project not found' })
+  if (!project) {
+    throw new respond.NotFoundError({ message: 'Project not found' })
+  }
   if (!project.isPublic && !ctx.session.isAdmin) {
     if (!(await userInTeam(project.teamId, ctx.session.id))) {
-      throw respond.Forbidden({
+      throw new respond.ForbiddenError({
         message: 'Access to project tables denied',
       })
     }
@@ -261,7 +271,7 @@ const defs = {
     authorize: withUserSession,
     fn: async (_ctx, { id }) => {
       const group = await getOne<{ name: string }>('google/group', id)
-      if (!group) throw respond.NotFound({ message: 'Team not found' })
+      if (!group) throw new respond.NotFoundError({ message: 'Team not found' })
 
       const members = await get<{ id: string; email: string }[]>(
         `google/group/${id}`,
@@ -325,7 +335,9 @@ const defs = {
     authorize: withUserSession,
     fn: (_ctx, { slug }) => {
       const project = ProjectsCollection.get(slug)
-      if (!project) throw respond.NotFound({ message: 'Project not found' })
+      if (!project) {
+        throw new respond.NotFoundError({ message: 'Project not found' })
+      }
       return project
     },
     input: OBJ({ slug: STR('The slug of the project') }),
@@ -349,7 +361,9 @@ const defs = {
     authorize: withAdminSession,
     fn: (_ctx, { slug }) => {
       const project = ProjectsCollection.get(slug)
-      if (!project) throw respond.NotFound({ message: 'Project not found' })
+      if (!project) {
+        throw new respond.NotFoundError({ message: 'Project not found' })
+      }
       ProjectsCollection.delete(slug)
       log.info('project-deleted', { slug })
       return true
@@ -365,7 +379,7 @@ const defs = {
         d.projectId === project
       )
       if (!deployments.length) {
-        throw respond.NotFound({ message: 'Deployments not found' })
+        throw new respond.NotFoundError({ message: 'Deployments not found' })
       }
       return deployments.map(({ tokenSalt: _, ...d }) => {
         return {
@@ -384,7 +398,9 @@ const defs = {
     authorize: withAdminSession,
     fn: async (_ctx, { url }) => {
       const dep = DeploymentsCollection.get(url)
-      if (!dep) throw respond.NotFound()
+      if (!dep) {
+        throw new respond.NotFoundError({ message: 'Deployment not found' })
+      }
       const { tokenSalt, ...deployment } = dep
       const token = await encryptMessage(
         JSON.stringify({ url: deployment.url, tokenSalt }),
@@ -445,7 +461,9 @@ const defs = {
     authorize: withAdminSession,
     fn: async (_ctx, { url }) => {
       const dep = DeploymentsCollection.get(url)
-      if (!dep) throw respond.NotFound()
+      if (!dep) {
+        throw new respond.NotFoundError({ message: 'Deployment not found' })
+      }
       const tokenSalt = performance.now().toString()
       log.info('deployment-token-regenerated', { url })
 
@@ -464,14 +482,18 @@ const defs = {
     authorize: withUserSession,
     fn: (_ctx, { url }) => {
       const dep = DeploymentsCollection.get(url)
-      if (!dep) throw respond.NotFound({ message: 'Deployment not found' })
+      if (!dep) {
+        throw new respond.NotFoundError({ message: 'Deployment not found' })
+      }
       if (!dep.databaseEnabled) {
-        throw respond.BadRequest({
+        throw new respond.BadRequestError({
           message: 'Database not enabled for deployment',
         })
       }
       const schema = DatabaseSchemasCollection.get(url)
-      if (!schema) throw respond.NotFound({ message: 'Schema not cached yet' })
+      if (!schema) {
+        throw new respond.NotFoundError({ message: 'Schema not cached yet' })
+      }
       return schema
     },
     input: OBJ({ url: STR('Deployment URL') }),
@@ -501,7 +523,9 @@ const defs = {
     authorize: withAdminSession,
     fn: async (_ctx, input) => {
       const dep = DeploymentsCollection.get(input)
-      if (!dep) throw respond.NotFound()
+      if (!dep) {
+        throw new respond.NotFoundError({ message: 'Deployment not found' })
+      }
       await DeploymentsCollection.delete(input)
       log.info('deployment-deleted', { url: input })
       return respond.NoContent()
@@ -512,7 +536,14 @@ const defs = {
   'POST/api/logs': route({
     authorize: withDeploymentSession,
     fn: (ctx, logs) => {
-      if (!ctx.session.url) throw respond.InternalServerError()
+      if (!ctx.session.url) {
+        log.error('deployment-session-missing-url', {
+          userId: ctx.session.id,
+        })
+        throw new respond.InternalServerErrorError({
+          message: 'Deployment URL missing from session',
+        })
+      }
       const count = Array.isArray(logs) ? logs.length : 1
       log.debug('logs-ingested', { deployment: ctx.session.url, count })
       return insertLogs(ctx.session.url, logs)
@@ -525,18 +556,22 @@ const defs = {
     fn: async (ctx, params) => {
       const deployment = DeploymentsCollection.get(params.deployment)
       if (!deployment) {
-        throw respond.NotFound({ message: 'Deployment not found' })
+        throw new respond.NotFoundError({ message: 'Deployment not found' })
       }
       if (!deployment.logsEnabled) {
-        throw respond.BadRequest({
+        throw new respond.BadRequestError({
           message: 'Logging not enabled for deployment',
         })
       }
       const project = ProjectsCollection.get(deployment.projectId)
-      if (!project) throw respond.NotFound({ message: 'Project not found' })
+      if (!project) {
+        throw new respond.NotFoundError({ message: 'Project not found' })
+      }
       if (!project.isPublic && !ctx.session.isAdmin) {
         if (!(await userInTeam(project.teamId, ctx.session.email))) {
-          throw respond.Forbidden({ message: 'Access to project logs denied' })
+          throw new respond.ForbiddenError({
+            message: 'Access to project logs denied',
+          })
         }
       }
 
@@ -575,10 +610,14 @@ const defs = {
       const dep = await withDeploymentTableAccess(ctx, deployment)
 
       const schema = DatabaseSchemasCollection.get(deployment)
-      if (!schema) throw respond.NotFound({ message: 'Schema not cached yet' })
+      if (!schema) {
+        throw new respond.NotFoundError({ message: 'Schema not cached yet' })
+      }
       const tableDef = schema.tables.find((t) => t.table === table)
       if (!tableDef) {
-        throw respond.NotFound({ message: 'Table not found in schema' })
+        throw new respond.NotFoundError({
+          message: 'Table not found in schema',
+        })
       }
 
       try {
@@ -665,7 +704,7 @@ const defs = {
         deployment,
       )
       if (!sqlEndpoint || !sqlToken) {
-        throw respond.BadRequest({
+        throw new respond.BadRequestError({
           message: 'SQL endpoint or token not configured for deployment',
         })
       }
@@ -713,15 +752,23 @@ const defs = {
         deployment,
       )
       if (!sqlEndpoint || !sqlToken) {
-        throw respond.BadRequest({
+        throw new respond.BadRequestError({
           message: 'SQL endpoint or token not configured for deployment',
         })
       }
 
-      return fetch(`${sqlEndpoint}/metrics`, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${sqlToken}` },
-      })
+      try {
+        return await fetch(`${sqlEndpoint}/metrics`, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${sqlToken}` },
+        })
+      } catch (err) {
+        throw new respond.InternalServerErrorError({
+          message: err instanceof Error
+            ? err.message
+            : 'Failed to fetch SQL metrics',
+        })
+      }
     },
     input: OBJ({ deployment: STR("The deployment's URL") }),
     output: ARR(MetricSchema, 'Collected query metrics'),
@@ -731,7 +778,9 @@ const defs = {
     authorize: withUserSession,
     fn: async (_ctx, { deployment }) => {
       const dep = DeploymentsCollection.get(deployment)
-      if (!dep) throw respond.NotFound({ message: 'Deployment not found' })
+      if (!dep) {
+        throw new respond.NotFoundError({ message: 'Deployment not found' })
+      }
       log.info('fetching-api-doc', {
         url: dep.url,
       })
@@ -748,7 +797,7 @@ const defs = {
         log.error('fetch-api-doc-error', {
           error: _err instanceof Error ? _err.stack : String(_err),
         })
-        throw respond.InternalServerError({
+        throw new respond.InternalServerErrorError({
           message: 'Failed to fetch API documentation',
         })
       }
@@ -778,7 +827,7 @@ const defs = {
           metricId: id,
           error: err instanceof Error ? err.message : String(err),
         })
-        throw respond.InternalServerError({
+        throw new respond.InternalServerErrorError({
           message: err instanceof Error ? err.message : String(err),
         })
       }

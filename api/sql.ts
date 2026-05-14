@@ -11,6 +11,7 @@ import {
   getProjectFunctions,
 } from '/api/lib/functions.ts'
 import { log } from '/api/lib/logger.ts'
+import { respond } from '@01edu/api/response'
 
 export class SQLQueryError extends Error {
   constructor(message: string, body: string) {
@@ -38,17 +39,26 @@ export async function runSQL(
   query: string,
   params?: unknown,
 ) {
-  const res = await fetch(`${endpoint}/execute`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ query, params }),
-  })
-  const body = await res.text()
-  if (res.ok) return JSON.parse(body)
-  throw new SQLQueryError(`sql endpoint error ${res.status}`, body)
+  try {
+    const res = await fetch(`${endpoint}/execute`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ query, params }),
+    })
+    const body = await res.text()
+    if (res.ok) return JSON.parse(body)
+    throw new SQLQueryError(`sql endpoint error ${res.status}`, body)
+  } catch (err) {
+    if (err instanceof SQLQueryError) throw err
+    throw new respond.InternalServerErrorError({
+      message: err instanceof Error
+        ? err.message
+        : 'Failed to connect to SQL endpoint',
+    })
+  }
 }
 
 // Dialect detection attempts (run first successful)
@@ -247,7 +257,9 @@ const constructWhereClause = (
       const { key, comparator, value } = filter
       const column = columnsMap.get(key)
       if (!column) {
-        throw Error(`Invalid filter column: ${key}`)
+        throw new respond.BadRequestError({
+          message: `Invalid filter column: ${key}`,
+        })
       }
       const safeValue = value.replace(/'/g, "''")
       whereClauses.push(`${key} ${comparator} '${safeValue}'`)
@@ -274,7 +286,9 @@ const constructOrderByClause = (
     const { key, order } = sort
     const column = columnsMap.get(key)
     if (!column) {
-      throw Error(`Invalid sort column: ${key}`)
+      throw new respond.BadRequestError({
+        message: `Invalid sort column: ${key}`,
+      })
     }
     orderClauses.push(`${key} ${order}`)
   }
@@ -287,7 +301,9 @@ export const fetchTablesData = async (
 ) => {
   const { sqlEndpoint, sqlToken } = params.deployment
   if (!sqlToken || !sqlEndpoint) {
-    throw Error('Missing SQL endpoint or token')
+    throw new respond.BadRequestError({
+      message: 'Missing SQL endpoint or token for this deployment',
+    })
   }
   const projectFunctions = getProjectFunctions(params.deployment.projectId)
 
@@ -355,7 +371,9 @@ export const insertTableData = async (
       deployment: deployment.url,
       table,
     })
-    throw Error('Missing SQL endpoint or token')
+    throw new respond.BadRequestError({
+      message: 'Missing SQL endpoint or token for this deployment',
+    })
   }
   const projectFunctions = getProjectFunctions(deployment.projectId)
   const transformedData = await applyWriteTransformers(
@@ -399,7 +417,9 @@ export const updateTableData = async (
       deployment: deployment.url,
       table,
     })
-    throw Error('Missing SQL endpoint or token')
+    throw new respond.BadRequestError({
+      message: 'Missing SQL endpoint or token for this deployment',
+    })
   }
   const projectFunctions = getProjectFunctions(deployment.projectId)
 

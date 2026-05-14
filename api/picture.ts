@@ -27,6 +27,7 @@ export const savePicture = async (url?: string) => {
       url,
       error: err instanceof Error ? err.message : String(err),
     })
+    return undefined
   }
 }
 
@@ -44,6 +45,6 @@ export const getPicture = async (hash: string) => {
       hash,
       error: err instanceof Error ? err.message : String(err),
     })
-    throw err
+    return new Response('Picture not found', { status: 404 })
   }
 }

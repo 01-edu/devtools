@@ -78,19 +78,27 @@ export async function handleGoogleCallback(
   }
 
   // Exchange the code for tokens
-  const tokenResponse = await fetch(GOOGLE_OAUTH_CONFIG.tokenEndpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams({
-      code,
-      client_id: GOOGLE_OAUTH_CONFIG.clientId,
-      client_secret: GOOGLE_OAUTH_CONFIG.clientSecret,
-      redirect_uri: GOOGLE_OAUTH_CONFIG.redirectUri,
-      grant_type: 'authorization_code',
-    }),
-  })
+  let tokenResponse: Response
+  try {
+    tokenResponse = await fetch(GOOGLE_OAUTH_CONFIG.tokenEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        code,
+        client_id: GOOGLE_OAUTH_CONFIG.clientId,
+        client_secret: GOOGLE_OAUTH_CONFIG.clientSecret,
+        redirect_uri: GOOGLE_OAUTH_CONFIG.redirectUri,
+        grant_type: 'authorization_code',
+      }),
+    })
+  } catch (err) {
+    throw new respond.UnauthorizedError({
+      message: 'Failed to contact Google OAuth',
+      details: err instanceof Error ? err.message : 'Network error',
+    })
+  }
 
   if (!tokenResponse.ok) {
     const errorBody = await tokenResponse.text().catch(() => 'unknown')
@@ -107,7 +115,15 @@ export async function handleGoogleCallback(
   const tokens = await tokenResponse.json() as GoogleTokens
 
   // Verify and decode the ID token
-  await verifyGoogleToken(tokens.id_token)
+  try {
+    await verifyGoogleToken(tokens.id_token)
+  } catch (err) {
+    throw new respond.UnauthorizedError({
+      message: 'Failed to verify Google ID token',
+      details: err instanceof Error ? err.message : 'Unknown error',
+    })
+  }
+
   const userInfo = decodeGoogleJWT(tokens.id_token) as GoogleUserInfo
   userInfo.picture &&= await savePicture(userInfo.picture)
   const sessionId = await authenticateOauthUser(userInfo)
