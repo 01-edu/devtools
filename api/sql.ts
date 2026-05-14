@@ -117,7 +117,7 @@ type TableInfo = {
   schema: string | undefined
   table: string
   columns: ColumnInfo[]
-  columnsMap: Map<string, ColumnInfo>
+  columnsMap: Record<string, ColumnInfo>
 }
 
 export async function refreshOneSchema(
@@ -135,7 +135,7 @@ export async function refreshOneSchema(
       if (!table) continue
       const key = (schema ? schema + '.' : '') + table
       if (!tableMap.has(key)) {
-        tableMap.set(key, { schema, table, columns: [], columnsMap: new Map() })
+        tableMap.set(key, { schema, table, columns: [], columnsMap: {} })
       }
 
       const column: ColumnInfo = {
@@ -183,10 +183,9 @@ export async function refreshOneSchema(
         if (!a.isPrimaryKey && b.isPrimaryKey) return 1
         return a.ordinal - b.ordinal
       }),
-      columnsMap: t.columns.reduce((obj, col) => {
-        obj[col.name] = col
-        return obj
-      }, {} as Record<string, ColumnInfo>),
+      columnsMap: Object.fromEntries(
+        t.columns.map((col) => [col.name, col]),
+      ) as Record<string, ColumnInfo>,
     }))
     const payload = {
       deploymentUrl: dep.url,
@@ -306,7 +305,7 @@ export const fetchTablesData = async (
     }
   }
 
-  const selectColumns = ['t.*']
+  const selectColumns = ['t.rowid AS _rowid_', 't.*']
   const joins: string[] = []
 
   for (const col of columnsMap.values()) {

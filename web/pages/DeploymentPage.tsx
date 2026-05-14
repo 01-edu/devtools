@@ -638,7 +638,7 @@ const TableFooter = ({ rows }: { rows: AnyRecord[] }) => {
 }
 
 const TableContent = ({ rows }: { rows: AnyRecord[] }) => {
-  let columns = Object.keys(rows[0] || {})
+  let columns = Object.keys(rows[0] || {}).filter((c) => c !== '_rowid_')
 
   const tableName = url.params.table || schema.data?.tables?.[0]?.table
   const tableDef = schema.data?.tables?.find((t) => t.table === tableName)
@@ -662,7 +662,7 @@ const TableContent = ({ rows }: { rows: AnyRecord[] }) => {
           : (
             rows.map((row, index) => (
               <DataRow
-                key={index}
+                key={row._rowid_ ?? index}
                 row={row}
                 columns={columns}
                 columnsDef={columnsDef}
