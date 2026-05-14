@@ -49,7 +49,7 @@ export async function decodeSession(sessionCode?: string) {
     const json = await decryptMessage(sessionCode)
     const googleUser = JSON.parse(json) as GoogleUserInfo
     const user = await getOne<
-      { name: { fullName: string }; thumbnailPhotoUrl: string }
+      { name: { fullName: string } }
     >(
       'google/user',
       googleUser.sub,
@@ -59,7 +59,7 @@ export async function decodeSession(sessionCode?: string) {
       id: googleUser.sub,
       email: googleUser.email,
       fullName: user.name.fullName,
-      picture: user.thumbnailPhotoUrl,
+      picture: googleUser.picture || '',
     }
   } catch (err) {
     log.debug('session-decode-failed', {

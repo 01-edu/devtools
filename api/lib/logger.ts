@@ -11,6 +11,8 @@ const severityMap: Record<LogLevel, number> = {
   error: 17,
 }
 
+type Params = Record<string, unknown>
+
 export function createLogger(serviceName: string): Log {
   const batch: Record<string, unknown>[] = []
 
@@ -27,7 +29,7 @@ export function createLogger(serviceName: string): Log {
   const log = (
     level: LogLevel,
     event: string,
-    props?: Record<string, unknown>,
+    props?: Params,
   ) => {
     const ctx = getContext()
     batch.push({
@@ -41,23 +43,17 @@ export function createLogger(serviceName: string): Log {
       service_instance_id: null,
     })
 
-    const m = level === 'error'
-      ? console.error
-      : level === 'warn'
-      ? console.warn
-      : level === 'debug'
-      ? console.debug
-      : console.info
-    m(event, props)
+    const c = console[level] || console.info
+    c(event, props)
 
     if (batch.length >= 50) flush()
   }
 
   return Object.assign(log, {
-    error: (e: string, p?: Record<string, unknown>) => log('error', e, p),
-    debug: (e: string, p?: Record<string, unknown>) => log('debug', e, p),
-    warn: (e: string, p?: Record<string, unknown>) => log('warn', e, p),
-    info: (e: string, p?: Record<string, unknown>) => log('info', e, p),
+    error: (e: string, p?: Params) => log('error', e, p),
+    debug: (e: string, p?: Params) => log('debug', e, p),
+    warn: (e: string, p?: Params) => log('warn', e, p),
+    info: (e: string, p?: Params) => log('info', e, p),
   })
 }
 
