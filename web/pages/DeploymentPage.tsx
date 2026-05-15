@@ -74,6 +74,121 @@ const Toast = () => {
   )
 }
 
+type ColumnDef = NonNullable<
+  ApiOutput['GET/api/deployment/schema']['tables']
+>[number]['columns'][number]
+
+const COLUMN_STYLES = {
+  pk: { color: 'text-warning', icon: Hash },
+  enum: { color: 'text-success', icon: Hash },
+  table: { color: 'text-info', icon: Link2 },
+  default: { color: 'text-base-content/80', icon: Columns },
+} as const
+
+const getColumnConfig = (col?: ColumnDef) => {
+  const key = col?.isPrimaryKey ? 'pk' : col?.relation?.type || 'default'
+  return COLUMN_STYLES[key as keyof typeof COLUMN_STYLES] ||
+    COLUMN_STYLES.default
+}
+
+const isDateColumn = (col?: ColumnDef, value?: unknown) => {
+  const type = col?.type || ''
+  const name = col?.name || ''
+  return type.includes('Date') || type.includes('Time') ||
+    (name.endsWith('At') &&
+      (typeof value === 'number' ||
+        (typeof value === 'string' && value.length > 0 &&
+          !isNaN(Number(value)))))
+}
+
+const toSafeDate = (value: unknown) => {
+  if (value instanceof Date) return value
+  const num = typeof value === 'number' ? value : Number(value)
+  if (!isNaN(num) && value !== '' && value !== null) {
+    const correctTime = num < 1e12 ? num * 1000 : num
+    return new Date(correctTime)
+  }
+  return new Date(String(value))
+}
+
+const formatCellValue = (value: unknown, col?: ColumnDef) => {
+  const isObj = typeof value === 'object' && value !== null
+  if (!value || !isDateColumn(col, value)) {
+    return isObj ? JSON.stringify(value) : String(value ?? '')
+  }
+
+  const date = toSafeDate(value)
+  if (isNaN(date.getTime())) return String(value)
+
+  return date.toLocaleString([], {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+const ColumnLabel = ({ col, row }: { col: ColumnDef; row?: AnyRecord }) => {
+  const config = getColumnConfig(col)
+  return (
+    <label class='label py-1'>
+      <div class='flex items-center gap-2'>
+        <span
+          class={`label-text text-xs font-semibold uppercase tracking-wider ${config.color}`}
+        >
+          {col?.name}
+        </span>
+        <config.icon class={`h-3 w-3 ${config.color}`} />
+        {col?.relation?.type === 'enum' && row &&
+          row[`inline_${col.name}`] !== undefined && (
+          <span class='badge badge-success badge-outline badge-xs opacity-70'>
+            {String(row[`inline_${col.name}`])}
+          </span>
+        )}
+      </div>
+      <span class='label-text-alt text-[10px] opacity-50'>
+        {col?.type || ''}
+      </span>
+    </label>
+  )
+}
+
+const DataCell = (
+  { col, row, name }: { col?: ColumnDef; row: AnyRecord; name: string },
+) => {
+  const config = getColumnConfig(col)
+  const isEnum = col?.relation?.type === 'enum'
+  const isTableRel = col?.relation?.type === 'table'
+  const isPK = col?.isPrimaryKey
+  const rawValue = row[name]
+
+  const value = isEnum ? (row[`inline_${name}`] ?? rawValue) : rawValue
+
+  return (
+    <td class='align-top min-w-[6rem] p-0 border-r border-base-300/30 font-normal text-left'>
+      {(isTableRel || isPK) && !!rawValue
+        ? (
+          <A
+            params={{
+              drawer: 'view-row',
+              rt: isPK ? null : col?.relation?.table,
+              'row-id': String(rawValue),
+            }}
+            class={`relative z-20 flex itsem-center gap-1 group/rel link no-underline ${config.color}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <TableCell value={value} col={col} />
+            {isTableRel && (
+              <Link2 class='h-3 w-3 opacity-0 group-hover/rel:opacity-100 transition-opacity shrink-0' />
+            )}
+          </A>
+        )
+        : <TableCell value={value} col={col} />}
+    </td>
+  )
+}
+
 // Effect to fetch schema when deployment URL changes
 effect(() => {
   const dep = url.params.dep
@@ -354,37 +469,38 @@ const RowNumberCell = ({ index }: { index: number }) => (
   </td>
 )
 
-const TableCell = ({ value }: { value: unknown }) => {
+const TableCell = ({ value, col }: { value: unknown; col?: ColumnDef }) => {
+  const config = getColumnConfig(col)
   const isObj = typeof value === 'object' && value !== null
-  const stringValue = isObj ? JSON.stringify(value) : String(value ?? '')
-  const isTooLong = stringValue.length > 100
-
-  if (value === null || value === undefined || value === '') {
-    return (
-      <span class='text-sm text-base-content/30 italic select-none text-left block w-full'>
-        null
-      </span>
-    )
-  }
-
-  if (isObj) {
-    return (
-      <code
-        class='font-mono text-sm text-base-content/70 block overflow-hidden text-ellipsis whitespace-nowrap max-w-md text-left w-full'
-        title={isTooLong ? stringValue : undefined}
-      >
-        {stringValue}
-      </code>
-    )
-  }
+  const displayValue = formatCellValue(value, col)
+  const isTooLong = displayValue.length > 100
 
   return (
-    <span
-      class='block overflow-hidden text-ellipsis whitespace-nowrap text-sm max-w-md text-left w-full'
-      title={isTooLong ? stringValue : undefined}
-    >
-      {stringValue}
-    </span>
+    <div class={`px-1 py-0.5 ${config.color}`}>
+      {value === null || value === undefined || value === ''
+        ? (
+          <span class='text-sm text-base-content/30 italic select-none text-left block w-full'>
+            null
+          </span>
+        )
+        : isObj
+        ? (
+          <code
+            class='font-mono text-sm text-base-content/70 block overflow-hidden text-ellipsis whitespace-nowrap max-w-md text-left w-full'
+            title={isTooLong ? displayValue : undefined}
+          >
+            {displayValue}
+          </code>
+        )
+        : (
+          <span
+            class='block overflow-hidden text-ellipsis whitespace-nowrap text-sm max-w-md text-left w-full'
+            title={isTooLong ? displayValue : undefined}
+          >
+            {displayValue}
+          </span>
+        )}
+    </div>
   )
 }
 
@@ -400,29 +516,23 @@ const EmptyRow = ({ colSpan }: { colSpan: number }) => (
 )
 
 const DataRow = (
-  { row, columns, index }: { row: AnyRecord; columns: string[]; index: number },
-) => {
-  const tableName = url.params.table || schema.data?.tables?.[0]?.table
-  const tableDef = schema.data?.tables?.find((t) => t.table === tableName)
-  const pk = tableDef?.columns?.[0]?.name
-  const rowId = pk ? String(row[pk]) : undefined
-
-  return (
-    <A
-      params={{ drawer: 'view-row', 'row-id': rowId }}
-      class='contents'
-    >
-      <tr class='hover:bg-base-200/50 cursor-pointer transition-colors border-b border-base-200/50 last:border-b-0'>
-        <RowNumberCell index={index} />
-        {columns.map((key) => (
-          <td class='align-top min-w-[6rem] p-0 pl-1 border-r border-base-300/30 font-normal text-left'>
-            <TableCell value={row[key]} />
-          </td>
-        ))}
-      </tr>
-    </A>
-  )
-}
+  { row, columns, columnsDef }: {
+    row: AnyRecord
+    columns: string[]
+    columnsDef?: ColumnDef[]
+  },
+) => (
+  <tr class='hover:bg-base-200/50 transition-colors border-b border-base-200/50 last:border-b-0'>
+    {columns.map((key) => (
+      <DataCell
+        key={key}
+        name={key}
+        row={row}
+        col={columnsDef?.find((c) => c.name === key)}
+      />
+    ))}
+  </tr>
+)
 
 const TableHeader = (
   { columns }: { columns: (string | { key: string; label: string })[] },
@@ -433,11 +543,6 @@ const TableHeader = (
   return (
     <thead class='sticky top-0 bg-base-200/90 backdrop-blur-sm shadow-sm z-10 border-b-2 border-base-300'>
       <tr>
-        <th class='sticky left-0 bg-base-200 w-10 min-w-[2.5rem] p-0 pl-1 border-r border-base-300/50 text-left'>
-          <span class='text-xs font-bold text-base-content/80 uppercase tracking-wider'>
-            #
-          </span>
-        </th>
         {columns.length > 0
           ? (
             columns.map((col) => {
@@ -533,15 +638,16 @@ const TableFooter = ({ rows }: { rows: AnyRecord[] }) => {
 }
 
 const TableContent = ({ rows }: { rows: AnyRecord[] }) => {
-  let columns = Object.keys(rows[0] || {})
+  let columns = Object.keys(rows[0] || {}).filter((c) => c !== '_rowid_')
+
+  const tableName = url.params.table || schema.data?.tables?.[0]?.table
+  const tableDef = schema.data?.tables?.find((t) => t.table === tableName)
+  const columnsDef = tableDef?.columns
 
   // If in tables view, use schema columns first
   if (url.params.tab === 'tables') {
-    const tableName = url.params.table || schema.data?.tables?.[0]?.table
-    const tableDef = schema.data?.tables?.find((t) => t.table === tableName)
-
-    if (tableDef?.columns) {
-      const schemaColumns = tableDef.columns.map((c) => c.name)
+    if (columnsDef) {
+      const schemaColumns = columnsDef.map((c) => c.name)
       // Add any extra columns found in rows that aren't in schema (e.g. virtual columns)
       const extraColumns = columns.filter((c) => !schemaColumns.includes(c))
       columns = [...schemaColumns, ...extraColumns]
@@ -556,10 +662,10 @@ const TableContent = ({ rows }: { rows: AnyRecord[] }) => {
           : (
             rows.map((row, index) => (
               <DataRow
-                key={index}
+                key={row._rowid_ ?? index}
                 row={row}
                 columns={columns}
-                index={index}
+                columnsDef={columnsDef}
               />
             ))
           )}
@@ -743,23 +849,26 @@ function SchemaPanel() {
                             Columns
                           </div>
                           <div class='space-y-0.5 max-h-64 overflow-y-auto'>
-                            {table.columns.map((col, idx) => (
-                              <div
-                                key={idx}
-                                class='flex items-center gap-2 px-2 py-1 text-xs hover:bg-base-200 rounded'
-                              >
-                                <Columns class='h-3 w-3 text-base-content/40' />
-                                <span
-                                  class='font-mono truncate'
-                                  title={col.name}
+                            {table.columns.map((col, idx) => {
+                              const config = getColumnConfig(col)
+                              return (
+                                <div
+                                  key={idx}
+                                  class={`flex items-center gap-2 px-2 py-1 text-xs hover:bg-base-200 rounded ${config.color}`}
                                 >
-                                  {col.name}
-                                </span>
-                                <span class='text-base-content/40 text-[10px] ml-auto'>
-                                  {col.type}
-                                </span>
-                              </div>
-                            ))}
+                                  <config.icon class='h-3 w-3' />
+                                  <span
+                                    class='font-mono truncate'
+                                    title={col.name}
+                                  >
+                                    {col.name}
+                                  </span>
+                                  <span class='text-base-content/40 text-[10px] ml-auto'>
+                                    {col.type}
+                                  </span>
+                                </div>
+                              )
+                            })}
                           </div>
                         </div>
                       )}
@@ -991,11 +1100,10 @@ const dateFmtConfig = {
   fractionalSecondDigits: 3,
 } as const
 
-const safeFormatTimestamp = (timestamp: Date) => {
-  // If timestamp is close to epoch (1970), assume it's in seconds and convert to ms
-  const time = timestamp.getTime()
-  const correctTime = time < 1000000000000 ? time * 1000 : time // 1e12 ms is roughly year 2001, 1e10 sec is year 2286
-  return new Date(correctTime).toLocaleString('en-UK', dateFmtConfig)
+const safeFormatTimestamp = (timestamp: Date | number | string) => {
+  const date = toSafeDate(timestamp)
+  if (isNaN(date.getTime())) return String(timestamp)
+  return date.toLocaleString('en-UK', dateFmtConfig)
     .split(', ').reverse().join(' ')
 }
 
@@ -1882,9 +1990,11 @@ function MetricsViewer() {
 effect(() => {
   const rowId = url.params['row-id']
   const dep = url.params.dep
+  const relTable = url.params.rt
 
   if (dep && rowId) {
-    const tableName = url.params.table || schema.data?.tables?.[0]?.table
+    const tableName = relTable || url.params.table ||
+      schema.data?.tables?.[0]?.table
     const tableDef = schema.data?.tables?.find((t) => t.table === tableName)
     const pk = tableDef?.columns?.[0]?.name
 
@@ -1933,12 +2043,14 @@ const RowDetails = () => {
     )
   }
 
+  const tableName = url.params.rt || url.params.table ||
+    schema.data?.tables?.[0]?.table
+  const tableDef = schema.data?.tables?.find((t) => t.table === tableName)
+
   const onUpdateRow = async (e: Event) => {
     e.preventDefault()
     const row = rowDetailsData.data?.rows?.[0] as AnyRecord | undefined
     if (!row) return
-    const tableName = url.params.table || schema.data?.tables?.[0]?.table
-    const tableDef = schema.data?.tables?.find((t) => t.table === tableName)
     const pk = tableDef?.columns?.[0]?.name
     if (!tableName || !pk) {
       toast('Could not identify table or primary key', 'error')
@@ -1983,7 +2095,7 @@ const RowDetails = () => {
       })
       toast('Row updated successfully')
       tableData.fetch()
-      navigate({ params: { drawer: null, 'row-id': null } })
+      navigate({ params: { drawer: null, 'row-id': null, rt: null } })
     } catch (err) {
       toast(err instanceof Error ? err.message : String(err), 'error')
     }
@@ -1992,9 +2104,11 @@ const RowDetails = () => {
   return (
     <div class='flex flex-col h-full bg-base-100'>
       <div class='p-4 border-b border-base-300 flex items-center justify-between sticky top-0 bg-base-100 z-10'>
-        <h3 class='font-semibold text-lg'>Row Details</h3>
+        <h3 class='font-semibold text-lg'>
+          {url.params.rt ? `Related: ${url.params.rt}` : 'Row Details'}
+        </h3>
         <A
-          params={{ drawer: null, 'row-id': null }}
+          params={{ drawer: null, 'row-id': null, rt: null }}
           replace
           class='btn btn-ghost btn-sm btn-circle'
         >
@@ -2004,41 +2118,33 @@ const RowDetails = () => {
 
       <form onSubmit={onUpdateRow} class='flex-1 flex flex-col min-h-0'>
         <div class='flex-1 overflow-y-auto p-4 space-y-4'>
-          {Object.entries(row).map(([key, value]) => {
-            const tableName = url.params.table ||
-              schema.data?.tables?.[0]?.table
-            const tableDef = schema.data?.tables?.find((t) =>
-              t.table === tableName
-            )
-            const colDef = tableDef?.columns?.find((c) => c.name === key)
-            const type = colDef?.type || 'String'
-
+          {tableDef?.columns.map((col) => {
+            const key = col.name
+            const value = row[key]
+            const type = col.type
             const isObject = (type.includes('Map') || type.includes('Array') ||
               type.includes('Tuple') || type.includes('Nested') ||
-              type.includes('JSON') || type.toLowerCase().includes('blob')) &&
+              type.includes('JSON') ||
+              type.toLowerCase().includes('blob')) &&
               (typeof value === 'object' || typeof value === 'string')
             const isNumber = type.includes('Int') || type.includes('Float') ||
               type.includes('Decimal')
             const isBoolean = type.includes('Bool')
-            const isDate = type.includes('Date') || type.includes('Time') ||
-              (key.endsWith('At') &&
-                (typeof value === 'number' || !isNaN(Number(value))))
+            const isDate = isDateColumn(col, value)
 
             return (
               <div key={key} class='form-control'>
-                <label class='label py-1'>
-                  <span class='label-text text-xs font-semibold text-base-content/50 uppercase tracking-wider'>
-                    {key}
-                  </span>
-                  <span class='label-text-alt text-[10px] opacity-50'>
-                    {type}
-                  </span>
-                </label>
+                <ColumnLabel col={col} row={row} />
 
                 {isObject
                   ? <ObjectInput name={key} defaultValue={value} />
                   : isBoolean
-                  ? <BooleanInput name={key} defaultChecked={Boolean(value)} />
+                  ? (
+                    <BooleanInput
+                      name={key}
+                      defaultChecked={Boolean(value)}
+                    />
+                  )
                   : isDate
                   ? (
                     <DateInput
@@ -2051,7 +2157,12 @@ const RowDetails = () => {
                   )
                   : isNumber
                   ? <NumberInput name={key} defaultValue={value as number} />
-                  : <TextInput name={key} defaultValue={String(value ?? '')} />}
+                  : (
+                    <TextInput
+                      name={key}
+                      defaultValue={String(value ?? '')}
+                    />
+                  )}
               </div>
             )
           })}
