@@ -2,6 +2,7 @@ import { render } from '@deno/gfm'
 import { promptTemplate } from '/api/fix-query-prompt.ts'
 import { GEMINI_API_KEY, GEMINI_MODEL } from '/api/lib/env.ts'
 import { AIAnalysisCacheCollection } from '/api/schema.ts'
+import { log } from '/api/lib/logger.ts'
 
 const GEMINI_URL =
   `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=json&key=${GEMINI_API_KEY}`
@@ -29,6 +30,11 @@ function cacheKey(deployment: string, metric: Metric) {
 async function callGemini(payload: string, thinkingLevel: string) {
   const prompt = promptTemplate.replace('{{QUERY_DETAILS_JSON}}', payload)
 
+  log.info('gemini-request-start', {
+    thinkingLevel,
+    promptLength: prompt.length,
+  })
+
   const res = await fetch(GEMINI_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -40,6 +46,7 @@ async function callGemini(payload: string, thinkingLevel: string) {
 
   if (!res.ok) {
     const body = await res.text()
+    log.error('gemini-request-failed', { status: res.status, body })
     throw new Error(`Gemini API error ${res.status}: ${body}`)
   }
 
@@ -65,7 +72,16 @@ export async function analyzeQueryWithAI(
 ) {
   const key = await cacheKey(deployment, metric)
   const cached = !forceRefresh && AIAnalysisCacheCollection.get(key)
-  if (cached) return cached.analysis
+  if (cached) {
+    log.info('ai-analysis-cache-hit', { deployment, query: metric.query })
+    return cached.analysis
+  }
+
+  log.info('ai-analysis-start', {
+    deployment,
+    query: metric.query,
+    forceRefresh,
+  })
 
   const payload = JSON.stringify({ schema, metrics: [metric] }, null, 2)
   const analysis = await callGemini(payload, forceRefresh ? 'HIGH' : 'MINIMAL')
@@ -76,5 +92,7 @@ export async function analyzeQueryWithAI(
   } else {
     AIAnalysisCacheCollection.insert({ cacheKey: key, analysis })
   }
+
+  log.info('ai-analysis-complete', { deployment, query: metric.query })
   return analysis
 }

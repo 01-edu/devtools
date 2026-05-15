@@ -39,8 +39,8 @@ import {
   SQLQueryError,
   updateTableData,
 } from '/api/sql.ts'
-import { Log } from '@01edu/api/log'
 import { get, getOne } from './lmdb-store.ts'
+import { log } from '/api/lib/logger.ts'
 import { analyzeQueryWithAI } from '/api/fix-query.ts'
 
 const MetricSchema = OBJ({
@@ -71,24 +71,39 @@ const MetricSchema = OBJ({
 
 const withUserSession = async ({ cookies }: RequestContext) => {
   const session = await decodeSession(cookies.session)
-  if (!session) throw Error('Missing user session')
+  if (!session) {
+    log.warn('auth-missing-session')
+    throw Error('Missing user session')
+  }
   const admin = AdminsCollection.get(session.id)
   return { ...session, isAdmin: !!admin }
 }
 
 const withAdminSession = async (ctx: RequestContext) => {
   const session = await withUserSession(ctx)
-  if (!session || !session.isAdmin) throw Error('Admin access required')
+  if (!session || !session.isAdmin) {
+    log.warn('auth-admin-required', { userId: session?.id })
+    throw Error('Admin access required')
+  }
 }
 
 const withDeploymentSession = async (ctx: RequestContext) => {
   const token = ctx.req.headers.get('Authorization')?.replace(/^Bearer /i, '')
-  if (!token) throw Error('Missing token')
+  if (!token) {
+    log.warn('deployment-auth-missing-token')
+    throw Error('Missing token')
+  }
   const message = await decryptMessage(token)
-  if (!message) throw Error('Invalid token')
+  if (!message) {
+    log.warn('deployment-auth-invalid-token')
+    throw Error('Invalid token')
+  }
   const data = JSON.parse(message)
   const dep = DeploymentsCollection.get(data?.url)
-  if (!dep || dep.tokenSalt !== data?.tokenSalt) throw Error('Invalid token')
+  if (!dep || dep.tokenSalt !== data?.tokenSalt) {
+    log.warn('deployment-auth-token-mismatch', { url: data?.url })
+    throw Error('Invalid token')
+  }
   return dep
 }
 
@@ -292,7 +307,10 @@ const defs = {
   }),
   'POST/api/project': route({
     authorize: withAdminSession,
-    fn: (_ctx, project) => ProjectsCollection.insert(project),
+    fn: (_ctx, project) => {
+      log.info('project-created', { slug: project.slug, name: project.name })
+      return ProjectsCollection.insert(project)
+    },
     input: OBJ({
       slug: STR('The unique identifier for the project'),
       name: STR('The name of the project'),
@@ -333,6 +351,7 @@ const defs = {
       const project = ProjectsCollection.get(slug)
       if (!project) throw respond.NotFound({ message: 'Project not found' })
       ProjectsCollection.delete(slug)
+      log.info('project-deleted', { slug })
       return true
     },
     input: OBJ({ slug: STR('The slug of the project') }),
@@ -388,6 +407,10 @@ const defs = {
           ...input,
           tokenSalt,
         })
+      log.info('deployment-created', {
+        url: deployment.url,
+        projectId: deployment.projectId,
+      })
       const token = await encryptMessage(
         JSON.stringify({ url: deployment.url, tokenSalt }),
       )
@@ -405,6 +428,7 @@ const defs = {
     fn: async (_ctx, input) => {
       const { tokenSalt, ...deployment } = await DeploymentsCollection
         .update(input.url, input)
+      log.info('deployment-updated', { url: input.url })
       const token = await encryptMessage(
         JSON.stringify({ url: deployment.url, tokenSalt }),
       )
@@ -423,6 +447,7 @@ const defs = {
       const dep = DeploymentsCollection.get(url)
       if (!dep) throw respond.NotFound()
       const tokenSalt = performance.now().toString()
+      log.info('deployment-token-regenerated', { url })
 
       const { tokenSalt: _, ...deployment } = await DeploymentsCollection
         .update(url, { ...dep, tokenSalt })
@@ -478,6 +503,7 @@ const defs = {
       const dep = DeploymentsCollection.get(input)
       if (!dep) throw respond.NotFound()
       await DeploymentsCollection.delete(input)
+      log.info('deployment-deleted', { url: input })
       return respond.NoContent()
     },
     input: STR(),
@@ -487,6 +513,8 @@ const defs = {
     authorize: withDeploymentSession,
     fn: (ctx, logs) => {
       if (!ctx.session.url) throw respond.InternalServerError()
+      const count = Array.isArray(logs) ? logs.length : 1
+      log.debug('logs-ingested', { deployment: ctx.session.url, count })
       return insertLogs(ctx.session.url, logs)
     },
     input: LogsInputSchema,
@@ -560,7 +588,7 @@ const defs = {
           columnsMap,
         )
       } catch (err) {
-        console.error('fetchTablesData-error', { stack: (err as Error)?.stack })
+        log.error('fetchTablesData-error', { stack: (err as Error)?.stack })
         throw err
       }
     },
@@ -598,6 +626,7 @@ const defs = {
     authorize: withUserSession,
     fn: async (ctx, { deployment, table, data }) => {
       const dep = await withDeploymentTableAccess(ctx, deployment)
+      log.info('table-row-inserted', { deployment, table })
       return insertTableData(dep, table, data)
     },
     input: OBJ({
@@ -611,6 +640,7 @@ const defs = {
     authorize: withUserSession,
     fn: async (ctx, { deployment, table, pk, data }) => {
       const dep = await withDeploymentTableAccess(ctx, deployment)
+      log.info('table-row-updated', { deployment, table, pkKey: pk.key })
       return updateTableData(dep, table, pk, data)
     },
     input: OBJ({
@@ -643,20 +673,23 @@ const defs = {
       try {
         const startTime = performance.now()
         const data = await runSQL(sqlEndpoint, sqlToken, sql)
-
-        return {
-          duration: (performance.now() - startTime) / 1000, // in seconds
-          rows: data,
-        }
+        const duration = (performance.now() - startTime) / 1000
+        log.info('sql-query-executed', { deployment, duration })
+        return { duration, rows: data }
       } catch (error) {
         if (error instanceof SQLQueryError) {
           const { type, sqlMessage } = error
+          log.error('sql-query-failed', { deployment, type, sqlMessage })
           throw new respond.BadRequestError({
             type,
             message: sqlMessage ||
               `SQL query error: ${type || 'Unknown error'}`,
           })
         }
+        log.error('sql-query-unexpected-error', {
+          deployment,
+          error: error instanceof Error ? error.message : String(error),
+        })
         throw new respond.InternalServerErrorError({
           message: error instanceof Error ? error.message : 'Unexpected error',
         })
@@ -699,7 +732,7 @@ const defs = {
     fn: async (_ctx, { deployment }) => {
       const dep = DeploymentsCollection.get(deployment)
       if (!dep) throw respond.NotFound({ message: 'Deployment not found' })
-      console.log('Fetching API documentation from deployment', {
+      log.info('fetching-api-doc', {
         url: dep.url,
       })
       try {
@@ -712,7 +745,7 @@ const defs = {
         if (!res.ok) throw new Error(`Status ${res.status}`)
         return await res.json()
       } catch (_err) {
-        console.error('Error fetching API documentation', {
+        log.error('fetch-api-doc-error', {
           error: _err instanceof Error ? _err.stack : String(_err),
         })
         throw respond.InternalServerError({
@@ -740,6 +773,11 @@ const defs = {
         )
         return { id, analysis }
       } catch (err) {
+        log.error('fix-query-failed', {
+          deployment,
+          metricId: id,
+          error: err instanceof Error ? err.message : String(err),
+        })
         throw respond.InternalServerError({
           message: err instanceof Error ? err.message : String(err),
         })
@@ -761,6 +799,4 @@ const defs = {
 } as const
 
 export type RouteDefinitions = typeof defs
-export const routeHandler = makeRouter(defs, {
-  log: console as unknown as Log,
-})
+export const routeHandler = makeRouter(defs, { log })

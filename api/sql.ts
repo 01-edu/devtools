@@ -10,6 +10,7 @@ import {
   applyWriteTransformers,
   getProjectFunctions,
 } from '/api/lib/functions.ts'
+import { log } from '/api/lib/logger.ts'
 
 export class SQLQueryError extends Error {
   constructor(message: string, body: string) {
@@ -63,7 +64,7 @@ async function detectDialect(endpoint: string, token: string): Promise<string> {
   for (const d of DETECTION_QUERIES) {
     try {
       const rows = await runSQL(endpoint, token, d.sql)
-      console.debug('dialect-detection', { dialect: d.name, rows })
+      log.debug('dialect-detection', { dialect: d.name, rows })
       if (rows.length) {
         const text = JSON.stringify(rows[0])
         if (d.matcher.test(text)) return d.name
@@ -199,13 +200,13 @@ export async function refreshOneSchema(
     } else {
       await DatabaseSchemasCollection.insert(payload)
     }
-    console.info('schema-refreshed', {
+    log.info('schema-refreshed', {
       deployment: dep.url,
       dialect,
       tables: tables.length,
     })
   } catch (err) {
-    console.error('schema-refresh-failed', { deployment: dep.url, err })
+    log.error('schema-refresh-failed', { deployment: dep.url, err })
   }
 }
 
@@ -223,7 +224,7 @@ export function startSchemaRefreshLoop() {
   intervalHandle = setInterval(() => {
     refreshAllSchemas()
   }, DB_SCHEMA_REFRESH_MS) as unknown as number
-  console.info('schema-refresh-loop-started', { everyMs: DB_SCHEMA_REFRESH_MS })
+  log.info('schema-refresh-loop-started', { everyMs: DB_SCHEMA_REFRESH_MS })
 }
 
 type FetchTablesParams = {
@@ -350,6 +351,10 @@ export const insertTableData = async (
 ) => {
   const { sqlEndpoint, sqlToken } = deployment
   if (!sqlToken || !sqlEndpoint) {
+    log.error('insert-table-data-missing-config', {
+      deployment: deployment.url,
+      table,
+    })
     throw Error('Missing SQL endpoint or token')
   }
   const projectFunctions = getProjectFunctions(deployment.projectId)
@@ -390,6 +395,10 @@ export const updateTableData = async (
   const { sqlEndpoint, sqlToken } = deployment
 
   if (!sqlToken || !sqlEndpoint) {
+    log.error('update-table-data-missing-config', {
+      deployment: deployment.url,
+      table,
+    })
     throw Error('Missing SQL endpoint or token')
   }
   const projectFunctions = getProjectFunctions(deployment.projectId)

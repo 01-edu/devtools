@@ -2,6 +2,7 @@ import { decodeBase64Url, encodeBase64Url } from '@std/encoding/base64url'
 import { SECRET } from '/api/lib/env.ts'
 import { getOne } from './lmdb-store.ts'
 import { GoogleUserInfo } from './auth.ts'
+import { log } from '/api/lib/logger.ts'
 
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
@@ -48,7 +49,7 @@ export async function decodeSession(sessionCode?: string) {
     const json = await decryptMessage(sessionCode)
     const googleUser = JSON.parse(json) as GoogleUserInfo
     const user = await getOne<
-      { name: { fullName: string }; thumbnailPhotoUrl: string }
+      { name: { fullName: string } }
     >(
       'google/user',
       googleUser.sub,
@@ -58,10 +59,12 @@ export async function decodeSession(sessionCode?: string) {
       id: googleUser.sub,
       email: googleUser.email,
       fullName: user.name.fullName,
-      picture: user.thumbnailPhotoUrl,
+      picture: googleUser.picture || '',
     }
-  } catch {
-    // Invalid session code
+  } catch (err) {
+    log.debug('session-decode-failed', {
+      error: err instanceof Error ? err.message : String(err),
+    })
   }
 }
 
