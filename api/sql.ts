@@ -10,7 +10,9 @@ import {
   applyWriteTransformers,
   getProjectFunctions,
 } from '/api/lib/functions.ts'
+import { FetchHttpError, fetchJson, FetchJsonError } from '/api/lib/fetcher.ts'
 import { log } from '/api/lib/logger.ts'
+import { respond } from '@01edu/api/response'
 
 export class SQLQueryError extends Error {
   constructor(message: string, body: string) {
@@ -32,23 +34,34 @@ export class SQLQueryError extends Error {
   sqlMessage: string
 }
 
-export async function runSQL(
+export async function runSQL<T>(
   endpoint: string,
   token: string,
   query: string,
   params?: unknown,
-) {
-  const res = await fetch(`${endpoint}/execute`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ query, params }),
-  })
-  const body = await res.text()
-  if (res.ok) return JSON.parse(body)
-  throw new SQLQueryError(`sql endpoint error ${res.status}`, body)
+): Promise<T> {
+  try {
+    return await fetchJson<T>(`${endpoint}/execute`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ query, params }),
+    })
+  } catch (err) {
+    if (err instanceof FetchHttpError) {
+      throw new SQLQueryError(`sql endpoint error ${err.status}`, err.body)
+    }
+    if (err instanceof FetchJsonError) {
+      throw new SQLQueryError(`sql endpoint error ${err.status}`, err.body)
+    }
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    throw new respond.InternalServerErrorError({
+      message: `Failed to execute SQL query: ${message}`,
+      error: err,
+    })
+  }
 }
 
 // Dialect detection attempts (run first successful)
@@ -63,7 +76,7 @@ const DETECTION_QUERIES: { name: string; sql: string; matcher: RegExp }[] = [
 async function detectDialect(endpoint: string, token: string): Promise<string> {
   for (const d of DETECTION_QUERIES) {
     try {
-      const rows = await runSQL(endpoint, token, d.sql)
+      const rows = await runSQL<unknown[]>(endpoint, token, d.sql)
       log.debug('dialect-detection', { dialect: d.name, rows })
       if (rows.length) {
         const text = JSON.stringify(rows[0])
@@ -247,7 +260,9 @@ const constructWhereClause = (
       const { key, comparator, value } = filter
       const column = columnsMap.get(key)
       if (!column) {
-        throw Error(`Invalid filter column: ${key}`)
+        throw new respond.BadRequestError({
+          message: `Invalid filter column: ${key}`,
+        })
       }
       const safeValue = value.replace(/'/g, "''")
       whereClauses.push(`${key} ${comparator} '${safeValue}'`)
@@ -274,7 +289,9 @@ const constructOrderByClause = (
     const { key, order } = sort
     const column = columnsMap.get(key)
     if (!column) {
-      throw Error(`Invalid sort column: ${key}`)
+      throw new respond.BadRequestError({
+        message: `Invalid sort column: ${key}`,
+      })
     }
     orderClauses.push(`${key} ${order}`)
   }
@@ -287,7 +304,9 @@ export const fetchTablesData = async (
 ) => {
   const { sqlEndpoint, sqlToken } = params.deployment
   if (!sqlToken || !sqlEndpoint) {
-    throw Error('Missing SQL endpoint or token')
+    throw new respond.BadRequestError({
+      message: 'Missing SQL endpoint or token for this deployment',
+    })
   }
   const projectFunctions = getProjectFunctions(params.deployment.projectId)
 
@@ -325,7 +344,11 @@ export const fetchTablesData = async (
   } ${whereClause} ${orderByClause} ${limitOffsetClause}`
   const countQuery =
     `SELECT COUNT(*) as count FROM ${params.table} ${whereClause}`
-  const rows = await runSQL(sqlEndpoint, sqlToken, query)
+  const rows = await runSQL<Record<string, unknown>[]>(
+    sqlEndpoint,
+    sqlToken,
+    query,
+  )
 
   // Apply read transformer pipeline
   const transformedRows = await applyReadTransformers(
@@ -339,7 +362,9 @@ export const fetchTablesData = async (
   return {
     rows: transformedRows,
     totalRows: limit > 0
-      ? ((await runSQL(sqlEndpoint, sqlToken, countQuery))[0].count) as number
+      ? ((await runSQL<{ count: number }[]>(sqlEndpoint, sqlToken, countQuery))[
+        0
+      ].count) as number
       : rows.length,
   }
 }
@@ -355,7 +380,9 @@ export const insertTableData = async (
       deployment: deployment.url,
       table,
     })
-    throw Error('Missing SQL endpoint or token')
+    throw new respond.BadRequestError({
+      message: 'Missing SQL endpoint or token for this deployment',
+    })
   }
   const projectFunctions = getProjectFunctions(deployment.projectId)
   const transformedData = await applyWriteTransformers(
@@ -399,7 +426,9 @@ export const updateTableData = async (
       deployment: deployment.url,
       table,
     })
-    throw Error('Missing SQL endpoint or token')
+    throw new respond.BadRequestError({
+      message: 'Missing SQL endpoint or token for this deployment',
+    })
   }
   const projectFunctions = getProjectFunctions(deployment.projectId)
 

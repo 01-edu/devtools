@@ -84,7 +84,7 @@ async function insertLogs(
   data: LogsInput,
 ) {
   const logsToInsert = Array.isArray(data) ? data : [data]
-  if (logsToInsert.length === 0) throw respond.NoContent()
+  if (logsToInsert.length === 0) return respond.NoContent()
 
   const rows = logsToInsert.map((log) => {
     const traceHex = numberToHex128(log.trace_id)
@@ -106,7 +106,9 @@ async function insertLogs(
     return respond.OK()
   } catch (error) {
     console.error('Error inserting logs into ClickHouse:', { error })
-    throw respond.InternalServerError()
+    throw new respond.InternalServerErrorError({
+      message: 'Failed to insert logs into ClickHouse',
+    })
   }
 }
 
@@ -213,7 +215,9 @@ async function getLogs(dep: string, data: FetchTablesParams) {
     return (await rs.json<Log>()).data
   } catch (e) {
     console.error('ClickHouse query failed', { error: e, query, params })
-    throw respond.InternalServerError()
+    throw new respond.InternalServerErrorError({
+      message: 'Failed to fetch logs from ClickHouse',
+    })
   }
 }
 

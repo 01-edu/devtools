@@ -1,10 +1,10 @@
 import { ORIGIN } from '/api/lib/env.ts'
+import { fetchJson } from '/api/lib/fetcher.ts'
 import {
   decodeGoogleJWT,
   generateStateToken,
   getGoogleAuthUrl,
   GOOGLE_OAUTH_CONFIG,
-  verifyGoogleToken,
   verifyState,
 } from '/api/lib/google-oauth.ts'
 import { respond } from '@01edu/api/response'
@@ -78,36 +78,48 @@ export async function handleGoogleCallback(
   }
 
   // Exchange the code for tokens
-  const tokenResponse = await fetch(GOOGLE_OAUTH_CONFIG.tokenEndpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams({
-      code,
-      client_id: GOOGLE_OAUTH_CONFIG.clientId,
-      client_secret: GOOGLE_OAUTH_CONFIG.clientSecret,
-      redirect_uri: GOOGLE_OAUTH_CONFIG.redirectUri,
-      grant_type: 'authorization_code',
-    }),
-  })
-
-  if (!tokenResponse.ok) {
-    const errorBody = await tokenResponse.text().catch(() => 'unknown')
+  let tokens: GoogleTokens
+  try {
+    tokens = await fetchJson<GoogleTokens>(
+      GOOGLE_OAUTH_CONFIG.tokenEndpoint,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          code,
+          client_id: GOOGLE_OAUTH_CONFIG.clientId,
+          client_secret: GOOGLE_OAUTH_CONFIG.clientSecret,
+          redirect_uri: GOOGLE_OAUTH_CONFIG.redirectUri,
+          grant_type: 'authorization_code',
+        }),
+      },
+    )
+  } catch (err) {
     log.error('oauth-token-exchange-failed', {
-      status: tokenResponse.status,
-      body: errorBody,
+      error: err,
     })
+    const message = err instanceof Error ? err.message : 'Unknown error'
     throw new respond.UnauthorizedError({
-      message: 'Failed to exchange authorization code',
-      details: 'Could not obtain access token from Google',
+      message: `Failed to exchange authorization code: ${message}`,
+      error: err,
     })
   }
 
-  const tokens = await tokenResponse.json() as GoogleTokens
-
   // Verify and decode the ID token
-  await verifyGoogleToken(tokens.id_token)
+  try {
+    await fetchJson<unknown>(
+      `https://oauth2.googleapis.com/tokeninfo?id_token=${tokens.id_token}`,
+    )
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    throw new respond.UnauthorizedError({
+      message: `Failed to verify Google ID token: ${message}`,
+      error: err,
+    })
+  }
+
   const userInfo = decodeGoogleJWT(tokens.id_token) as GoogleUserInfo
   userInfo.picture &&= await savePicture(userInfo.picture)
   const sessionId = await authenticateOauthUser(userInfo)
