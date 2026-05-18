@@ -538,7 +538,7 @@ const defs = {
     fn: (ctx, logs) => {
       if (!ctx.session.url) {
         log.error('deployment-session-missing-url', {
-          userId: ctx.session.id,
+          userId: ctx.session.url,
         })
         throw new respond.InternalServerErrorError({
           message: 'Deployment URL missing from session',

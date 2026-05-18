@@ -12,7 +12,9 @@ export const getOne = async <T>(
     if (res.status === 404) return null
     if (!res.ok) {
       log.error('store-get-one-failed', { path, id, status: res.status })
-      throw new Error(`Store getOne failed (${path}/${id}) with status ${res.status}`)
+      throw new Error(
+        `Store getOne failed (${path}/${id}) with status ${res.status}`,
+      )
     }
     return await res.json()
   } catch (err) {
