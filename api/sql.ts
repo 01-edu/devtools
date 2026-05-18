@@ -10,6 +10,7 @@ import {
   applyWriteTransformers,
   getProjectFunctions,
 } from '/api/lib/functions.ts'
+import { FetchHttpError, fetchJson, FetchJsonError } from '/api/lib/fetcher.ts'
 import { log } from '/api/lib/logger.ts'
 import { respond } from '@01edu/api/response'
 
@@ -33,14 +34,14 @@ export class SQLQueryError extends Error {
   sqlMessage: string
 }
 
-export async function runSQL(
+export async function runSQL<T>(
   endpoint: string,
   token: string,
   query: string,
   params?: unknown,
-) {
+): Promise<T> {
   try {
-    const res = await fetch(`${endpoint}/execute`, {
+    return await fetchJson<T>(`${endpoint}/execute`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -48,15 +49,17 @@ export async function runSQL(
       },
       body: JSON.stringify({ query, params }),
     })
-    const body = await res.text()
-    if (res.ok) return JSON.parse(body)
-    throw new SQLQueryError(`sql endpoint error ${res.status}`, body)
   } catch (err) {
-    if (err instanceof SQLQueryError) throw err
+    if (err instanceof FetchHttpError) {
+      throw new SQLQueryError(`sql endpoint error ${err.status}`, err.body)
+    }
+    if (err instanceof FetchJsonError) {
+      throw new SQLQueryError(`sql endpoint error ${err.status}`, err.body)
+    }
+    const message = err instanceof Error ? err.message : 'Unknown error'
     throw new respond.InternalServerErrorError({
-      message: err instanceof Error
-        ? err.message
-        : 'Failed to connect to SQL endpoint',
+      message: `Failed to execute SQL query: ${message}`,
+      error: err,
     })
   }
 }
@@ -73,7 +76,7 @@ const DETECTION_QUERIES: { name: string; sql: string; matcher: RegExp }[] = [
 async function detectDialect(endpoint: string, token: string): Promise<string> {
   for (const d of DETECTION_QUERIES) {
     try {
-      const rows = await runSQL(endpoint, token, d.sql)
+      const rows = await runSQL<unknown[]>(endpoint, token, d.sql)
       log.debug('dialect-detection', { dialect: d.name, rows })
       if (rows.length) {
         const text = JSON.stringify(rows[0])
@@ -341,7 +344,11 @@ export const fetchTablesData = async (
   } ${whereClause} ${orderByClause} ${limitOffsetClause}`
   const countQuery =
     `SELECT COUNT(*) as count FROM ${params.table} ${whereClause}`
-  const rows = await runSQL(sqlEndpoint, sqlToken, query)
+  const rows = await runSQL<Record<string, unknown>[]>(
+    sqlEndpoint,
+    sqlToken,
+    query,
+  )
 
   // Apply read transformer pipeline
   const transformedRows = await applyReadTransformers(
@@ -355,7 +362,9 @@ export const fetchTablesData = async (
   return {
     rows: transformedRows,
     totalRows: limit > 0
-      ? ((await runSQL(sqlEndpoint, sqlToken, countQuery))[0].count) as number
+      ? ((await runSQL<{ count: number }[]>(sqlEndpoint, sqlToken, countQuery))[
+        0
+      ].count) as number
       : rows.length,
   }
 }

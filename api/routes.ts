@@ -1,5 +1,6 @@
 import { makeRouter, route } from '@01edu/api/router'
 import type { RequestContext } from '@01edu/api/context'
+import { fetchJson } from '/api/lib/fetcher.ts'
 import { handleGoogleCallback, initiateGoogleAuth } from '/api/auth.ts'
 import {
   AdminsCollection,
@@ -622,7 +623,7 @@ const defs = {
 
       try {
         const columnsMap = new Map(tableDef.columns.map((c) => [c.name, c]))
-        return fetchTablesData(
+        return await fetchTablesData(
           { ...input, deployment: dep, table },
           columnsMap,
         )
@@ -711,7 +712,11 @@ const defs = {
 
       try {
         const startTime = performance.now()
-        const data = await runSQL(sqlEndpoint, sqlToken, sql)
+        const data = await runSQL<Record<string, unknown>[]>(
+          sqlEndpoint,
+          sqlToken,
+          sql,
+        )
         const duration = (performance.now() - startTime) / 1000
         log.info('sql-query-executed', { deployment, duration })
         return { duration, rows: data }
@@ -788,17 +793,15 @@ const defs = {
         const urlStr = dep.url.startsWith('http')
           ? dep.url
           : `https://${dep.url}`
-        const res = await fetch(`${urlStr}/api/doc`, {
+        return await fetchJson(`${urlStr}/api/doc`, {
           method: 'GET',
         })
-        if (!res.ok) throw new Error(`Status ${res.status}`)
-        return await res.json()
-      } catch (_err) {
-        log.error('fetch-api-doc-error', {
-          error: _err instanceof Error ? _err.stack : String(_err),
-        })
+      } catch (err) {
+        log.error('fetch-api-doc-error', { error: err })
+        const message = err instanceof Error ? err.message : 'Unknown error'
         throw new respond.InternalServerErrorError({
-          message: 'Failed to fetch API documentation',
+          message: `Failed to fetch API documentation: ${message}`,
+          error: err,
         })
       }
     },
