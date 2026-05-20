@@ -1,8 +1,10 @@
 import { render } from '@deno/gfm'
 import { promptTemplate } from '/api/fix-query-prompt.ts'
+import { fetchJson } from '/api/lib/fetcher.ts'
 import { GEMINI_API_KEY, GEMINI_MODEL } from '/api/lib/env.ts'
 import { AIAnalysisCacheCollection } from '/api/schema.ts'
 import { log } from '/api/lib/logger.ts'
+import { respond } from '@01edu/api/response'
 
 const GEMINI_URL =
   `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=json&key=${GEMINI_API_KEY}`
@@ -35,33 +37,35 @@ async function callGemini(payload: string, thinkingLevel: string) {
     promptLength: prompt.length,
   })
 
-  const res = await fetch(GEMINI_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { thinkingConfig: { thinkingLevel } },
-    }),
-  })
+  try {
+    const chunks = await fetchJson<{
+      candidates?: {
+        content?: { parts?: { text?: string }[] }
+      }[]
+    }[]>(GEMINI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: { thinkingConfig: { thinkingLevel } },
+      }),
+    })
 
-  if (!res.ok) {
-    const body = await res.text()
-    log.error('gemini-request-failed', { status: res.status, body })
-    throw new Error(`Gemini API error ${res.status}: ${body}`)
+    const markdown = chunks
+      .flatMap((chunk) => chunk.candidates ?? [])
+      .flatMap((candidate) => candidate.content?.parts ?? [])
+      .map((part) => part.text ?? '')
+      .join('')
+
+    return render(markdown)
+  } catch (err) {
+    log.error('gemini-request-failed', { error: err })
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    throw new respond.InternalServerErrorError({
+      message: `Gemini request failed: ${message}`,
+      error: err,
+    })
   }
-
-  // streamGenerateContent with alt=json returns a JSON array of response chunks
-  const chunks: {
-    candidates?: { content?: { parts?: { text?: string }[] } }[]
-  }[] = await res.json()
-
-  const markdown = chunks
-    .flatMap((chunk) => chunk.candidates ?? [])
-    .flatMap((candidate) => candidate.content?.parts ?? [])
-    .map((part) => part.text ?? '')
-    .join('')
-
-  return render(markdown)
 }
 
 export async function analyzeQueryWithAI(

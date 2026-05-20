@@ -1,5 +1,7 @@
+import { FetchHttpError, fetchJson } from '/api/lib/fetcher.ts'
 import { STORE_SECRET, STORE_URL } from '/api/lib/env.ts'
 import { log } from '/api/lib/logger.ts'
+import { respond } from '@01edu/api/response'
 
 const headers = { authorization: `Bearer ${STORE_SECRET}` }
 export const getOne = async <T>(
@@ -8,19 +10,21 @@ export const getOne = async <T>(
 ): Promise<T | null> => {
   const url = `${STORE_URL}/${path}/${encodeURIComponent(String(id))}`
   try {
-    const res = await fetch(url, { headers })
-    if (res.status === 404) return null
-    if (!res.ok) {
-      log.error('store-get-one-failed', { path, id, status: res.status })
-    }
-    return res.json()
+    return await fetchJson<T>(url, { headers })
   } catch (err) {
+    if (err instanceof FetchHttpError && err.status === 404) {
+      return null
+    }
     log.error('store-get-one-error', {
       path,
       id,
-      error: err instanceof Error ? err.message : String(err),
+      error: err,
     })
-    throw err
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    throw new respond.InternalServerErrorError({
+      message: `Store request failed: ${message}`,
+      error: err,
+    })
   }
 }
 
@@ -29,18 +33,18 @@ export const get = async <T>(
   params?: { q?: string; limit?: number; from?: number },
 ): Promise<T> => {
   const q = new URLSearchParams(params as unknown as Record<string, string>)
-  const url = `${STORE_URL}/${path}/?${q}`
   try {
-    const res = await fetch(url, { headers })
-    if (!res.ok) {
-      log.error('store-get-failed', { path, status: res.status })
-    }
-    return res.json()
+    return await fetchJson<T>(`${STORE_URL}/${path}/?${q}`, { headers })
   } catch (err) {
     log.error('store-get-error', {
       path,
-      error: err instanceof Error ? err.message : String(err),
+      params,
+      error: err,
     })
-    throw err
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    throw new respond.InternalServerErrorError({
+      message: `Store request failed: ${message}`,
+      error: err,
+    })
   }
 }
