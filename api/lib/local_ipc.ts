@@ -1,12 +1,12 @@
 import { TextLineStream } from '@std/streams/text-line-stream'
 import { PORT } from '/api/lib/env.ts'
+import { DeploymentsCollection, ProjectsCollection } from '/api/schema.ts'
 
-const encoder = new TextEncoder()
-const registrations = new Map<string, number>()
-
-const socket = Deno.build.os === 'windows'
+const defaultSocketPath = Deno.build.os === 'windows'
   ? '\\\\.\\pipe\\01-devtools'
   : `${Deno.env.get('XDG_RUNTIME_DIR') || '/tmp'}/01-devtools.sock`
+
+const encoder = new TextEncoder()
 
 async function removeSocket(path: string) {
   if (Deno.build.os === 'windows') return
@@ -17,9 +17,9 @@ async function removeSocket(path: string) {
   }
 }
 
-async function sendCommand(path: string, command: string) {
+async function sendCommand(socketPath: string, command: string) {
   try {
-    const conn = await Deno.connect({ transport: 'unix', path })
+    const conn = await Deno.connect({ transport: 'unix', path: socketPath })
     await conn.write(encoder.encode(`${command}\n`))
     const reader = conn.readable
       .pipeThrough(new TextDecoderStream())
@@ -28,50 +28,86 @@ async function sendCommand(path: string, command: string) {
     const { value } = await reader.read()
     reader.releaseLock()
     conn.close()
-    return JSON.parse(value!)
+    return value ? JSON.parse(value) : null
   } catch {
     return null
   }
 }
 
-async function getAppName(path: string) {
-  const { code, stdout } = await new Deno.Command('git', {
-    args: ['-C', path, 'config', '--get', 'remote.origin.url'],
-    stdout: 'piped',
-    stderr: 'null',
-  }).output()
-  if (code !== 0) return null
-  const remote = new TextDecoder().decode(stdout).trim()
-  return remote.split(/github\.com[:/]([^/\s]+\/[^/\s]+?)(?:\.git)?$/)[1]
+type JSONPrimitive = string | number | boolean | null
+type JSONValue = JSONPrimitive | JSONObject | JSONArray
+interface JSONObject {
+  [member: string]: JSONValue
 }
+interface JSONArray extends Array<JSONValue> {}
 
-export type JSONPrimitive = string | number | boolean | null
-export type JSONValue = JSONPrimitive | JSONObject | JSONArray
-export type JSONObject = { [member: string]: JSONValue }
-export interface JSONArray extends Array<JSONValue> {}
 const commands: Record<
   string,
   (arg: string) => Promise<JSONObject> | JSONObject
 > = {
   info: () => ({ pid: Deno.pid, port: PORT }),
+
   register: async (arg: string): Promise<JSONObject> => {
     try {
-      const { pid, path } = JSON.parse(arg)
-      if (!pid || !path) return { error: 'Usage: register/{"pid":456,"path":"..."}' }
-      try {
-      const oldPid = registrations.get(path)
-        oldPid && Deno.kill(oldPid, 'SIGTERM')    
-      } catch {
-        // Ignore already-dead processes.
+      const {
+        projectId,
+        name,
+        url,
+        logsEnabled,
+        databaseEnabled,
+        sqlEndpoint,
+        sqlToken,
+      } = JSON.parse(arg)
+
+      if (!projectId || !url) {
+        return {
+          error: 'Usage: register/{"projectId":"...","url":"..."...}',
+        }
       }
-      registrations.set(path, pid)
-      const name = (await getAppName(path)) || path.split('/').at(-1)
-      return { pid, path, name }
+
+      // Create or update project
+      const projectName = name || projectId
+      const existingProject = ProjectsCollection.get(projectId)
+      if (!existingProject) {
+        await ProjectsCollection.insert({
+          slug: projectId,
+          name: projectName,
+          teamId: 'local',
+          isPublic: true,
+          repositoryUrl: null,
+        })
+      }
+
+      // Create or update deployment
+      const existingDeployment = DeploymentsCollection.get(url)
+      if (existingDeployment) {
+        await DeploymentsCollection.update(url, {
+          projectId,
+          logsEnabled: logsEnabled ?? true,
+          databaseEnabled: databaseEnabled ?? false,
+          sqlEndpoint: sqlEndpoint || undefined,
+          sqlToken: sqlToken || 'local',
+          tokenSalt: crypto.randomUUID(),
+        })
+      } else {
+        await DeploymentsCollection.insert({
+          projectId,
+          url,
+          logsEnabled: logsEnabled ?? true,
+          databaseEnabled: databaseEnabled ?? false,
+          sqlEndpoint: sqlEndpoint || undefined,
+          sqlToken: sqlToken || 'local',
+          tokenSalt: crypto.randomUUID(),
+        })
+      }
+
+      return { pid: Deno.pid, port: PORT }
     } catch (err) {
       console.error(err)
       return { error: (err as Error)?.message || String(err) }
     }
   },
+
   _: () => ({ error: 'Command not found' }),
 }
 
@@ -97,8 +133,8 @@ async function acceptLoop(listener: Deno.Listener) {
   }
 }
 
-export async function startLocalServer(path = socket) {
-  const existing = await sendCommand(path, 'info')
+export async function startRegistryServer(socketPath = defaultSocketPath) {
+  const existing = await sendCommand(socketPath, 'info')
   if (existing) {
     console.info(
       `devtools already started here pid=${existing.pid} port=${existing.port}`,
@@ -106,13 +142,13 @@ export async function startLocalServer(path = socket) {
     Deno.exit(0)
   }
 
-  await removeSocket(path)
-  const listener = Deno.listen({ transport: 'unix', path })
+  await removeSocket(socketPath)
+  const listener = Deno.listen({ transport: 'unix', path: socketPath })
   void acceptLoop(listener)
   return {
     close: () => {
       listener.close()
-      return removeSocket(path)
+      return removeSocket(socketPath)
     },
   }
 }

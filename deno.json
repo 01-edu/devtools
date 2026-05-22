@@ -3,7 +3,7 @@
   "tasks": {
     "all": "deno task check && deno task lint && deno task test --parallel",
     "check": "deno check",
-    "dev": { "dependencies": ["dev:clickhouse", "dev:api", "dev:vite"] },
+    "dev": { "dependencies": ["dev:api", "dev:vite"] },
     "dev:api": "deno serve --port 3021 -A --env-file=.env.dev api/server.ts",
     "dev:env": "deno run -A tasks/env.ts",
     "dev:vite": "deno run -A --env-file=.env.dev tasks/vite.ts",

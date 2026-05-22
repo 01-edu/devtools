@@ -252,6 +252,8 @@ const defs = {
   'GET/api/teams': route({
     authorize: withUserSession,
     fn: async () => {
+      if (isLocal) return [{ id: 'local', name: 'Local', members: [] }]
+
       const groups = await get<{ id: string; name: string }[]>(
         'google/group',
         {
@@ -282,6 +284,7 @@ const defs = {
   'GET/api/team': route({
     authorize: withUserSession,
     fn: async (_ctx, { id }) => {
+      if (isLocal) return { id: 'local', name: 'Local', members: [] }
       const group = await getOne<{ name: string }>('google/group', id)
       if (!group) throw new respond.NotFoundError({ message: 'Team not found' })
 
@@ -441,35 +444,6 @@ const defs = {
     input: DeploymentDef,
     output: deploymentOutput,
     description: 'Create a new deployment',
-  }),
-  'POST/api/deployment/local': route({
-    fn: async (_ctx, input) => {
-      if (!isLocal) return respond.NotFound()
-      if (!ProjectsCollection.get('local')) {
-        await ProjectsCollection.insert({
-          slug: 'local',
-          name: 'Local',
-          teamId: 'local',
-          isPublic: true,
-          repositoryUrl: undefined,
-        })
-      }
-
-      if (!DeploymentsCollection.get('dev')) {
-        await DeploymentsCollection.insert({
-          projectId: 'local',
-          url: 'dev',
-          logsEnabled: true,
-          databaseEnabled: !!input.endpoint,
-          sqlEndpoint: input.endpoint
-            ? new URL(input.endpoint).href
-            : undefined,
-          sqlToken: 'local',
-          tokenSalt: 'local',
-        })
-      }
-    },
-    input: OBJ({ endpoint: optional(STR('Full href of the SQL endpoint')) }),
   }),
   'PUT/api/deployment': route({
     authorize: withAdminSession,

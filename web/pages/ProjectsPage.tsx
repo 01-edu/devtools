@@ -23,13 +23,9 @@ type Project = ApiOutput['GET/api/projects'][number]
 type Team = ApiOutput['GET/api/team']
 
 const teams = api['GET/api/teams'].signal()
+teams.fetch()
 const projects = api['GET/api/projects'].signal()
-
-effect(() => {
-  if (!user.data || user.data.id === 'local') return
-  teams.fetch()
-  projects.fetch()
-})
+projects.fetch()
 
 const toastSignal = signal<{ message: string; type: 'info' | 'error' } | null>(
   null,
