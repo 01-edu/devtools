@@ -1,10 +1,11 @@
+import { ensureDir } from '@std/fs/ensure-dir'
 import { TextLineStream } from '@std/streams/text-line-stream'
 import { PORT } from '/api/lib/env.ts'
 import { DeploymentsCollection, ProjectsCollection } from '/api/schema.ts'
 
-const defaultSocketPath = Deno.build.os === 'windows'
+export const defaultSocketPath = Deno.build.os === 'windows'
   ? '\\\\.\\pipe\\01-devtools'
-  : `${Deno.env.get('XDG_RUNTIME_DIR') || '/tmp'}/01-devtools.sock`
+  : `${Deno.env.get('XDG_RUNTIME_DIR') || '/tmp'}/01-devtools/01-devtools.sock`
 
 const encoder = new TextEncoder()
 
@@ -142,6 +143,9 @@ export async function startRegistryServer(socketPath = defaultSocketPath) {
     Deno.exit(0)
   }
 
+  if (Deno.build.os !== 'windows') {
+    await ensureDir(socketPath.slice(0, socketPath.lastIndexOf('/')))
+  }
   await removeSocket(socketPath)
   const listener = Deno.listen({ transport: 'unix', path: socketPath })
   void acceptLoop(listener)

@@ -8,43 +8,29 @@ services:
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: ${CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT:-1}
     ports:
       - '8123:8123'
-      - '9000:9000'
-    ulimits:
-      nofile:
-        soft: 262144
-        hard: 262144
     volumes:
       - clickhouse-data:/var/lib/clickhouse
+      - ./clickhouse-config.xml:/etc/clickhouse-server/config.d/dev.xml:ro
+      - ./clickhouse-users.xml:/etc/clickhouse-server/users.d/dev.xml:ro
     healthcheck:
       test:
-        [
-          'CMD-SHELL',
-          "clickhouse-client --host 127.0.0.1 --user \"$${CLICKHOUSE_USER}\" --password \"$${CLICKHOUSE_PASSWORD}\" --query 'SELECT 1' >/dev/null 2>&1",
-        ]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 10s
+        ['CMD-SHELL', 'wget -qO- http://localhost:8123/ping >/dev/null 2>&1']
+      interval: 2s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
 
   app:
     build:
       context: .
     restart: unless-stopped
+    env_file:
+      - .env.dev
     environment:
-      BASE_URL: '/'
-      APP_ENV: 'prod'
-      PORT: ${PORT:-3021}
-      PICTURE_DIR: ${PICTURE_DIR:-/app/.picture}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      CLIENT_SECRET: ${CLIENT_SECRET:-}
-      REDIRECT_URI: ${REDIRECT_URI:-http://localhost:3021/auth/callback}
-      SECRET: ${SECRET:-iUokBru8WPSMAuMspijlt7F-Cnpqyg84F36b1G681h0}
-      STORE_URL: ${STORE_URL:-}
-      STORE_SECRET: ${STORE_SECRET:-}
-      CLICKHOUSE_HOST: ${CLICKHOUSE_HOST:-http://clickhouse:8123}
-      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-devtools}
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-devtools-password}
+      APP_ENV: prod
       LOCAL_ENV: yes
+      CLICKHOUSE_HOST: http://clickhouse:8123
+      XDG_RUNTIME_DIR: ${XDG_RUNTIME_DIR:-/tmp}
     depends_on:
       clickhouse:
         condition: service_healthy
@@ -53,6 +39,7 @@ services:
     volumes:
       - ./db:/app/db
       - app-pictures:/app/.picture
+      - ${XDG_RUNTIME_DIR:-/tmp}/01-devtools:${XDG_RUNTIME_DIR:-/tmp}/01-devtools
 
 volumes:
   clickhouse-data:
