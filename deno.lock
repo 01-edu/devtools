@@ -1191,6 +1191,9 @@
       "integrity": "sha512-B58NGBEoc8Y9MWWCQGl/gq9xBCe4IiKM0a2x7GZdQKOW5Exr8S1W24J6OgM1njK8xCRGvAJIL/MxXHf6SkmQKQ=="
     }
   },
+  "remote": {
+    "https://gistcdn.githack.com/kigiri/21df06d173fcdced5281b86ba6ac1382/raw/crypto.js": "e85976e655898538dbade9d87b05ca0a6bb167b3128cd4098622000a582f5f6d"
+  },
   "workspace": {
     "dependencies": [
       "jsr:@01edu/api-client@~0.2.6",
