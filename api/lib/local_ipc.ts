@@ -2,6 +2,7 @@ import { ensureDir } from '@std/fs/ensure-dir'
 import { TextLineStream } from '@std/streams/text-line-stream'
 import { PORT } from '/api/lib/env.ts'
 import { DeploymentsCollection, ProjectsCollection } from '/api/schema.ts'
+import { refreshOneSchema } from '/api/sql.ts'
 
 export const defaultSocketPath = Deno.build.os === 'windows'
   ? '\\\\.\\pipe\\01-devtools'
@@ -80,8 +81,8 @@ const commands: Record<
       }
 
       // Create or update deployment
-      const existingDeployment = DeploymentsCollection.get(url)
-      if (existingDeployment) {
+      let dep = DeploymentsCollection.get(url)
+      if (dep) {
         await DeploymentsCollection.update(url, {
           projectId,
           logsEnabled: logsEnabled ?? true,
@@ -91,7 +92,7 @@ const commands: Record<
           tokenSalt: crypto.randomUUID(),
         })
       } else {
-        await DeploymentsCollection.insert({
+        dep = await DeploymentsCollection.insert({
           projectId,
           url,
           logsEnabled: logsEnabled ?? true,
@@ -101,7 +102,7 @@ const commands: Record<
           tokenSalt: crypto.randomUUID(),
         })
       }
-
+      refreshOneSchema(dep)
       return { pid: Deno.pid, port: PORT }
     } catch (err) {
       console.error(err)

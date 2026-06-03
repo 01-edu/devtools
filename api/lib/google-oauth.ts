@@ -10,7 +10,7 @@ export const GOOGLE_OAUTH_CONFIG = {
 
 class StateManager {
   private store = new Map<string, { expires: number }>()
-  private cleanupInterval: number
+  private cleanupInterval: NodeJS.Timeout
 
   constructor(private maxAge = 10 * 60 * 1000) { // 10 minutes
     this.cleanupInterval = setInterval(() => this.cleanup(), 60000)

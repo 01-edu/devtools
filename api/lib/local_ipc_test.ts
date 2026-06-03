@@ -31,7 +31,7 @@ const getEndpoint = async () => {
           recursive: true,
         })
       }
-    }
+    },
   }
 }
 
@@ -45,13 +45,15 @@ Deno.test('local ipc server returns current pid and port', async () => {
 Deno.test('register returns pid and port on success', async () => {
   await using endpoint = await getEndpoint()
   const res = await endpoint.sendCommand(
-    `register/${JSON.stringify({
-      projectId: 'test-project',
-      name: 'Test Project',
-      url: 'localhost:9999',
-      logsEnabled: true,
-      databaseEnabled: false,
-    })}`,
+    `register/${
+      JSON.stringify({
+        projectId: 'test-project',
+        name: 'Test Project',
+        url: 'localhost:9999',
+        logsEnabled: true,
+        databaseEnabled: false,
+      })
+    }`,
   )
   assertEquals(res.pid, Deno.pid)
   assertEquals(typeof res.port, 'number')

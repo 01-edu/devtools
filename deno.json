@@ -26,6 +26,7 @@
     "prod:vite": "BASE_URL=/ APP_ENV=prod deno run -A tasks/vite.ts",
     "review": "deno run -A https://gistcdn.githack.com/kigiri/7658b4af30bb5eaca3e4cad1fcac7b0c/raw/review.js",
     "seed": "deno run -A --env-file=.env.dev tasks/seed.ts",
+    "setup": "deno install --allow-scripts=npm:chdb --entrypoint api/server.ts",
     "test": "deno test --env-file=.env.test -A --unstable-worker-options --no-check"
   },
   "imports": {
@@ -41,20 +42,21 @@
     "@std/crypto": "jsr:@std/crypto@^1.1.0",
     "@std/encoding": "jsr:@std/encoding@^1.0.10",
     "@std/fmt": "jsr:@std/fmt@^1.0.10",
-    "@std/fs": "jsr:@std/fs@^1.0.23",
-    "@std/http": "jsr:@std/http@^1.1.0",
-    "@std/path": "jsr:@std/path@^1.1.4",
-    "@std/streams": "jsr:@std/streams@^1.1.0",
-    "@std/testing": "jsr:@std/testing@^1.0.18",
-    "vite": "npm:vite@^8.0.13",
+    "@std/fs": "jsr:@std/fs@^1.0.24",
+    "@std/http": "jsr:@std/http@^1.1.1",
+    "@std/path": "jsr:@std/path@^1.1.5",
+    "@std/streams": "jsr:@std/streams@^1.1.1",
+    "@std/testing": "jsr:@std/testing@^1.0.19",
+    "chdb": "npm:chdb@^2.0.1",
+    "vite": "npm:vite@^8.0.16",
     "preact": "npm:preact@^10.29.2",
     "@preact/preset-vite": "npm:@preact/preset-vite@^2.10.5",
-    "@preact/signals": "npm:@preact/signals@^2.9.0",
-    "@clickhouse/client": "npm:@clickhouse/client@^1.18.5",
+    "@preact/signals": "npm:@preact/signals@^2.9.1",
+    "@clickhouse/client": "npm:@clickhouse/client@^1.19.0",
     "@tailwindcss/vite": "npm:@tailwindcss/vite@^4.3.0",
     "tailwindcss": "npm:tailwindcss@^4.3.0",
     "daisyui": "npm:daisyui@^5.5.20",
-    "lucide-preact": "npm:lucide-preact@^1.16.0",
+    "lucide-preact": "npm:lucide-preact@^1.17.0",
     "@deno/gfm": "jsr:@deno/gfm@0.12.0"
   },
   "fmt": {
@@ -71,6 +73,7 @@
   },
   "nodeModulesDir": "auto",
   "compilerOptions": {
+    "module": "esnext",
     "jsx": "react-jsx",
     "jsxImportSource": "preact",
     "lib": [
@@ -82,5 +85,9 @@
       "DOM.AsyncIterable",
       "webworker"
     ]
+  },
+  "allowScripts": {
+    "allow": ["npm:chdb@2.0.1", "npm:esbuild@0.28.0"],
+    "deny": []
   }
 }

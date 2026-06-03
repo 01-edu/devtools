@@ -1,4 +1,7 @@
-import { createClient } from '@clickhouse/client'
+import defer * as chclient from '@clickhouse/client'
+import defer * as local from './lib/clickhouse-local.ts'
+import { isLocal } from './lib/env.ts'
+
 import {
   CLICKHOUSE_HOST,
   CLICKHOUSE_PASSWORD,
@@ -49,18 +52,22 @@ export const LogsInputSchema = UNION(
 type Log = Asserted<typeof LogSchemaOutput>
 type LogsInput = Asserted<typeof LogsInputSchema>
 
-export const client = createClient({
-  url: CLICKHOUSE_HOST,
-  username: CLICKHOUSE_USER,
-  password: CLICKHOUSE_PASSWORD,
-  compression: {
-    request: true,
-    response: true,
-  },
-  clickhouse_settings: {
-    date_time_input_format: 'best_effort',
-  },
-})
+export const client: ReturnType<typeof chclient.createClient> = isLocal
+  ? local.createLocalClient(CLICKHOUSE_HOST) as unknown as ReturnType<
+    typeof chclient.createClient
+  >
+  : chclient.createClient({
+    url: CLICKHOUSE_HOST,
+    username: CLICKHOUSE_USER,
+    password: CLICKHOUSE_PASSWORD,
+    compression: {
+      request: true,
+      response: true,
+    },
+    clickhouse_settings: {
+      date_time_input_format: 'best_effort',
+    },
+  })
 
 const numberToHex128 = (() => {
   const alphabet = new TextEncoder().encode('0123456789abcdef')

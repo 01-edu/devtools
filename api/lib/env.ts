@@ -12,9 +12,9 @@ export const SECRET = ENV(
   'iUokBru8WPSMAuMspijlt7F-Cnpqyg84F36b1G681h0',
 )
 
-export const CLICKHOUSE_HOST = ENV('CLICKHOUSE_HOST')
-export const CLICKHOUSE_USER = ENV('CLICKHOUSE_USER')
-export const CLICKHOUSE_PASSWORD = ENV('CLICKHOUSE_PASSWORD')
+export const CLICKHOUSE_HOST = ENV('CLICKHOUSE_HOST','./db/chdb')
+export const CLICKHOUSE_USER = ENV('CLICKHOUSE_USER','default')
+export const CLICKHOUSE_PASSWORD = ENV('CLICKHOUSE_PASSWORD','')
 
 // Optional interval (ms) for refreshing external SQL database schemas
 // Defaults to 24 hours
