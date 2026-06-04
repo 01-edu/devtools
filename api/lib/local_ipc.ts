@@ -55,10 +55,7 @@ const commands: Record<
         projectId,
         name,
         url,
-        logsEnabled,
-        databaseEnabled,
         sqlEndpoint,
-        sqlToken,
       } = JSON.parse(arg)
 
       if (!projectId || !url) {
@@ -85,24 +82,24 @@ const commands: Record<
       if (dep) {
         await DeploymentsCollection.update(url, {
           projectId,
-          logsEnabled: logsEnabled ?? true,
-          databaseEnabled: databaseEnabled ?? false,
-          sqlEndpoint: sqlEndpoint || undefined,
-          sqlToken: sqlToken || 'local',
-          tokenSalt: crypto.randomUUID(),
+          logsEnabled: true,
+          databaseEnabled: true,
+          sqlEndpoint: sqlEndpoint || `http://${url}/api/sql`,
+          sqlToken: 'local',
+          tokenSalt: 'local',
         })
       } else {
         dep = await DeploymentsCollection.insert({
           projectId,
           url,
-          logsEnabled: logsEnabled ?? true,
-          databaseEnabled: databaseEnabled ?? false,
-          sqlEndpoint: sqlEndpoint || undefined,
-          sqlToken: sqlToken || 'local',
-          tokenSalt: crypto.randomUUID(),
+          logsEnabled: true,
+          databaseEnabled: true,
+          sqlEndpoint: sqlEndpoint || `http://${url}/api/sql`,
+          sqlToken: 'local',
+          tokenSalt: 'local',
         })
       }
-      refreshOneSchema(dep)
+      setTimeout(() => refreshOneSchema(dep), 1000)
       return { pid: Deno.pid, port: PORT }
     } catch (err) {
       console.error(err)

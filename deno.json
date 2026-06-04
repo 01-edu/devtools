@@ -20,13 +20,13 @@
     "fmt": "deno fmt",
     "lint": "deno lint",
     "prod": "deno task prod:vite && deno task prod:api",
-    "prod:api:bundle": "mkdir -p dist && deno bundle api/server.ts -o dist/server.bundle.js",
-    "prod:api": "deno task prod:api:bundle && deno compile -c deno.json -A --no-check --output dist/api --target x86_64-unknown-linux-gnu --include dist/web --include db/functions dist/server.bundle.js --env=prod",
+    "prod:api": "deno compile -c deno.json -A --no-check --output dist/api --target x86_64-unknown-linux-gnu --include dist/web --include db/functions api/server.ts --env=prod",
     "prod:start": "deno task clickhouse:prod && dist/api",
     "prod:vite": "BASE_URL=/ APP_ENV=prod deno run -A tasks/vite.ts",
     "review": "deno run -A https://gistcdn.githack.com/kigiri/7658b4af30bb5eaca3e4cad1fcac7b0c/raw/review.js",
     "seed": "deno run -A --env-file=.env.dev tasks/seed.ts",
-    "setup": "deno install --allow-scripts=npm:chdb --entrypoint api/server.ts",
+    "setup": "deno install && deno task setup:chdb",
+    "setup:chdb": "cd node_modules/chdb && bash update_libchdb.sh && npm run build",
     "test": "deno test --env-file=.env.test -A --unstable-worker-options --no-check"
   },
   "imports": {
@@ -87,7 +87,7 @@
     ]
   },
   "allowScripts": {
-    "allow": ["npm:chdb@2.0.1", "npm:esbuild@0.28.0"],
+    "allow": ["npm:esbuild@0.28.0"],
     "deny": []
   }
 }

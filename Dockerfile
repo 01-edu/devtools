@@ -12,14 +12,15 @@ RUN deno install
 # Build frontend (dist/web) and compile backend with static files
 COPY ./tasks/vite.ts /app/tasks/vite.ts
 COPY ./web /app/web
-RUN deno cache --allow-scripts --lock=deno.lock tasks/vite.ts web/index.tsx
+# Use explicit package to avoid chdb install script failure (Deno bug with npm run -> deno task)
+RUN deno cache --allow-scripts=npm:esbuild@0.28.0 --lock=deno.lock tasks/vite.ts web/index.tsx
 ENV BASE_URL="/"
 RUN deno task prod:vite
 
 # Build API
 COPY ./api  /app/api
 COPY ./db /app/db
-RUN deno cache --allow-scripts --lock=deno.lock api/server.ts
+RUN deno cache --allow-scripts=npm:esbuild@0.28.0 --lock=deno.lock api/server.ts
 RUN deno task prod:api
 
 # Stage 2: Final image

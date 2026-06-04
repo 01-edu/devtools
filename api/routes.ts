@@ -105,6 +105,13 @@ const withDeploymentSession = async (ctx: RequestContext) => {
     log.warn('deployment-auth-missing-token')
     throw new respond.UnauthorizedError({ message: 'Missing token' })
   }
+
+  if (isLocal) {
+    const dep = DeploymentsCollection.get(token)
+    if (!dep) throw new respond.UnauthorizedError({ message: 'Invalid token' })
+    return dep
+  }
+
   try {
     const message = await decryptMessage(token)
     if (!message) {
@@ -794,7 +801,7 @@ const defs = {
       try {
         const urlStr = dep.url.startsWith('http')
           ? dep.url
-          : `https://${dep.url}`
+          : `${isLocal ? 'http' : 'https'}://${dep.url}`
         return await fetchJson(`${urlStr}/api/doc`, {
           method: 'GET',
         })

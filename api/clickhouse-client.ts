@@ -93,14 +93,28 @@ export async function insertLogs(service_name: string, data: LogsInput) {
   const rows = logsToInsert.map((log) => {
     const traceHex = numberToHex128(log.trace_id)
     const spanHex = numberToHex128(log.span_id ?? log.trace_id)
-    return {
-      ...log,
+    const attributes =
+      log.attributes && typeof log.attributes === 'object' &&
+        !Array.isArray(log.attributes)
+        ? log.attributes
+        : {}
+
+    const row: Record<string, unknown> = {
       timestamp: new Date(log.timestamp),
-      attributes: log.attributes ?? {},
+      severity_number: log.severity_number,
+      event_name: log.event_name,
+      attributes,
       service_name: service_name,
       trace_id: traceHex,
       span_id: spanHex,
     }
+
+    if (log.service_version != null) row.service_version = log.service_version
+    if (log.service_instance_id != null) {
+      row.service_instance_id = log.service_instance_id
+    }
+
+    return row
   })
 
   console.debug('Inserting logs into ClickHouse', { rows })

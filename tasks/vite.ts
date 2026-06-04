@@ -45,7 +45,7 @@ const server = await createServer({
   base: BASE_URL,
   plugins: [...plugins, apiProxy({ port: PORT, prefix: '/api/' })],
   resolve: { alias: preactRuntimeAlias },
-  server: { port: 7737, host: true },
+  server: { port: 0, host: true },
 })
 await server.listen()
 server.printUrls()
