@@ -32,15 +32,18 @@ export function createLogger(serviceName: string): Log {
     props?: Params,
   ) => {
     const ctx = getContext()
+    const attributes =
+      props && typeof props === 'object' && !Array.isArray(props)
+        ? props
+        : {}
+
     batch.push({
       timestamp: Date.now(),
       trace_id: ctx?.trace ?? Date.now() / 1000,
       span_id: ctx?.span ?? ctx?.trace ?? Date.now() / 1000,
       severity_number: severityMap[level],
       event_name: event,
-      attributes: props ?? {},
-      service_version: null,
-      service_instance_id: null,
+      attributes,
     })
 
     const c = console[level] || console.info

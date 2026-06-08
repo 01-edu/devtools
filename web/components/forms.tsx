@@ -1,4 +1,8 @@
-import { JSX } from 'preact'
+import type {
+  ButtonHTMLAttributes,
+  ComponentChildren,
+  InputHTMLAttributes,
+} from 'preact'
 import { useId } from 'preact/hooks'
 import { A, LinkProps } from '@01edu/signal-router'
 
@@ -7,7 +11,7 @@ export const Card = (
   { children, title, description }: {
     title: string
     description?: string
-    children: JSX.Element | JSX.Element[]
+    children: ComponentChildren
   },
 ) => (
   <div class='bg-surface rounded-lg border border-divider shadow-sm bg-base-100'>
@@ -27,7 +31,7 @@ export const Card = (
 export const Input = (
   { label, name, note, ...props }:
     & { label: string; name: string; note?: string }
-    & JSX.InputHTMLAttributes<HTMLInputElement>,
+    & InputHTMLAttributes<HTMLInputElement>,
 ) => {
   const id = useId()
   return (
@@ -52,7 +56,7 @@ export const Button = (
     & {
       variant?: 'primary' | 'secondary' | 'danger'
     }
-    & Omit<JSX.ButtonHTMLAttributes<HTMLButtonElement>, 'class' | 'style'>
+    & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'class' | 'style'>
     & Partial<LinkProps>,
 ) => {
   const baseClasses =
@@ -94,7 +98,7 @@ export const Switch = (
     label: string
     note?: string
     // checked: boolean
-  } & JSX.InputHTMLAttributes<HTMLInputElement>,
+  } & InputHTMLAttributes<HTMLInputElement>,
 ) => {
   const id = useId()
   return (

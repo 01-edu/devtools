@@ -1,20 +1,21 @@
 import { serveDir } from '@std/http/file-server'
-import { APP_ENV } from '@01edu/api/env'
 import { server } from '@01edu/api/server'
 import { routeHandler } from '/api/routes.ts'
-import { PORT } from './lib/env.ts'
+import { APP_ENV, isLocal, PORT } from '/api/lib/env.ts'
 import { init } from '/api/lib/functions.ts'
-import { startSchemaRefreshLoop } from './sql.ts'
+import { initLogTable } from '/api/clickhouse-client.ts'
+import { startRegistryServer } from '/api/lib/local_ipc.ts'
+import { startSchemaRefreshLoop } from '/api/sql.ts'
 import { log } from '/api/lib/logger.ts'
 
+await initLogTable()
 await init()
 startSchemaRefreshLoop()
+isLocal && (await startRegistryServer())
 
 const fetch = server({ log, routeHandler })
 export default {
-  fetch(req: Request) {
-    return fetch(req, new URL(req.url))
-  },
+  fetch: (req: Request) => fetch(req, new URL(req.url)),
 }
 
 if (APP_ENV === 'prod') {

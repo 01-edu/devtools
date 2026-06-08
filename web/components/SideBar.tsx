@@ -5,8 +5,8 @@ import {
   LucideIcon,
   Settings,
 } from 'lucide-preact'
-import { user } from '../lib/session.ts'
 import { A, url } from '@01edu/signal-router'
+import { sidebarItems } from '../lib/shared.tsx'
 
 export type SidebarItem = {
   label: string
@@ -15,10 +15,10 @@ export type SidebarItem = {
 }
 
 export function Sidebar(
-  { sidebarItems, sbi, title }: {
-    sidebarItems: Record<string, SidebarItem>
+  { sbi, title, isAdmin }: {
     sbi?: string
     title?: string
+    isAdmin?: boolean
   },
 ) {
   const sb = url.params.sb
@@ -70,7 +70,7 @@ export function Sidebar(
             params={{ sbi: 'settings' }}
             replace
             class={`rounded p-2 w-full flex items-center gap-2 ${
-              user.data?.isAdmin
+              isAdmin
                 ? 'settings' === sbi ? 'bg-primary text-primary-content' : ''
                 : 'opacity-50 pointer-events-none'
             }`}

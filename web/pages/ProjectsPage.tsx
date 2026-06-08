@@ -24,7 +24,6 @@ type Team = ApiOutput['GET/api/team']
 
 const teams = api['GET/api/teams'].signal()
 teams.fetch()
-
 const projects = api['GET/api/projects'].signal()
 projects.fetch()
 

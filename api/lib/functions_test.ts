@@ -19,9 +19,6 @@ Deno.test('Functions Module - Pipeline & Config', async () => {
 
   await ensureDir(projectDir)
 
-  // Initialize module
-  await functions.init()
-
   // Define test row type
   type TestRow = {
     id: number
@@ -48,8 +45,8 @@ Deno.test('Functions Module - Pipeline & Config', async () => {
   await Deno.writeTextFile(file1, code1)
   await Deno.writeTextFile(file2, code2)
 
-  // Give watcher time
-  await new Promise((r) => setTimeout(r, 1000))
+  // Initialize module after files are written
+  await functions.init()
 
   // 2. Verify loading and sorting
   const loaded = functions.getProjectFunctions(testSlug)
@@ -105,5 +102,4 @@ Deno.test('Functions Module - Pipeline & Config', async () => {
     // Skipped
   }
   await new Promise((r) => setTimeout(r, 500))
-  functions.stopWatcher()
 })

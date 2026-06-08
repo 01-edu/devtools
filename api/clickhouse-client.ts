@@ -1,4 +1,7 @@
-import { createClient } from '@clickhouse/client'
+import defer * as chclient from '@clickhouse/client'
+import defer * as local from './lib/clickhouse-local.ts'
+import { isLocal } from './lib/env.ts'
+
 import {
   CLICKHOUSE_HOST,
   CLICKHOUSE_PASSWORD,
@@ -15,7 +18,7 @@ import {
   UNION,
 } from '@01edu/api/validator'
 
-const LogSchema = OBJ({
+export const LogSchema = OBJ({
   timestamp: NUM('The timestamp of the log event'),
   trace_id: NUM('A float64 representation of the trace ID'),
   span_id: optional(NUM('A float64 representation of the span ID')),
@@ -41,7 +44,7 @@ export const LogSchemaOutput = OBJ({
   service_instance_id: optional(STR('Service instance ID')),
 }, 'A log event')
 
-const LogsInputSchema = UNION(
+export const LogsInputSchema = UNION(
   LogSchema,
   ARR(LogSchema, 'An array of log events'),
 )
@@ -49,18 +52,22 @@ const LogsInputSchema = UNION(
 type Log = Asserted<typeof LogSchemaOutput>
 type LogsInput = Asserted<typeof LogsInputSchema>
 
-const client = createClient({
-  url: CLICKHOUSE_HOST,
-  username: CLICKHOUSE_USER,
-  password: CLICKHOUSE_PASSWORD,
-  compression: {
-    request: true,
-    response: true,
-  },
-  clickhouse_settings: {
-    date_time_input_format: 'best_effort',
-  },
-})
+export const client: ReturnType<typeof chclient.createClient> = isLocal
+  ? local.createLocalClient(CLICKHOUSE_HOST) as unknown as ReturnType<
+    typeof chclient.createClient
+  >
+  : chclient.createClient({
+    url: CLICKHOUSE_HOST,
+    username: CLICKHOUSE_USER,
+    password: CLICKHOUSE_PASSWORD,
+    compression: {
+      request: true,
+      response: true,
+    },
+    clickhouse_settings: {
+      date_time_input_format: 'best_effort',
+    },
+  })
 
 const numberToHex128 = (() => {
   const alphabet = new TextEncoder().encode('0123456789abcdef')
@@ -79,24 +86,35 @@ const numberToHex128 = (() => {
   }
 })()
 
-async function insertLogs(
-  service_name: string,
-  data: LogsInput,
-) {
+export async function insertLogs(service_name: string, data: LogsInput) {
   const logsToInsert = Array.isArray(data) ? data : [data]
   if (logsToInsert.length === 0) return respond.NoContent()
 
   const rows = logsToInsert.map((log) => {
     const traceHex = numberToHex128(log.trace_id)
     const spanHex = numberToHex128(log.span_id ?? log.trace_id)
-    return {
-      ...log,
+    const attributes =
+      log.attributes && typeof log.attributes === 'object' &&
+        !Array.isArray(log.attributes)
+        ? log.attributes
+        : {}
+
+    const row: Record<string, unknown> = {
       timestamp: new Date(log.timestamp),
-      attributes: log.attributes ?? {},
+      severity_number: log.severity_number,
+      event_name: log.event_name,
+      attributes,
       service_name: service_name,
       trace_id: traceHex,
       span_id: spanHex,
     }
+
+    if (log.service_version != null) row.service_version = log.service_version
+    if (log.service_instance_id != null) {
+      row.service_instance_id = log.service_instance_id
+    }
+
+    return row
   })
 
   console.debug('Inserting logs into ClickHouse', { rows })
@@ -204,7 +222,7 @@ function inferParamType(key: string, value: string): string {
   return 'String'
 }
 
-async function getLogs(dep: string, data: FetchTablesParams) {
+export async function getLogs(dep: string, data: FetchTablesParams) {
   const { query, params } = buildLogsQuery(dep, data)
   try {
     const rs = await client.query({
@@ -244,4 +262,39 @@ async function getLogs(dep: string, data: FetchTablesParams) {
 //   }
 // }
 
-export { client, getLogs, insertLogs, LogSchema, LogsInputSchema }
+export const initLogTable = async () => {
+  await client.ping()
+  await client.command({
+    query: `
+    CREATE TABLE IF NOT EXISTS logs (
+      id UUID DEFAULT generateUUIDv4(),
+      -- Flattened resource fields
+      service_name LowCardinality(String),
+      service_version LowCardinality(String),
+      service_instance_id String,
+
+      timestamp DateTime64(3, 'UTC') DEFAULT now64(3, 'UTC'),
+      observed_timestamp DateTime64(3, 'UTC') DEFAULT now64(3, 'UTC'),
+      trace_id FixedString(16),
+      span_id FixedString(16),
+      severity_number UInt8,
+      -- derived column, computed by DB from severity_number
+      severity_text LowCardinality(String) MATERIALIZED CASE
+        WHEN severity_number > 4 AND severity_number <= 8 THEN 'DEBUG'
+        WHEN severity_number > 8 AND severity_number <= 12 THEN 'INFO'
+        WHEN severity_number > 12 AND severity_number <= 16 THEN 'WARN'
+        WHEN severity_number > 20 AND severity_number <= 24 THEN 'FATAL'
+        ELSE 'ERROR'
+      END,
+      -- Often empty, but kept for OTEL spec compliance
+      body Nullable(String),
+      attributes JSON,
+      event_name LowCardinality(String)
+    )
+    ENGINE = MergeTree
+    PARTITION BY toYYYYMMDD(timestamp)
+    ORDER BY (service_name, timestamp, trace_id)
+    SETTINGS index_granularity = 8192, min_bytes_for_wide_part = 0;
+  `,
+  })
+}

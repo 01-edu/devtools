@@ -12,7 +12,7 @@ import {
   TeamDetailDef,
   User,
   UserDef,
-} from './schema.ts'
+} from '/api/schema.ts'
 import {
   ARR,
   BOOL,
@@ -40,6 +40,7 @@ import {
   SQLQueryError,
   updateTableData,
 } from '/api/sql.ts'
+import { isLocal } from '/api/lib/env.ts'
 import { get, getOne } from './lmdb-store.ts'
 import { log } from '/api/lib/logger.ts'
 import { analyzeQueryWithAI } from '/api/fix-query.ts'
@@ -70,15 +71,25 @@ const MetricSchema = OBJ({
   }, 'SQLite sqlite3_stmt_status counters'),
 })
 
-const withUserSession = async ({ cookies }: RequestContext) => {
-  const session = await decodeSession(cookies.session)
-  if (!session) {
-    log.warn('auth-missing-session')
-    throw new respond.UnauthorizedError({ message: 'Missing user session' })
+const localUser = {
+  id: 'local', // this id is for local env, it will ignore permissions
+  email: 'local@admin.dev',
+  fullName: 'Local Dev',
+  picture: '',
+  isAdmin: true,
+} as const
+
+const withUserSession = isLocal
+  ? () => localUser
+  : async ({ cookies }: RequestContext) => {
+    const session = await decodeSession(cookies.session)
+    if (!session) {
+      log.warn('auth-missing-session')
+      throw new respond.UnauthorizedError({ message: 'Missing user session' })
+    }
+    const admin = AdminsCollection.get(session.id)
+    return { ...session, isAdmin: !!admin }
   }
-  const admin = AdminsCollection.get(session.id)
-  return { ...session, isAdmin: !!admin }
-}
 
 const withAdminSession = async (ctx: RequestContext) => {
   const session = await withUserSession(ctx)
@@ -94,6 +105,13 @@ const withDeploymentSession = async (ctx: RequestContext) => {
     log.warn('deployment-auth-missing-token')
     throw new respond.UnauthorizedError({ message: 'Missing token' })
   }
+
+  if (isLocal) {
+    const dep = DeploymentsCollection.get(token)
+    if (!dep) throw new respond.UnauthorizedError({ message: 'Invalid token' })
+    return dep
+  }
+
   try {
     const message = await decryptMessage(token)
     if (!message) {
@@ -241,6 +259,8 @@ const defs = {
   'GET/api/teams': route({
     authorize: withUserSession,
     fn: async () => {
+      if (isLocal) return [{ id: 'local', name: 'Local', members: [] }]
+
       const groups = await get<{ id: string; name: string }[]>(
         'google/group',
         {
@@ -271,6 +291,7 @@ const defs = {
   'GET/api/team': route({
     authorize: withUserSession,
     fn: async (_ctx, { id }) => {
+      if (isLocal) return { id: 'local', name: 'Local', members: [] }
       const group = await getOne<{ name: string }>('google/group', id)
       if (!group) throw new respond.NotFoundError({ message: 'Team not found' })
 
@@ -406,10 +427,7 @@ const defs = {
       const token = await encryptMessage(
         JSON.stringify({ url: deployment.url, tokenSalt }),
       )
-      return {
-        ...deployment,
-        token,
-      }
+      return { ...deployment, token }
     },
     input: OBJ({ url: STR('Deployment URL') }),
     output: deploymentOutput,
@@ -420,10 +438,7 @@ const defs = {
     fn: async (_ctx, input) => {
       const tokenSalt = performance.now().toString()
       const { tokenSalt: _, ...deployment } = await DeploymentsCollection
-        .insert({
-          ...input,
-          tokenSalt,
-        })
+        .insert({ ...input, tokenSalt })
       log.info('deployment-created', {
         url: deployment.url,
         projectId: deployment.projectId,
@@ -431,10 +446,7 @@ const defs = {
       const token = await encryptMessage(
         JSON.stringify({ url: deployment.url, tokenSalt }),
       )
-      return {
-        ...deployment,
-        token,
-      }
+      return { ...deployment, token }
     },
     input: DeploymentDef,
     output: deploymentOutput,
@@ -449,10 +461,7 @@ const defs = {
       const token = await encryptMessage(
         JSON.stringify({ url: deployment.url, tokenSalt }),
       )
-      return {
-        ...deployment,
-        token,
-      }
+      return { ...deployment, token }
     },
     input: DeploymentDef,
     output: deploymentOutput,
@@ -792,7 +801,7 @@ const defs = {
       try {
         const urlStr = dep.url.startsWith('http')
           ? dep.url
-          : `https://${dep.url}`
+          : `${isLocal ? 'http' : 'https'}://${dep.url}`
         return await fetchJson(`${urlStr}/api/doc`, {
           method: 'GET',
         })
