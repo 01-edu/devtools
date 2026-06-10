@@ -25,8 +25,7 @@
     "prod:vite": "BASE_URL=/ APP_ENV=prod deno run -A tasks/vite.ts",
     "review": "deno run -A https://gistcdn.githack.com/kigiri/7658b4af30bb5eaca3e4cad1fcac7b0c/raw/review.js",
     "seed": "deno run -A --env-file=.env.dev tasks/seed.ts",
-    "setup": "deno install && deno task setup:chdb",
-    "setup:chdb": "cd node_modules/chdb && bash update_libchdb.sh && npm run build",
+    "setup:chdb": "cd node_modules/chdb && bash update_libchdb.sh && npx node-gyp configure build --verbose && bash fix_loader_path.sh",
     "test": "deno test --env-file=.env.test -A --unstable-worker-options --no-check"
   },
   "imports": {

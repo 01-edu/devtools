@@ -146,6 +146,15 @@ export async function startRegistryServer(socketPath = defaultSocketPath) {
   }
   await removeSocket(socketPath)
   const listener = Deno.listen({ transport: 'unix', path: socketPath })
+
+  if (Deno.build.os !== 'windows') {
+    try {
+      await Deno.chmod(socketPath, 0o666)
+    } catch (error) {
+      console.error('Failed to set socket permissions:', error)
+    }
+  }
+
   void acceptLoop(listener)
   return {
     close: () => {

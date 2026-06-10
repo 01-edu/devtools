@@ -1,5 +1,5 @@
-import defer * as chclient from '@clickhouse/client'
-import defer * as local from './lib/clickhouse-local.ts'
+import { createClient } from '@clickhouse/client'
+import { createLocalClient } from './lib/clickhouse-local.ts'
 import { isLocal } from './lib/env.ts'
 
 import {
@@ -52,11 +52,11 @@ export const LogsInputSchema = UNION(
 type Log = Asserted<typeof LogSchemaOutput>
 type LogsInput = Asserted<typeof LogsInputSchema>
 
-export const client: ReturnType<typeof chclient.createClient> = isLocal
-  ? local.createLocalClient(CLICKHOUSE_HOST) as unknown as ReturnType<
-    typeof chclient.createClient
+export const client: ReturnType<typeof createClient> = isLocal
+  ? (await createLocalClient(CLICKHOUSE_HOST)) as unknown as ReturnType<
+    typeof createClient
   >
-  : chclient.createClient({
+  : createClient({
     url: CLICKHOUSE_HOST,
     username: CLICKHOUSE_USER,
     password: CLICKHOUSE_PASSWORD,
@@ -93,11 +93,10 @@ export async function insertLogs(service_name: string, data: LogsInput) {
   const rows = logsToInsert.map((log) => {
     const traceHex = numberToHex128(log.trace_id)
     const spanHex = numberToHex128(log.span_id ?? log.trace_id)
-    const attributes =
-      log.attributes && typeof log.attributes === 'object' &&
+    const attributes = log.attributes && typeof log.attributes === 'object' &&
         !Array.isArray(log.attributes)
-        ? log.attributes
-        : {}
+      ? log.attributes
+      : {}
 
     const row: Record<string, unknown> = {
       timestamp: new Date(log.timestamp),
