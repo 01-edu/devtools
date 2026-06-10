@@ -44,7 +44,6 @@ COPY --from=builder /app/prod_deps/ /app/
 ENV LOCAL_ENV=true
 ENV BASE_URL=/
 ENV PORT=3021
-ENV GEMINI_API_KEY=something
 ENV APP_ENV=prod
 
 EXPOSE 3021

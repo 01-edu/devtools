@@ -28,7 +28,7 @@ const LOCAL_ENV = ENV('LOCAL_ENV', '')
 export const isLocal = LOCAL_ENV === 'yes' || LOCAL_ENV === '1' ||
   LOCAL_ENV === 'true'
 
-export const GEMINI_API_KEY = ENV('GEMINI_API_KEY')
+export const GEMINI_API_KEY = ENV('GEMINI_API_KEY', '')
 
 export const GEMINI_MODEL = ENV(
   'GEMINI_MODEL',

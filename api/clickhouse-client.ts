@@ -53,7 +53,7 @@ type Log = Asserted<typeof LogSchemaOutput>
 type LogsInput = Asserted<typeof LogsInputSchema>
 
 export const client: ReturnType<typeof createClient> = isLocal
-  ? createLocalClient(CLICKHOUSE_HOST) as unknown as ReturnType<
+  ? (await createLocalClient(CLICKHOUSE_HOST)) as unknown as ReturnType<
     typeof createClient
   >
   : createClient({
