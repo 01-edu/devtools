@@ -33,9 +33,7 @@ export function createLogger(serviceName: string): Log {
   ) => {
     const ctx = getContext()
     const attributes =
-      props && typeof props === 'object' && !Array.isArray(props)
-        ? props
-        : {}
+      props && typeof props === 'object' && !Array.isArray(props) ? props : {}
 
     batch.push({
       timestamp: Date.now(),

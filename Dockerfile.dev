@@ -1,0 +1,51 @@
+FROM denoland/deno:latest AS builder
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    build-essential \
+    python3 \
+    npm && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY ./deno.json /app/deno.json
+COPY ./deno.lock /app/deno.lock
+
+RUN deno install
+RUN deno task setup:chdb
+
+RUN mkdir -p /app/prod_deps/node_modules/.deno/chdb@2.0.1/node_modules && \
+    cp -r /app/node_modules/.deno/chdb@2.0.1/node_modules/chdb /app/prod_deps/node_modules/.deno/chdb@2.0.1/node_modules/chdb && \
+    ln -s .deno/chdb@2.0.1/node_modules/chdb /app/prod_deps/node_modules/chdb
+
+COPY ./tasks/vite.ts /app/tasks/vite.ts
+COPY ./web /app/web
+RUN deno cache --allow-scripts=npm:esbuild@0.28.0 --lock=deno.lock tasks/vite.ts web/index.tsx
+ENV BASE_URL="/"
+RUN deno task prod:vite
+
+COPY ./api  /app/api
+COPY ./db /app/db
+RUN deno cache --allow-scripts=npm:esbuild@0.28.0 --lock=deno.lock api/server.ts
+RUN deno task prod:api
+
+
+FROM ubuntu:24.04
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /app/dist/api /app/server
+COPY --from=builder /app/db/functions /app/db/functions
+COPY --from=builder /app/prod_deps/ /app/
+
+ENV LOCAL_ENV=true
+ENV BASE_URL=/
+ENV PORT=3021
+ENV APP_ENV=prod
+
+EXPOSE 3021
+
+CMD ["/app/server", "--env=prod"]

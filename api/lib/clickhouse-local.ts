@@ -1,7 +1,6 @@
 import defer * as chdb from 'chdb'
-
-export function createLocalClient(path: string) {
-  const session = new chdb.Session(path)
+export  function createLocalClient(path: string) {
+  const session = new  chdb.Session(path)
   session.query(`SET date_time_input_format = 'best_effort'`)
 
   return {
