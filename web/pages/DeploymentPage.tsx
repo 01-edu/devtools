@@ -458,12 +458,6 @@ effect(() => {
   }
 })
 
-const RowNumberCell = ({ index }: { index: number }) => (
-  <td class='sticky left-0 bg-base-100 tabular-nums font-medium text-xs text-base-content/60 w-10 min-w-[2.5rem] p-0 pl-1 border-r border-base-300/50 text-left'>
-    {(Number(url.params.tpage) || 0) * pageSize + index + 1}
-  </td>
-)
-
 const TableCell = ({ value, col }: { value: unknown; col?: ColumnDef }) => {
   const config = getColumnConfig(col)
   const isObj = typeof value === 'object' && value !== null
@@ -1380,7 +1374,6 @@ function LogsViewer() {
                       style={logRowStyle.value}
                       class='hover:bg-base-200/50 border-b border-base-300/50 cursor-pointer transition-colors'
                     >
-                      <RowNumberCell index={filteredLogs.indexOf(log) ?? 0} />
                       <td class='p-0 pl-1 font-mono text-xs text-base-content/70 tabular-nums w-44 shrink-0 border-r border-base-300/30 text-left'>
                         <div class='flex items-center gap-2 text-xs'>
                           <Clock class='w-3 h-3 shrink-0 opacity-50' />
