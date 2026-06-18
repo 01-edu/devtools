@@ -993,8 +993,8 @@ const logsPending = new Signal(false)
 const fetchLogs = async (reset = false) => {
   const { dep, lq, sbi } = url.params
   if (!dep || sbi !== 'deployment') return
-  if (logsPending.value) return
-  if (!reset && !logsHasMore.value) return
+  if (logsPending.peek()) return
+  if (!reset && !logsHasMore.peek()) return
 
   logsPending.value = true
   const filterRows = parseFilters('l').filter((r) => r.key !== 'key' && r.value)
@@ -1010,7 +1010,7 @@ const fetchLogs = async (reset = false) => {
     order: r.dir === 'asc' ? 'ASC' : 'DESC' as Order,
   }))
 
-  const offset = reset ? 0 : logsList.value.length
+  const offset = reset ? 0 : logsList.peek().length
   try {
     const data = await api['POST/api/deployment/logs'].fetch({
       deployment: dep || '',
@@ -1038,9 +1038,7 @@ const fetchLogs = async (reset = false) => {
 effect(() => {
   const { dep, sbi } = url.params
   if (dep && sbi === 'deployment') {
-    untracked(() => {
-      fetchLogs(true)
-    })
+    fetchLogs(true)
   }
 })
 
