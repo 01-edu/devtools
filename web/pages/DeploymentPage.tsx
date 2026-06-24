@@ -1010,11 +1010,14 @@ const fetchLogs = async (mode: FetchMode = 'next') => {
     order: r.dir === 'asc' ? 'ASC' : 'DESC' as Order,
   }))
 
+  const currentLogs = logsList.peek()
+  const limit = mode === 'reset' ? 300 : 100
+
   let offset = 0
   if (mode === 'next') {
-    offset = logsStartOffset.peek() + logsList.peek().length
+    offset = Math.max(0, logsStartOffset.peek() + currentLogs.length - 30)
   } else if (mode === 'prev') {
-    offset = Math.max(0, logsStartOffset.peek() - 100)
+    offset = Math.max(0, logsStartOffset.peek() - 70)
   }
 
   try {
@@ -1023,32 +1026,81 @@ const fetchLogs = async (mode: FetchMode = 'next') => {
       filter: filterRows,
       sort: sortRows,
       search: lq || '',
-      limit: 100,
+      limit: limit,
       offset: offset,
     })
-
-    const currentLogs = logsList.peek()
 
     if (mode === 'reset') {
       logsList.value = data
       logsStartOffset.value = 0
-      logsHasMore.value = data.length === 100
+      logsHasMore.value = data.length === 300
     } else if (mode === 'next') {
-      if (currentLogs.length >= 300) {
-        logsList.value = [...currentLogs.slice(100), ...data]
-        logsStartOffset.value += 100
+      const lastItem = currentLogs[currentLogs.length - 1]
+      const matchIndex = lastItem
+        ? data.findIndex((item) => item.id === lastItem.id)
+        : -1
+
+      if (matchIndex !== -1) {
+        const calibratedLastDbIndex = offset + matchIndex
+        const calibratedFirstDbIndex = calibratedLastDbIndex -
+          (currentLogs.length - 1)
+
+        const newItems = data.slice(matchIndex + 1)
+        const combinedNext = [...currentLogs, ...newItems]
+
+        if (combinedNext.length > 300) {
+          const overflow = combinedNext.length - 300
+          logsList.value = combinedNext.slice(overflow)
+          // Correction ici : utilisation de la variable correctement nommée
+          logsStartOffset.value = calibratedFirstDbIndex + overflow
+        } else {
+          logsList.value = combinedNext
+          logsStartOffset.value = calibratedFirstDbIndex
+        }
       } else {
-        logsList.value = [...currentLogs, ...data]
+        const combinedNext = [...currentLogs, ...data]
+        if (combinedNext.length > 300) {
+          const overflow = combinedNext.length - 300
+          logsList.value = combinedNext.slice(overflow)
+          logsStartOffset.value = offset + overflow
+        } else {
+          logsList.value = combinedNext
+          logsStartOffset.value = offset
+        }
       }
       logsHasMore.value = data.length === 100
     } else if (mode === 'prev') {
-      if (currentLogs.length >= 300) {
-        logsList.value = [...data, ...currentLogs.slice(0, 200)]
+      const firstItem = currentLogs[0]
+      const matchIndex = firstItem
+        ? data.findIndex((item) => item.id === firstItem.id)
+        : -1
+
+      if (matchIndex !== -1) {
+        const newItems = data.slice(0, matchIndex)
+        const combinedPrev = [...newItems, ...currentLogs]
+
+        if (combinedPrev.length > 300) {
+          logsList.value = combinedPrev.slice(0, 300)
+        } else {
+          logsList.value = combinedPrev
+        }
+        logsStartOffset.value = offset
+        logsHasMore.value = true
       } else {
-        logsList.value = [...data, ...currentLogs]
+        if (offset === 0) {
+          logsList.value = data
+          logsStartOffset.value = 0
+        } else {
+          const combinedPrev = [...data, ...currentLogs]
+          if (combinedPrev.length > 300) {
+            logsList.value = combinedPrev.slice(0, 300)
+          } else {
+            logsList.value = combinedPrev
+          }
+          logsStartOffset.value = offset
+        }
+        logsHasMore.value = true
       }
-      logsStartOffset.value = Math.max(0, logsStartOffset.peek() - 100)
-      logsHasMore.value = true
     }
   } catch {
     toast('Failed to fetch logs', 'error')
@@ -1068,22 +1120,56 @@ const onScrollLogs = async (e: Event) => {
   const target = e.target as HTMLElement
   if (logsPending.peek()) return
 
-  const isNearBottom =
-    target.scrollHeight - target.scrollTop <= target.clientHeight * 1.5
-  if (isNearBottom && logsHasMore.peek()) {
-    await fetchLogs('next')
+  const currentCount = logsList.peek().length
+  if (currentCount === 0) return
+
+  const scrollTop = target.scrollTop
+  const scrollHeight = target.scrollHeight
+  const clientHeight = target.clientHeight
+
+  const itemHeight = scrollHeight / currentCount
+
+  // Défilement classique si la liste n'est pas encore pleine
+  if (currentCount < 300) {
+    if (scrollHeight - scrollTop <= clientHeight * 1.5 && logsHasMore.peek()) {
+      await fetchLogs('next')
+    }
     return
   }
 
-  const isNearTop = target.scrollTop <= target.clientHeight * 0.5
-  if (isNearTop && logsStartOffset.peek() > 0) {
-    const previousScrollHeight = target.scrollHeight
-    const previousScrollTop = target.scrollTop
-    await fetchLogs('prev')
+  const triggerNextThreshold = itemHeight * (currentCount - 100) // Entrée dans le bloc 3
+  const triggerPrevThreshold = itemHeight * 100 // Entrée dans le bloc 1
+
+  // --- ANTICIPATION VERS LE BAS ---
+  if (scrollTop > triggerNextThreshold && logsHasMore.peek()) {
+    const previousScrollTop = scrollTop
+    const oldOffset = logsStartOffset.peek()
+
+    await fetchLogs('next')
+
+    const removedCount = logsStartOffset.peek() - oldOffset
     requestAnimationFrame(() => {
-      const scrollHeightDifference = target.scrollHeight - previousScrollHeight
-      target.scrollTop = previousScrollTop + scrollHeightDifference
+      const newItemHeight = target.scrollHeight / logsList.peek().length
+      const removedHeight = removedCount * newItemHeight
+      target.scrollTop = Math.max(0, previousScrollTop - removedHeight)
     })
+    return
+  }
+
+  // --- ANTICIPATION VERS LE HAUT ---
+  if (scrollTop < triggerPrevThreshold && logsStartOffset.peek() > 0) {
+    const previousScrollTop = scrollTop
+    const oldOffset = logsStartOffset.peek()
+
+    await fetchLogs('prev')
+
+    const addedCount = oldOffset - logsStartOffset.peek()
+    requestAnimationFrame(() => {
+      const newItemHeight = target.scrollHeight / logsList.peek().length
+      const addedHeight = addedCount * newItemHeight
+      target.scrollTop = previousScrollTop + addedHeight
+    })
+    return
   }
 }
 
