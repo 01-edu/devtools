@@ -980,17 +980,23 @@ function TabNavigation() {
   )
 }
 
+type FetchMode = 'reset' | 'next' | 'prev'
+
 const logsList = new Signal<ApiOutput['POST/api/deployment/logs']>([])
 const logsHasMore = new Signal(true)
 const logsPending = new Signal(false)
+const logsStartOffset = new Signal(0)
 
-const fetchLogs = async (reset = false) => {
+const fetchLogs = async (mode: FetchMode = 'next') => {
   const { dep, lq, sbi } = url.params
   if (!dep || sbi !== 'deployment') return
   if (logsPending.peek()) return
-  if (!reset && !logsHasMore.peek()) return
+
+  if (mode === 'next' && !logsHasMore.peek()) return
+  if (mode === 'prev' && logsStartOffset.peek() === 0) return
 
   logsPending.value = true
+
   const filterRows = parseFilters('l').filter((r) => r.key !== 'key' && r.value)
     .map((r) => ({
       key: r.key,
@@ -1004,7 +1010,13 @@ const fetchLogs = async (reset = false) => {
     order: r.dir === 'asc' ? 'ASC' : 'DESC' as Order,
   }))
 
-  const offset = reset ? 0 : logsList.peek().length
+  let offset = 0
+  if (mode === 'next') {
+    offset = logsStartOffset.peek() + logsList.peek().length
+  } else if (mode === 'prev') {
+    offset = Math.max(0, logsStartOffset.peek() - 100)
+  }
+
   try {
     const data = await api['POST/api/deployment/logs'].fetch({
       deployment: dep || '',
@@ -1015,13 +1027,29 @@ const fetchLogs = async (reset = false) => {
       offset: offset,
     })
 
-    if (reset) {
-      logsList.value = data
-    } else {
-      logsList.value = [...logsList.value, ...data]
-    }
+    const currentLogs = logsList.peek()
 
-    logsHasMore.value = data.length === 100
+    if (mode === 'reset') {
+      logsList.value = data
+      logsStartOffset.value = 0
+      logsHasMore.value = data.length === 100
+    } else if (mode === 'next') {
+      if (currentLogs.length >= 300) {
+        logsList.value = [...currentLogs.slice(100), ...data]
+        logsStartOffset.value += 100
+      } else {
+        logsList.value = [...currentLogs, ...data]
+      }
+      logsHasMore.value = data.length === 100
+    } else if (mode === 'prev') {
+      if (currentLogs.length >= 300) {
+        logsList.value = [...data, ...currentLogs.slice(0, 200)]
+      } else {
+        logsList.value = [...data, ...currentLogs]
+      }
+      logsStartOffset.value = Math.max(0, logsStartOffset.peek() - 100)
+      logsHasMore.value = true
+    }
   } catch {
     toast('Failed to fetch logs', 'error')
   } finally {
@@ -1032,16 +1060,30 @@ const fetchLogs = async (reset = false) => {
 effect(() => {
   const { dep, sbi } = url.params
   if (dep && sbi === 'deployment') {
-    fetchLogs(true)
+    fetchLogs('reset')
   }
 })
 
-const onScrollLogs = (e: Event) => {
+const onScrollLogs = async (e: Event) => {
   const target = e.target as HTMLElement
-  if (target.scrollHeight - target.scrollTop <= target.clientHeight * 1.5) {
-    if (!logsPending.value && logsHasMore.value) {
-      fetchLogs(false)
-    }
+  if (logsPending.peek()) return
+
+  const isNearBottom =
+    target.scrollHeight - target.scrollTop <= target.clientHeight * 1.5
+  if (isNearBottom && logsHasMore.peek()) {
+    await fetchLogs('next')
+    return
+  }
+
+  const isNearTop = target.scrollTop <= target.clientHeight * 0.5
+  if (isNearTop && logsStartOffset.peek() > 0) {
+    const previousScrollHeight = target.scrollHeight
+    const previousScrollTop = target.scrollTop
+    await fetchLogs('prev')
+    requestAnimationFrame(() => {
+      const scrollHeightDifference = target.scrollHeight - previousScrollHeight
+      target.scrollTop = previousScrollTop + scrollHeightDifference
+    })
   }
 }
 
