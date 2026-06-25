@@ -4,6 +4,7 @@ import {
   AlertCircle,
   AlertTriangle,
   ArrowDown,
+  ArrowLeftRight,
   ArrowUp,
   BarChart,
   BarChart2,
@@ -16,9 +17,11 @@ import {
   Database,
   Download,
   FileText,
+  Globe,
   Hash,
   Info,
   Link2,
+  LucideIcon,
   Play,
   Plus,
   RefreshCw,
@@ -52,6 +55,7 @@ export const tableData = api['POST/api/deployment/table/data'].signal()
 export const rowDetailsData = api['POST/api/deployment/table/data'].signal()
 export const logDetailsData = api['POST/api/deployment/logs'].signal()
 export const metricsData = api['GET/api/deployment/metrics-sql'].signal()
+const routerMetricsData = api['GET/api/deployment/metrics-router'].signal()
 
 const toastSignal = new Signal<
   { message: string; type: 'info' | 'error' } | null
@@ -195,7 +199,7 @@ effect(() => {
   dep && schema.fetch({ url: dep })
 })
 
-const tabNames = ['tables', 'queries', 'logs', 'metrics'] as const
+const tabNames = ['tables', 'queries', 'logs', 'metrics', 'routes'] as const
 type TabName = (typeof tabNames)[number]
 
 const activeTab = computed(() => {
@@ -874,7 +878,7 @@ function SchemaPanel() {
 }
 
 const TabButton = (
-  { tabName }: { tabName: 'tables' | 'queries' | 'logs' | 'metrics' },
+  { tabName }: { tabName: TabName },
 ) => (
   <A
     params={{ tab: tabName }}
@@ -918,6 +922,7 @@ function TabNavigation() {
           <TabButton tabName='queries' />
           <TabButton tabName='logs' />
           <TabButton tabName='metrics' />
+          <TabButton tabName='routes' />
         </div>
 
         <div class='flex flex-wrap items-center gap-2 shrink-0'>
@@ -939,7 +944,7 @@ function TabNavigation() {
               />
             </label>
           )}
-          {tab !== 'logs' && (
+          {tab !== 'logs' && tab !== 'routes' && tab !== 'metrics' && (
             <A
               params={{ drawer: tab === 'tables' ? 'insert' : null }}
               onClick={tab === 'queries'
@@ -955,7 +960,7 @@ function TabNavigation() {
               </span>
             </A>
           )}
-          {tab !== 'queries' && tab !== 'metrics' && (
+          {tab !== 'queries' && tab !== 'metrics' && tab !== 'routes' && (
             <>
               <FilterMenu filterKeyOptions={filterKeyOptions} tag={tab} />
               <SortMenu sortKeyOptions={filterKeyOptions} tag={tab} />
@@ -1479,7 +1484,7 @@ const TabViews = {
   ),
   logs: <LogsViewer />,
   metrics: <MetricsViewer />,
-  // Add other tab views here as needed
+  routes: <RouterMetricsViewer />,
 } satisfies Record<TabName, ComponentChildren>
 
 effect(() => {
@@ -1489,9 +1494,17 @@ effect(() => {
   }
 })
 
+effect(() => {
+  const { dep, tab } = url.params
+  if (dep && tab === 'routes') {
+    routerMetricsData.fetch({ deployment: dep })
+  }
+})
+
 // ─── Metrics types ───────────────────────────────────────────────────────────
 
 type Metric = ApiOutput['GET/api/deployment/metrics-sql'][number]
+type RouterMetric = ApiOutput['GET/api/deployment/metrics-router'][number]
 type MetricStatus = NonNullable<Metric['status']>
 type MetricExplain = NonNullable<Metric['explain']>
 
@@ -1518,7 +1531,10 @@ type StatCellProps = {
   width?: string
 }
 
-type MetricRowProps = { metric: Metric & { id: string } }
+type MetricRowProps = {
+  type: 'sql' | 'router'
+  metric: (Metric & { id: string }) | RouterMetric
+}
 type StatusCountersProps = { status: MetricStatus }
 type QueryPlanProps = { explain: MetricExplain }
 
@@ -1836,12 +1852,76 @@ function MetricDetail() {
   )
 }
 
-function MetricRow({ metric }: MetricRowProps) {
-  const isExpanded = url.params.expanded === metric.id
-  const avg = formatDuration(metric.count && (metric.duration / metric.count))
+const methodColors: Record<string, string> = {
+  GET: 'badge-info',
+  POST: 'badge-success',
+  PUT: 'badge-warning',
+  PATCH: 'badge-warning',
+  DELETE: 'badge-error',
+}
+
+const RouteLabel = ({ metric }: { metric: RouterMetric }) => {
+  const colonIdx = metric.key.indexOf(':')
+  const method = colonIdx > -1 ? metric.key.slice(0, colonIdx) : 'GET'
+  const path = colonIdx > -1 ? metric.key.slice(colonIdx + 1) : metric.key
+  return (
+    <div class='flex items-center gap-2'>
+      <span
+        class={`badge badge-sm font-bold uppercase ${
+          methodColors[method] || 'badge-ghost'
+        }`}
+      >
+        {method}
+      </span>
+      <span class='font-mono text-[13px] text-base-content/85 truncate'>
+        {path}
+      </span>
+    </div>
+  )
+}
+
+const SqlMaxDurationCell = ({ metric }: { metric: Metric }) => {
   const maxFmt = metric.max != null ? formatDuration(metric.max) : null
+  return (
+    <StatCell
+      label='Max'
+      value={maxFmt ? maxFmt.value : '—'}
+      unit={maxFmt?.unit}
+      valueClass='text-error/80'
+      unitClass='text-error/40'
+    />
+  )
+}
+
+const RouterErrorsCell = ({ metric }: { metric: RouterMetric }) => {
+  const errorRate = metric.count
+    ? ((metric.error / metric.count) * 100).toFixed(1)
+    : '0.0'
+  return (
+    <StatCell
+      label='Errors'
+      value={errorRate}
+      unit='%'
+      valueClass={Number(errorRate) > 5 ? 'text-error' : 'text-success'}
+      unitClass={Number(errorRate) > 5 ? 'text-error/40' : 'text-success/40'}
+    />
+  )
+}
+
+const MetricRow = ({ type, metric }: MetricRowProps) => {
+  const isSql = type === 'sql'
+  const id = isSql
+    ? (metric as Metric & { id: string }).id
+    : (metric as RouterMetric).key
+  const isExpanded = url.params.expanded === id
+
+  const avg = formatDuration(metric.count ? metric.duration / metric.count : 0)
   const totalFmt = formatDuration(metric.duration)
-  const pct = (metric.duration / stats.value.totalDuration) * 100
+
+  const totalDuration = isSql
+    ? stats.value.totalDuration
+    : routerStats.value.totalDuration
+  const pct = totalDuration ? (metric.duration / totalDuration) * 100 : 0
 
   return (
     <div>
@@ -1849,15 +1929,19 @@ function MetricRow({ metric }: MetricRowProps) {
         class={`px-5 py-3 flex items-center gap-4 cursor-pointer hover:bg-base-200/40 transition-colors ${
           isExpanded ? 'bg-base-200/30' : ''
         }`}
-        params={{ expanded: isExpanded ? null : metric.id }}
+        params={{ expanded: isExpanded ? null : id }}
       >
         <div class='flex-1 min-w-0'>
-          <div
-            ref={(e) => highlightSQL(e)}
-            class='font-mono text-[13px] text-base-content/85 truncate'
-          >
-            {metric.query}
-          </div>
+          {isSql
+            ? (
+              <div
+                ref={(e) => highlightSQL(e)}
+                class='font-mono text-[13px] text-base-content/85 truncate'
+              >
+                {(metric as Metric).query}
+              </div>
+            )
+            : <RouteLabel metric={metric as RouterMetric} />}
           <div class='mt-1.5 h-1 bg-base-200 rounded-full overflow-hidden max-w-[200px]'>
             <div
               class={`h-full rounded-full ${
@@ -1880,13 +1964,9 @@ function MetricRow({ metric }: MetricRowProps) {
             valueClass='text-secondary'
             unitClass='text-secondary/50'
           />
-          <StatCell
-            label='Max'
-            value={maxFmt ? maxFmt.value : '—'}
-            unit={maxFmt?.unit}
-            valueClass='text-error/80'
-            unitClass='text-error/40'
-          />
+          {isSql
+            ? <SqlMaxDurationCell metric={metric as Metric} />
+            : <RouterErrorsCell metric={metric as RouterMetric} />}
           <StatCell
             label='Total'
             value={totalFmt.value}
@@ -1900,52 +1980,54 @@ function MetricRow({ metric }: MetricRowProps) {
           </div>
         </div>
       </A>
-      {isExpanded && <MetricDetail />}
+      {isExpanded && isSql && <MetricDetail />}
     </div>
   )
 }
 
-function MetricsSummaryBar() {
-  const totalDuration = formatDuration(stats.value.totalDuration)
+type SummaryItem = {
+  icon: LucideIcon
+  value: string | number
+  label: string
+}
+
+function MetricsSummaryBar({ items }: { items: SummaryItem[] }) {
   return (
     <div class='flex items-center gap-6 px-5 py-3 border-b border-base-200 shrink-0 bg-base-100'>
-      <div class='flex items-center gap-2 text-sm'>
-        <Activity class='w-4 h-4 text-base-content/40' />
-        <span class='font-semibold text-base-content'>
-          {stats.value.totalCalls.toLocaleString()}
-        </span>
-        <span class='text-base-content/40'>total calls</span>
-      </div>
-      <div class='w-px h-4 bg-base-300' />
-      <div class='flex items-center gap-2 text-sm'>
-        <Timer class='w-4 h-4 text-base-content/40' />
-        <span class='font-semibold text-base-content'>
-          {totalDuration.value} {totalDuration.unit}
-        </span>
-        <span class='text-base-content/40'>total time</span>
-      </div>
-      <div class='w-px h-4 bg-base-300' />
-      <div class='flex items-center gap-2 text-sm'>
-        <BarChart2 class='w-4 h-4 text-base-content/40' />
-        <span class='font-semibold text-base-content'>{stats.value.count}</span>
-        <span class='text-base-content/40'>unique queries</span>
-      </div>
+      {items.map((item, index) => (
+        <>
+          {index > 0 && <div class='w-px h-4 bg-base-300' />}
+          <div class='flex items-center gap-2 text-sm' key={item.label}>
+            <item.icon class='w-4 h-4 text-base-content/40' />
+            <span class='font-semibold text-base-content'>
+              {item.value}
+            </span>
+            <span class='text-base-content/40'>{item.label}</span>
+          </div>
+        </>
+      ))}
     </div>
   )
 }
 
-function MetricsEmpty() {
+type MetricsEmptyProps = {
+  icon: LucideIcon
+  title: string
+  description: string
+}
+
+const MetricsEmpty = (
+  { icon: Icon, title, description }: MetricsEmptyProps,
+) => {
   return (
     <div class='flex flex-col items-center justify-center py-20 gap-4 text-center'>
       <div class='h-16 w-16 rounded-full bg-base-200 flex items-center justify-center'>
-        <BarChart class='w-8 h-8 text-base-content/20' />
+        <Icon class='w-8 h-8 text-base-content/20' />
       </div>
       <div>
-        <h3 class='font-semibold text-base-content mb-1'>
-          No metrics recorded
-        </h3>
+        <h3 class='font-semibold text-base-content mb-1'>{title}</h3>
         <p class='text-sm text-base-content/50 max-w-xs mx-auto'>
-          Execute database queries to see performance data here.
+          {description}
         </p>
       </div>
     </div>
@@ -1957,6 +2039,26 @@ function MetricsEmpty() {
 function MetricsViewer() {
   const isPending = metricsData.pending
   const sorted = sortedMetrics.value
+  const totalDuration = formatDuration(stats.value.totalDuration)
+
+  const items = [
+    {
+      icon: Activity,
+      value: stats.value.totalCalls.toLocaleString(),
+      label: 'total calls',
+    },
+    {
+      icon: Timer,
+      value: `${totalDuration.value} ${totalDuration.unit}`,
+      label: 'total time',
+    },
+    {
+      icon: BarChart2,
+      value: stats.value.count,
+      label: 'unique queries',
+    },
+  ]
+
   return (
     <div class='flex flex-col h-full min-h-0 relative bg-base-100'>
       {!!isPending && (
@@ -1964,10 +2066,92 @@ function MetricsViewer() {
           <div class='h-full bg-primary animate-progress origin-left' />
         </div>
       )}
-      <MetricsSummaryBar />
+      <MetricsSummaryBar items={items} />
       <div class='flex-1 min-h-0 overflow-y-auto divide-y divide-base-200'>
-        {sorted.map((metric) => <MetricRow key={metric.id} metric={metric} />)}
-        {sorted.length === 0 && !isPending && <MetricsEmpty />}
+        {sorted.map((metric) => (
+          <MetricRow key={metric.id} type='sql' metric={metric} />
+        ))}
+        {sorted.length === 0 && !isPending && (
+          <MetricsEmpty
+            icon={BarChart}
+            title='No metrics recorded'
+            description='Execute database queries to see performance data here.'
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── RouterMetricsViewer ────────────────────────────────────────────────────
+
+const sortedRouterMetrics = computed(() => {
+  const data = routerMetricsData.data || []
+  return [...data].sort((a, b) => b.duration - a.duration)
+})
+
+const routerStats = computed(() => {
+  const metrics = sortedRouterMetrics.value
+  return {
+    count: metrics.length,
+    totalCalls: metrics.reduce((acc, m) => acc + (m.count || 0), 0),
+    totalDuration: metrics.reduce((acc, m) => acc + (m.duration || 0), 0),
+    totalErrors: metrics.reduce((acc, m) => acc + (m.error || 0), 0),
+    totalSuccess: metrics.reduce((acc, m) => acc + (m.success || 0), 0),
+  }
+})
+
+function RouterMetricsViewer() {
+  const isPending = routerMetricsData.pending
+  const sorted = sortedRouterMetrics.value
+  const totalDuration = formatDuration(routerStats.value.totalDuration)
+  const errorRate = routerStats.value.totalCalls
+    ? ((routerStats.value.totalErrors / routerStats.value.totalCalls) * 100)
+      .toFixed(1)
+    : '0.0'
+
+  const items = [
+    {
+      icon: Activity,
+      value: routerStats.value.totalCalls.toLocaleString(),
+      label: 'total requests',
+    },
+    {
+      icon: Timer,
+      value: `${totalDuration.value} ${totalDuration.unit}`,
+      label: 'total time',
+    },
+    {
+      icon: Globe,
+      value: routerStats.value.count,
+      label: 'routes',
+    },
+    {
+      icon: XCircle,
+      value: `${errorRate}%`,
+      label: 'error rate',
+    },
+  ]
+
+  return (
+    <div class='flex flex-col h-full min-h-0 relative bg-base-100'>
+      {!!isPending && (
+        <div class='absolute top-0 left-0 right-0 h-0.5 z-20 overflow-hidden bg-base-300'>
+          <div class='h-full bg-primary animate-progress origin-left' />
+        </div>
+      )}
+      <MetricsSummaryBar items={items} />
+      <div class='flex-1 min-h-0 overflow-y-auto divide-y divide-base-200'>
+        {sorted.map((metric) => (
+          <MetricRow key={metric.key} type='router' metric={metric} />
+        ))}
+        {sorted.length === 0 && !isPending && (
+          <MetricsEmpty
+            icon={ArrowLeftRight}
+            title='No route metrics recorded'
+            description='Make HTTP requests to the deployment to see route performance data here.'
+          />
+        )}
       </div>
     </div>
   )
