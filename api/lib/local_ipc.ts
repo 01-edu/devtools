@@ -84,8 +84,8 @@ const commands: Record<
           projectId,
           logsEnabled: true,
           databaseEnabled: true,
-          sqlEndpoint: sqlEndpoint || `http://${url}/api/sql`,
-          sqlToken: 'local',
+          endpoint: sqlEndpoint || `http://${url}/api/sql`,
+          accessToken: 'local',
           tokenSalt: 'local',
         })
       } else {
@@ -94,8 +94,8 @@ const commands: Record<
           url,
           logsEnabled: true,
           databaseEnabled: true,
-          sqlEndpoint: sqlEndpoint || `http://${url}/api/sql`,
-          sqlToken: 'local',
+          endpoint: sqlEndpoint || `http://${url}/api/sql`,
+          accessToken: 'local',
           tokenSalt: 'local',
         })
       }

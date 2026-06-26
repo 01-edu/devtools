@@ -57,8 +57,8 @@ async function seed() {
       projectId: project.slug,
       databaseEnabled: false,
       logsEnabled: true,
-      sqlEndpoint: undefined,
-      sqlToken: undefined,
+      endpoint: undefined,
+      accessToken: undefined,
       url,
       tokenSalt: crypto.randomUUID(),
     })

@@ -41,7 +41,7 @@ export async function runSQL<T>(
   params?: unknown,
 ): Promise<T> {
   try {
-    return await fetchJson<T>(`${endpoint}/execute`, {
+    return await fetchJson<T>(`${endpoint}/sql/execute`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -137,10 +137,10 @@ type TableInfo = {
 export async function refreshOneSchema(
   dep: ReturnType<typeof DeploymentsCollection.get>,
 ) {
-  if (!dep || !dep.databaseEnabled || !dep.sqlEndpoint || !dep.sqlToken) return
+  if (!dep || !dep.databaseEnabled || !dep.endpoint || !dep.accessToken) return
   try {
-    const dialect = await detectDialect(dep.sqlEndpoint, dep.sqlToken)
-    const rows = await fetchSchema(dep.sqlEndpoint, dep.sqlToken, dialect)
+    const dialect = await detectDialect(dep.endpoint, dep.accessToken)
+    const rows = await fetchSchema(dep.endpoint, dep.accessToken, dialect)
     if (!rows || !rows.length) return
     const tableMap = new Map<string, TableInfo>()
     for (const r of rows) {
@@ -302,8 +302,8 @@ export const fetchTablesData = async (
   params: FetchTablesParams,
   columnsMap: Map<string, ColumnInfo>,
 ) => {
-  const { sqlEndpoint, sqlToken } = params.deployment
-  if (!sqlToken || !sqlEndpoint) {
+  const { endpoint, accessToken } = params.deployment
+  if (!endpoint || !accessToken) {
     throw new respond.BadRequestError({
       message: 'Missing SQL endpoint or token for this deployment',
     })
@@ -345,8 +345,8 @@ export const fetchTablesData = async (
   const countQuery =
     `SELECT COUNT(*) as count FROM ${params.table} ${whereClause}`
   const rows = await runSQL<Record<string, unknown>[]>(
-    sqlEndpoint,
-    sqlToken,
+    endpoint,
+    accessToken,
     query,
   )
 
@@ -362,7 +362,7 @@ export const fetchTablesData = async (
   return {
     rows: transformedRows,
     totalRows: limit > 0
-      ? ((await runSQL<{ count: number }[]>(sqlEndpoint, sqlToken, countQuery))[
+      ? ((await runSQL<{ count: number }[]>(endpoint, accessToken, countQuery))[
         0
       ].count) as number
       : rows.length,
@@ -374,8 +374,8 @@ export const insertTableData = async (
   table: string,
   data: Record<string, unknown>,
 ) => {
-  const { sqlEndpoint, sqlToken } = deployment
-  if (!sqlToken || !sqlEndpoint) {
+  const { endpoint, accessToken } = deployment
+  if (!endpoint || !accessToken) {
     log.error('insert-table-data-missing-config', {
       deployment: deployment.url,
       table,
@@ -401,7 +401,7 @@ export const insertTableData = async (
   const query = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${
     values.join(', ')
   })`
-  const rows = await runSQL(sqlEndpoint, sqlToken, query)
+  const rows = await runSQL(endpoint, accessToken, query)
 
   // Apply read transformer pipeline
   return await applyReadTransformers(
@@ -419,9 +419,9 @@ export const updateTableData = async (
   pk: { key: string; value: unknown },
   data: Record<string, unknown>,
 ) => {
-  const { sqlEndpoint, sqlToken } = deployment
+  const { endpoint, accessToken } = deployment
 
-  if (!sqlToken || !sqlEndpoint) {
+  if (!endpoint || !accessToken) {
     log.error('update-table-data-missing-config', {
       deployment: deployment.url,
       table,
@@ -457,7 +457,7 @@ export const updateTableData = async (
     sets.join(', ')
   } WHERE ${pk.key} = ${pkVal}`
 
-  const rows = await runSQL(sqlEndpoint, sqlToken, query)
+  const rows = await runSQL(endpoint, accessToken, query)
 
   // Apply read transformer pipeline
   return await applyReadTransformers(

@@ -58,8 +58,8 @@ export const DeploymentDef = OBJ({
   url: STR('The URL of the deployment'),
   logsEnabled: BOOL('Are logs enabled for this deployment?'),
   databaseEnabled: BOOL('Is the database enabled for this deployment?'),
-  sqlEndpoint: optional(STR('The SQL execution endpoint for the database')),
-  sqlToken: optional(STR('The security token for the SQL endpoint')),
+  endpoint: optional(STR('The SQL execution endpoint for the database')),
+  accessToken: optional(STR('The security token for the SQL endpoint')),
 }, 'The deployment schema definition')
 export type Deployment = Asserted<typeof DeploymentDef>
 

@@ -175,8 +175,8 @@ const deploymentOutput = OBJ({
   url: STR('The URL of the deployment'),
   logsEnabled: BOOL('Whether logging is enabled'),
   databaseEnabled: BOOL('Whether the database is enabled'),
-  sqlEndpoint: optional(STR('The SQL endpoint')),
-  sqlToken: optional(STR('The SQL token')),
+  endpoint: optional(STR('The SQL endpoint')),
+  accessToken: optional(STR('The SQL token')),
   createdAt: optional(NUM('The creation date of the deployment')),
   updatedAt: optional(NUM('The last update date of the deployment')),
   token: optional(STR('The deployment token')),
@@ -709,11 +709,11 @@ const defs = {
   'GET/api/deployment/query': route({
     authorize: withUserSession,
     fn: async (ctx, { deployment, sql }) => {
-      const { sqlEndpoint, sqlToken } = await withDeploymentTableAccess(
+      const { endpoint, accessToken } = await withDeploymentTableAccess(
         ctx,
         deployment,
       )
-      if (!sqlEndpoint || !sqlToken) {
+      if (!endpoint || !accessToken) {
         throw new respond.BadRequestError({
           message: 'SQL endpoint or token not configured for deployment',
         })
@@ -722,8 +722,8 @@ const defs = {
       try {
         const startTime = performance.now()
         const data = await runSQL<Record<string, unknown>[]>(
-          sqlEndpoint,
-          sqlToken,
+          endpoint,
+          accessToken,
           sql,
         )
         const duration = (performance.now() - startTime) / 1000
@@ -761,20 +761,20 @@ const defs = {
   'GET/api/deployment/metrics-sql': route({
     authorize: withUserSession,
     fn: async (ctx, { deployment }) => {
-      const { sqlEndpoint, sqlToken } = await withDeploymentTableAccess(
+      const { endpoint, accessToken } = await withDeploymentTableAccess(
         ctx,
         deployment,
       )
-      if (!sqlEndpoint || !sqlToken) {
+      if (!endpoint || !accessToken) {
         throw new respond.BadRequestError({
           message: 'SQL endpoint or token not configured for deployment',
         })
       }
 
       try {
-        return await fetch(`${sqlEndpoint}/metrics`, {
+        return await fetch(`${endpoint}/sql/metrics`, {
           method: 'GET',
-          headers: { Authorization: `Bearer ${sqlToken}` },
+          headers: { Authorization: `Bearer ${accessToken}` },
         })
       } catch (err) {
         throw new respond.InternalServerErrorError({
@@ -799,10 +799,7 @@ const defs = {
         url: dep.url,
       })
       try {
-        const urlStr = dep.url.startsWith('http')
-          ? dep.url
-          : `${isLocal ? 'http' : 'https'}://${dep.url}`
-        return await fetchJson(`${urlStr}/api/doc`, {
+        return await fetchJson(`${dep.endpoint}/doc`, {
           method: 'GET',
         })
       } catch (err) {
