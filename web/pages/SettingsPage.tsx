@@ -356,8 +356,8 @@ const handleSubmit = async (e: TargetedEvent<HTMLFormElement>) => {
       projectId,
       logsEnabled: false,
       databaseEnabled: false,
-      sqlEndpoint: null,
-      sqlToken: null,
+      endpoint: null,
+      accessToken: null,
     })
     deployments.fetch({ project: projectId })
     navigate({
@@ -573,8 +573,8 @@ const handleDeploymentSubmit = async (e: TargetedEvent<HTMLFormElement>) => {
       projectId: project.data!.slug,
       logsEnabled,
       databaseEnabled,
-      sqlEndpoint: (fd.get('sql-endpoint') as string) || undefined,
-      sqlToken: (fd.get('sql-token') as string) || undefined,
+      endpoint: (fd.get('endpoint') as string) || undefined,
+      accessToken: (fd.get('token') as string) || undefined,
     })
     getDeployment.fetch({ url: dep.url })
     navigate({
@@ -652,25 +652,25 @@ const DeploymentsSettingsPage = () => {
                 <LogsTokenSection deploymentUrl={dep.url} />
               </Accordion>
               <Accordion
-                label='Database Enabled'
+                label='Deployment Access'
                 name='databaseEnabled'
                 value={dep.databaseEnabled}
                 editKey='deployment'
                 urlKey='db'
               >
                 <div class='space-y-2'>
-                  <Label text='SQL Endpoint' desc='database connection URL' />
+                  <Label text='Endpoint' desc='service connection URL' />
                   <Input
-                    name='sql-endpoint'
-                    value={dep.sqlEndpoint || ''}
+                    name='endpoint'
+                    value={dep.endpoint || ''}
                     editKey='deployment'
                     placeholder='https://...'
                     mono
                   />
-                  <Label text='SQL Token' desc='auth token for database' />
+                  <Label text='Access Token' desc='auth token' />
                   <Input
-                    name='sql-token'
-                    value={dep.sqlToken || ''}
+                    name='token'
+                    value={dep.accessToken || ''}
                     editKey='deployment'
                     secret
                     visKey='sql-vis'
