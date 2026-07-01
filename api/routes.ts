@@ -793,10 +793,7 @@ const defs = {
     fn: async (ctx, { deployment }) => {
       const dep = await withDeploymentTableAccess(ctx, deployment)
       try {
-        const urlStr = dep.url.startsWith('http')
-          ? dep.url
-          : `${isLocal ? 'http' : 'https'}://${dep.url}`
-        return await fetchJson(`${urlStr}/api/router/metrics`, {
+        return await fetchJson(`${dep.endpoint}/router/metrics`, {
           method: 'GET',
         })
       } catch (err) {
@@ -833,7 +830,7 @@ const defs = {
         throw new respond.NotFoundError({ message: 'Deployment not found' })
       }
       log.info('fetching-api-doc', {
-        url: dep.url,
+        url: dep.endpoint,
       })
       try {
         return await fetchJson(`${dep.endpoint}/doc`, {
