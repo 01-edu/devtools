@@ -788,6 +788,40 @@ const defs = {
     output: ARR(MetricSchema, 'Collected query metrics'),
     description: 'Get SQL metrics from the deployment',
   }),
+  'GET/api/deployment/metrics-router': route({
+    authorize: withUserSession,
+    fn: async (ctx, { deployment }) => {
+      const dep = await withDeploymentTableAccess(ctx, deployment)
+      try {
+        return await fetchJson(`${dep.endpoint}/router/metrics`, {
+          method: 'GET',
+        })
+      } catch (err) {
+        log.error('fetch-router-metrics-error', { error: err })
+        throw new respond.InternalServerErrorError({
+          message: err instanceof Error
+            ? err.message
+            : 'Failed to fetch router metrics',
+        })
+      }
+    },
+    input: OBJ({ deployment: STR("The deployment's URL") }),
+    output: ARR(
+      OBJ({
+        key: STR('Route key (method:path) allow to identify which route'),
+        duration: NUM(
+          'Total time the route handler take to respond, in milliseconds',
+        ),
+        count: NUM('How many times the route was called'),
+        error: NUM('Number of time it responded with a status 400 or above'),
+        success: NUM(
+          'Number of time it responded with a status under 399 (Success, Redirect and Info)',
+        ),
+      }, 'Route metrics'),
+      'Collected route metrics',
+    ),
+    description: 'Get router metrics from the deployment',
+  }),
   'GET/api/deployment/doc': route({
     authorize: withUserSession,
     fn: async (_ctx, { deployment }) => {
@@ -796,7 +830,7 @@ const defs = {
         throw new respond.NotFoundError({ message: 'Deployment not found' })
       }
       log.info('fetching-api-doc', {
-        url: dep.url,
+        url: dep.endpoint,
       })
       try {
         return await fetchJson(`${dep.endpoint}/doc`, {
