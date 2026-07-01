@@ -795,6 +795,10 @@ const defs = {
       try {
         return await fetchJson(`${dep.endpoint}/router/metrics`, {
           method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${dep.accessToken}`,
+          },
         })
       } catch (err) {
         log.error('fetch-router-metrics-error', { error: err })
