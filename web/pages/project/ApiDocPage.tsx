@@ -141,7 +141,7 @@ const ObjectDefinition = ({
   )
 }
 
-const TypeDefinition = ({
+export const TypeDefinition = ({
   typeName,
   doc,
 }: {

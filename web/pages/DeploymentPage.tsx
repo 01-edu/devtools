@@ -46,6 +46,8 @@ import { QueryHistory } from '../components/QueryHistory.tsx'
 import { DeploymentHeader } from '../components/DeploymentHeader.tsx'
 import type { ComponentChildren } from 'preact'
 import { querier, queriesHistory, runQuery } from '../lib/shared.tsx'
+import { apiDocs, TypeDefinition } from './project/ApiDocPage.tsx'
+import type { EndpointDoc } from './project/ApiDocPage.tsx'
 
 type AnyRecord = Record<string, unknown>
 // API signals for schema and table data
@@ -1501,6 +1503,14 @@ effect(() => {
   }
 })
 
+// Fetch API docs when the routes tab is active so expanded rows can show route documentation
+effect(() => {
+  const { dep, tab } = url.params
+  if (dep && tab === 'routes') {
+    apiDocs.fetch({ deployment: dep })
+  }
+})
+
 // ─── Metrics types ───────────────────────────────────────────────────────────
 
 type Metric = ApiOutput['GET/api/deployment/metrics-sql'][number]
@@ -1852,6 +1862,107 @@ function MetricDetail() {
   )
 }
 
+function RouteMetricDetail() {
+  const expanded = url.params.expanded
+  const sorted = sortedRouterMetrics.value
+  const metric = expanded && sorted.find((m) => m.key === expanded)
+  if (!metric) {
+    expanded && navigate({ params: { expanded: null }, replace: true })
+    return null
+  }
+
+  const colonIdx = metric.key.indexOf(':')
+  const method = colonIdx > -1 ? metric.key.slice(0, colonIdx) : 'GET'
+  const path = colonIdx > -1 ? metric.key.slice(colonIdx + 1) : metric.key
+
+  const endpoint = apiDocs.data?.find((d) =>
+    d.method === method && d.path === path
+  ) as EndpointDoc | undefined
+
+  const inputType = endpoint && (
+    <TypeDefinition typeName='Input' doc={endpoint.input} />
+  )
+  const outputType = endpoint && (
+    <TypeDefinition typeName='Output' doc={endpoint.output} />
+  )
+
+  return (
+    <div class='px-5 pb-5 pt-4 bg-base-200/20 border-t border-base-200 space-y-5'>
+      <div>
+        <div class='text-[10px] font-bold uppercase tracking-widest text-base-content/40 mb-2 flex items-center gap-1.5'>
+          <FileText class='w-3.5 h-3.5' /> Route Documentation
+        </div>
+        {endpoint
+          ? (
+            <div class='bg-base-100 rounded-lg border border-base-200 p-4 space-y-4'>
+              <div class='flex items-center gap-3 flex-wrap'>
+                <span
+                  class={`badge badge-sm font-bold uppercase ${
+                    methodColors[method] || 'badge-ghost'
+                  }`}
+                >
+                  {method}
+                </span>
+                <span class='font-mono text-sm text-base-content/85'>
+                  {path}
+                </span>
+                {endpoint.requiresAuth && (
+                  <span class='badge badge-warning badge-outline badge-xs'>
+                    Requires Auth
+                  </span>
+                )}
+              </div>
+              {endpoint.description && (
+                <p class='text-sm text-base-content/70'>
+                  {endpoint.description}
+                </p>
+              )}
+              {endpoint.requiresAuth && endpoint.authFunction && (
+                <p class='text-xs text-base-content/50'>
+                  Auth Function:{' '}
+                  <code class='bg-base-200 px-1 rounded'>
+                    {endpoint.authFunction}
+                  </code>
+                </p>
+              )}
+              <div class='grid grid-cols-1 xl:grid-cols-2 gap-4 pt-2'>
+                <div>
+                  <div class='text-[10px] font-bold uppercase tracking-widest text-base-content/40 mb-2'>
+                    Input
+                  </div>
+                  <pre class='bg-base-200/30 rounded-lg border border-base-200 p-3 overflow-x-auto text-sm font-mono min-h-[120px]'>
+                    {inputType || (
+                      <span class='text-xs text-base-content/40 italic'>
+                        No input documented
+                      </span>
+                    )}
+                  </pre>
+                </div>
+                <div>
+                  <div class='text-[10px] font-bold uppercase tracking-widest text-base-content/40 mb-2'>
+                    Output
+                  </div>
+                  <pre class='bg-base-200/30 rounded-lg border border-base-200 p-3 overflow-x-auto text-sm font-mono min-h-[120px]'>
+                    {outputType || (
+                      <span class='text-xs text-base-content/40 italic'>
+                        No output documented
+                      </span>
+                    )}
+                  </pre>
+                </div>
+              </div>
+            </div>
+          )
+          : (
+            <div class='bg-base-100 rounded-lg border border-base-200 p-4 text-sm text-base-content/60'>
+              No API documentation found for this route.
+            </div>
+          )}
+      </div>
+    </div>
+  )
+}
+
 const methodColors: Record<string, string> = {
   GET: 'badge-info',
   POST: 'badge-success',
@@ -1980,7 +2091,7 @@ const MetricRow = ({ type, metric }: MetricRowProps) => {
           </div>
         </div>
       </A>
-      {isExpanded && isSql && <MetricDetail />}
+      {isExpanded && (isSql ? <MetricDetail /> : <RouteMetricDetail />)}
     </div>
   )
 }
