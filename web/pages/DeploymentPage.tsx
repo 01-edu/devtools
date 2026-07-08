@@ -105,19 +105,19 @@ const findTableWithTraceColumn = () => {
   const currentTableDef = schema.data?.tables?.find((t) =>
     t.table === currentTable
   )
-  const currentTraceCol = currentTableDef?.columns.find((c) => isTraceColumn(c))
+  const currentTraceCol = currentTableDef?.columns.find(isTraceColumn)
   if (currentTable && currentTraceCol) {
     return { table: currentTable, column: currentTraceCol.name }
   }
 
   const tableWithTrace = schema.data?.tables?.find((t) =>
-    t.columns.some((c) => isTraceColumn(c))
+    t.columns.some(isTraceColumn)
   )
   if (!tableWithTrace) return null
 
   return {
     table: tableWithTrace.table,
-    column: tableWithTrace.columns.find((c) => isTraceColumn(c))!.name,
+    column: tableWithTrace.columns.find(isTraceColumn)!.name,
   }
 }
 
@@ -1094,19 +1094,11 @@ const onScrollLogs = (e: Event) => {
 }
 
 const parseHex128 = (() => {
-  const alphabet = new TextEncoder().encode('0123456789abcdef')
-  const alphabetMap = new Uint8Array(256)
-  const enc = new TextEncoder()
-  alphabet.forEach((c, i) => alphabetMap[c] = i)
+  const output = new Uint8Array(8)
+  const view = new DataView(output.buffer)
   return (encoded: string) => {
-    const bytes = enc.encode(encoded)
-    const buffer = new Uint8Array(8)
-    const view = new DataView(buffer.buffer)
-    let i = -1
-    while (++i < 8) {
-      const hi = alphabetMap[bytes[i * 2]]!
-      const lo = alphabetMap[bytes[i * 2 + 1]]!
-      buffer[i] = (hi << 4) | lo
+    for (let i = 0; i < 8; i++) {
+      output[i] = parseInt(encoded.slice(i * 2, i * 2 + 2), 16)
     }
     const value = view.getFloat64(0, false)
     return {
@@ -1118,19 +1110,11 @@ const parseHex128 = (() => {
 })()
 
 const numberToHex128 = (() => {
-  const alphabet = new TextEncoder().encode('0123456789abcdef')
-  const output = new Uint8Array(16)
-  const view = new DataView(new Uint8Array(8).buffer)
-  const dec = new TextDecoder()
+  const output = new Uint8Array(8)
+  const view = new DataView(output.buffer)
   return (id: number) => {
     view.setFloat64(0, id, false)
-    let i = -1
-    while (++i < 8) {
-      const x = view.getUint8(i)
-      output[i * 2] = alphabet[x >> 4]
-      output[i * 2 + 1] = alphabet[x & 0xF]
-    }
-    return dec.decode(output)
+    return output.toHex()
   }
 })()
 
