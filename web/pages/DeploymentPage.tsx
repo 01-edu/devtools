@@ -95,6 +95,32 @@ const getColumnConfig = (col?: ColumnDef) => {
     COLUMN_STYLES.default
 }
 
+const isTraceColumn = (col?: ColumnDef) => {
+  const name = col?.name.toLowerCase() || ''
+  return name === 'trace' || name === 'trace_id'
+}
+
+const findTableWithTraceColumn = () => {
+  const currentTable = url.params.table || schema.data?.tables?.[0]?.table
+  const currentTableDef = schema.data?.tables?.find((t) =>
+    t.table === currentTable
+  )
+  const currentTraceCol = currentTableDef?.columns.find(isTraceColumn)
+  if (currentTable && currentTraceCol) {
+    return { table: currentTable, column: currentTraceCol.name }
+  }
+
+  const tableWithTrace = schema.data?.tables?.find((t) =>
+    t.columns.some(isTraceColumn)
+  )
+  if (!tableWithTrace) return null
+
+  return {
+    table: tableWithTrace.table,
+    column: tableWithTrace.columns.find(isTraceColumn)!.name,
+  }
+}
+
 const isDateColumn = (col?: ColumnDef, value?: unknown) => {
   const type = col?.type || ''
   const name = col?.name || ''
@@ -165,26 +191,43 @@ const DataCell = (
   const isEnum = col?.relation?.type === 'enum'
   const isTableRel = col?.relation?.type === 'table'
   const isPK = col?.isPrimaryKey
+  const isTraceCol = isTraceColumn(col)
   const rawValue = row[name]
 
   const value = isEnum ? (row[`inline_${name}`] ?? rawValue) : rawValue
 
+  const traceParams = isTraceCol && !!rawValue
+    ? {
+      tab: 'logs',
+      drawer: null,
+      'row-id': null,
+      rt: null,
+      fl: `trace_id,eq,${numberToHex128(Number(rawValue))}`,
+      lq: null,
+      sl: null,
+    }
+    : null
+
   return (
     <td class='align-top min-w-[6rem] p-0 border-r border-base-300/30 font-normal text-left'>
-      {(isTableRel || isPK) && !!rawValue
+      {(isTableRel || isPK || traceParams) && !!rawValue
         ? (
           <A
-            params={{
+            params={traceParams || {
               drawer: 'view-row',
               rt: isPK ? null : col?.relation?.table,
               'row-id': String(rawValue),
             }}
             class={`relative z-20 flex itsem-center gap-1 group/rel link no-underline ${config.color}`}
+            title={isTraceCol ? `View logs for trace ${rawValue}` : undefined}
             onClick={(e) => e.stopPropagation()}
           >
             <TableCell value={value} col={col} />
             {isTableRel && (
               <Link2 class='h-3 w-3 opacity-0 group-hover/rel:opacity-100 transition-opacity shrink-0' />
+            )}
+            {isTraceCol && (
+              <ArrowLeftRight class='h-3 w-3 opacity-0 group-hover/rel:opacity-100 transition-opacity shrink-0' />
             )}
           </A>
         )
@@ -1051,19 +1094,11 @@ const onScrollLogs = (e: Event) => {
 }
 
 const parseHex128 = (() => {
-  const alphabet = new TextEncoder().encode('0123456789abcdef')
-  const alphabetMap = new Uint8Array(256)
-  const enc = new TextEncoder()
-  alphabet.forEach((c, i) => alphabetMap[c] = i)
+  const output = new Uint8Array(8)
+  const view = new DataView(output.buffer)
   return (encoded: string) => {
-    const bytes = enc.encode(encoded)
-    const buffer = new Uint8Array(8)
-    const view = new DataView(buffer.buffer)
-    let i = -1
-    while (++i < 8) {
-      const hi = alphabetMap[bytes[i * 2]]!
-      const lo = alphabetMap[bytes[i * 2 + 1]]!
-      buffer[i] = (hi << 4) | lo
+    for (let i = 0; i < 8; i++) {
+      output[i] = parseInt(encoded.slice(i * 2, i * 2 + 2), 16)
     }
     const value = view.getFloat64(0, false)
     return {
@@ -1071,6 +1106,15 @@ const parseHex128 = (() => {
       short: encoded.slice(8),
       hue: (((value - Math.trunc(value)) * 100000) % 3600) / 10,
     }
+  }
+})()
+
+const numberToHex128 = (() => {
+  const output = new Uint8Array(8)
+  const view = new DataView(output.buffer)
+  return (id: number) => {
+    view.setFloat64(0, id, false)
+    return output.toHex()
   }
 })()
 
@@ -1261,6 +1305,73 @@ const BodyBlock = ({ body }: { body: string }) => (
     <pre class='text-sm font-mono whitespace-pre-wrap break-all bg-base-200/50 rounded p-2'>{body}</pre>
   </div>
 )
+
+const RelatedTraceButton = (
+  { direction }: { direction: 'tables' | 'logs' },
+) => {
+  const isTables = direction === 'tables'
+
+  const row = rowDetailsData.data?.rows?.[0] as AnyRecord | undefined
+  const tableName = url.params.rt || url.params.table ||
+    schema.data?.tables?.[0]?.table
+  const tableDef = schema.data?.tables?.find((t) => t.table === tableName)
+  const traceCol = tableDef?.columns.find((c) => isTraceColumn(c))
+  const logId = url.params['log-id']
+
+  if (isTables && !logId) return null
+  if (!isTables && !traceCol) return null
+
+  const rawValue = isTables
+    ? logDetailsData.data?.[0].trace_id
+    : row?.[traceCol!.name]
+
+  if (!rawValue) return null
+  const trace = isTables
+    ? parseHex128(String(rawValue)).value
+    : numberToHex128(Number(rawValue))
+
+  const target = isTables ? findTableWithTraceColumn() : null
+  if (isTables && !target) return null
+
+  const params = isTables
+    ? {
+      tab: 'tables' as const,
+      table: target!.table,
+      drawer: null,
+      'log-id': null,
+      ft: `${target!.column},eq,${trace}`,
+      qt: null,
+      st: null,
+      tpage: null,
+    }
+    : {
+      tab: 'logs' as const,
+      drawer: null,
+      'row-id': null,
+      rt: null,
+      fl: `trace_id,eq,${trace}`,
+      lq: null,
+      sl: null,
+    }
+
+  const label = isTables ? 'View related data' : 'View related logs'
+  const title = isTables
+    ? `View ${target!.table} rows for trace ${trace}`
+    : `View logs for trace ${trace}`
+  const Icon = isTables ? Database : FileText
+
+  return (
+    <A
+      params={params}
+      replace
+      class='btn btn-outline btn-sm'
+      title={title}
+    >
+      <Icon class='h-4 w-4' />
+      {label}
+    </A>
+  )
+}
 
 // Attributes block for JSON display
 const AttributesBlock = (
@@ -2277,13 +2388,16 @@ const RowDetails = () => {
         <h3 class='font-semibold text-lg'>
           {url.params.rt ? `Related: ${url.params.rt}` : 'Row Details'}
         </h3>
-        <A
-          params={{ drawer: null, 'row-id': null, rt: null }}
-          replace
-          class='btn btn-ghost btn-sm btn-circle'
-        >
-          <XCircle class='h-5 w-5' />
-        </A>
+        <div class='flex items-center gap-2'>
+          <RelatedTraceButton direction='logs' />
+          <A
+            params={{ drawer: null, 'row-id': null, rt: null }}
+            replace
+            class='btn btn-ghost btn-sm btn-circle'
+          >
+            <XCircle class='h-5 w-5' />
+          </A>
+        </div>
       </div>
 
       <form onSubmit={onUpdateRow} class='flex-1 flex flex-col min-h-0'>
@@ -2516,13 +2630,16 @@ const LogDetails = () => {
           </div>
           <h3 class='font-bold text-base'>{log.event_name}</h3>
         </div>
-        <A
-          params={{ drawer: null, 'log-id': null }}
-          replace
-          class='btn btn-ghost btn-sm btn-circle'
-        >
-          <XCircle class='h-5 w-5' />
-        </A>
+        <div class='flex items-center gap-2'>
+          <RelatedTraceButton direction='tables' />
+          <A
+            params={{ drawer: null, 'log-id': null }}
+            replace
+            class='btn btn-ghost btn-sm btn-circle'
+          >
+            <XCircle class='h-5 w-5' />
+          </A>
+        </div>
       </div>
 
       <div class='flex-1 overflow-y-auto p-4 space-y-4'>

@@ -70,19 +70,11 @@ export const client: ReturnType<typeof createClient> = isLocal
   })
 
 const numberToHex128 = (() => {
-  const alphabet = new TextEncoder().encode('0123456789abcdef')
-  const output = new Uint8Array(16)
-  const view = new DataView(new Uint8Array(8).buffer)
-  const dec = new TextDecoder()
+  const output = new Uint8Array(8)
+  const view = new DataView(output.buffer)
   return (id: number) => {
     view.setFloat64(0, id, false)
-    let i = -1
-    while (++i < 8) {
-      const x = view.getUint8(i)
-      output[i * 2] = alphabet[x >> 4]
-      output[i * 2 + 1] = alphabet[x & 0xF]
-    }
-    return dec.decode(output)
+    return output.toHex()
   }
 })()
 
