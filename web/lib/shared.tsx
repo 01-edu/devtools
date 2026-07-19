@@ -2,6 +2,7 @@ import { Book, HardDrive, ListTodo } from 'lucide-preact'
 import { api } from './api.ts'
 import { DeploymentPage } from '../pages/DeploymentPage.tsx'
 import { ApiDocPage } from '../pages/project/ApiDocPage.tsx'
+import { TasksPage } from '../pages/project/TaskPage.tsx'
 import { SidebarItem } from '../components/SideBar.tsx'
 import { url } from '@01edu/signal-router'
 import { Signal } from '@preact/signals'
@@ -26,7 +27,7 @@ export const sidebarItems: Record<string, SidebarItem> = {
     label: 'API Docs',
     component: ApiDocPage,
   },
-  'tasks': { icon: ListTodo, label: 'Tasks', component: DeploymentPage },
+  'tasks': { icon: ListTodo, label: 'Tasks', component: TasksPage },
 } as const
 
 // API signal for deployment queries
@@ -37,6 +38,12 @@ export const deployments = api['GET/api/project/deployments'].signal()
 
 // API signal for current project
 export const project = api['GET/api/project'].signal()
+
+// API signal for the project's tasks
+export const tasks = api['GET/api/project/tasks'].signal()
+
+// API signal for the project's team (used to resolve assignee names)
+export const projectTeam = api['GET/api/team'].signal()
 
 export const runQuery = (query?: string) => {
   if (querier.pending) return
