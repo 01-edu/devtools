@@ -1,11 +1,5 @@
-// Types and pure logic for the read-only, cross-source task manager
-// aggregator. See TASK_MANAGER_INTEGRATION.md for the design this
-// implements (§1-§4) and TASK_MANAGER_ISSUES.md, issue 1.
-
 export type Source = 'github' | 'jira' | 'discord'
 
-// Whatever identifier a source hands us — resolved against the team
-// directory in resolvePerson, never shown to a user as-is.
 export type PersonRef = {
   login?: string
   email?: string
@@ -44,8 +38,6 @@ export type Comment = {
 
 export type TicketStatus = 'todo' | 'in_progress' | 'done'
 
-// Produced by the aggregator, never stored — always recomputed from
-// WorkItem[].
 export type Ticket = {
   key: string
   title: string
@@ -68,14 +60,11 @@ export interface Provider {
   comments(item: WorkItem): Promise<Comment[]>
 }
 
-// A real ticket key is always {LETTERS}{DIGITS} once normalized (e.g.
-// LH92, SUP2078) — enforcing the shape here means a source that doesn't
-// follow the naming convention yields no key, never a wrong one.
-const KEY_SHAPE = /^[A-Z]+[0-9]+$/
+const KEY_PATTERN = /^([A-Z]+)[^0-9]?([0-9]+)/
 
 export const normalizeKey = (rawKey: string): string | undefined => {
-  const normalized = rawKey.toUpperCase().replace(/[^A-Z0-9]/g, '')
-  return KEY_SHAPE.test(normalized) ? normalized : undefined
+  const [, prefix, id] = rawKey.toUpperCase().match(KEY_PATTERN) ?? []
+  return id ? `${prefix}${id}` : undefined
 }
 
 export const extractKey = (item: WorkItem): string | undefined => {
@@ -86,16 +75,11 @@ export const extractKey = (item: WorkItem): string | undefined => {
       return typeof key === 'string' ? normalizeKey(key) : undefined
     }
     case 'discord': {
-      // The thread name is prefixed with the key, e.g. "LH92 Fix bug".
       const thread = raw?.thread as { name?: string } | undefined
-      const [prefix] = thread?.name?.split(' ') ?? []
-      return prefix ? normalizeKey(prefix) : undefined
+      return thread?.name ? normalizeKey(thread.name) : undefined
     }
-    case 'github': {
-      // The title is prefixed with the key by convention, same idea.
-      const [prefix] = item.title.split(' ')
-      return prefix ? normalizeKey(prefix) : undefined
-    }
+    case 'github':
+      return normalizeKey(item.title)
     default: {
       const exhaustive: never = item.source
       return exhaustive
@@ -117,11 +101,6 @@ const JIRA_STATUS_MAP: Record<string, TicketStatus> = {
 const mapJiraStatus = (status?: string): TicketStatus | undefined =>
   status ? JIRA_STATUS_MAP[status.toLowerCase()] : undefined
 
-// A GitHub PR is stronger evidence of real progress than Jira's own status
-// column, so it takes priority when both are present. Recomputed from the
-// current state of each source every time — nothing is stored, so a
-// reopened PR simply stops being "merged" on the next read and the
-// deduced status drops back down on its own.
 export const deriveStatus = (items: WorkItem[]): TicketStatus => {
   const pr = items.find((item) => item.source === 'github')
   if (pr?.status === 'merged') return 'done'
@@ -130,67 +109,64 @@ export const deriveStatus = (items: WorkItem[]): TicketStatus => {
   return mapJiraStatus(jira?.status) ?? 'todo'
 }
 
+const matchesPersonRef = (ref: PersonRef, person: Person): boolean =>
+  (ref.login != null && person.githubLogin === ref.login) ||
+  (ref.email != null && person.emails.includes(ref.email)) ||
+  (ref.discordId != null && person.discordId === ref.discordId) ||
+  (ref.jiraAccountId != null && person.jiraAccountId === ref.jiraAccountId)
+
+function findPersonMatch(this: PersonRef, person: Person): boolean {
+  return matchesPersonRef(this, person)
+}
+
 export const resolvePerson = (
   directory: Person[],
   ref: PersonRef,
-): Person | undefined =>
-  directory.find((person) =>
-    (ref.login != null && person.githubLogin === ref.login) ||
-    (ref.email != null && person.emails.includes(ref.email)) ||
-    (ref.discordId != null && person.discordId === ref.discordId) ||
-    (ref.jiraAccountId != null && person.jiraAccountId === ref.jiraAccountId)
-  )
+): Person | undefined => directory.find(findPersonMatch, ref)
 
-// A ref that fails to resolve (nobody in the directory matches) is
-// dropped rather than shown as a raw login/email — the point is one
-// unified list of people, not a leak of per-source identifiers.
-const resolveUnique = (directory: Person[], refs: PersonRef[]): Person[] => {
-  const resolved = refs
-    .map((ref) => resolvePerson(directory, ref))
-    .filter((person): person is Person => person != null)
-  return [...new Map(resolved.map((person) => [person.id, person])).values()]
-}
-
-const pickTitle = (items: WorkItem[]): string => {
-  const jira = items.find((item) => item.source === 'jira')
-  if (jira) return jira.title
-
-  const github = items.find((item) => item.source === 'github')
-  if (github) {
-    const withoutKeyPrefix = github.title.split(' ').slice(1).join(' ')
-    return withoutKeyPrefix || github.title
+const resolveUnique = (
+  directory: Person[],
+  items: WorkItem[],
+  personKey: 'assigneeRefs' | 'reviewerRefs',
+): Person[] => {
+  const persons = new Set<Person>()
+  for (const item of items) {
+    for (const ref of item[personKey] ?? []) {
+      const match = directory.find(findPersonMatch, ref)
+      match && persons.add(match)
+    }
   }
-
-  return items[0].title
+  return [...persons]
 }
 
-// Groups WorkItems into Tickets by their canonical key (see extractKey);
-// an item with no extractable key surfaces as its own single-item Ticket
-// instead of being dropped. Pure: no I/O, discussion is always empty here
-// — populating it requires calling Provider.comments(), which belongs to
-// the aggregator that wires providers together, not this module.
+const stripKeyPrefix = (title: string, key: string): string => {
+  const [prefix, ...rest] = title.split(' ')
+  return prefix && normalizeKey(prefix) === key
+    ? rest.join(' ') || title
+    : title
+}
+
+const pickTitle = (items: WorkItem[], key: string): string => {
+  const jira = items.find((item) => item.source === 'jira')
+  return stripKeyPrefix((jira ?? items[0]).title, key)
+}
+
 export const groupIntoTickets = (
   items: WorkItem[],
   directory: Person[],
 ): Ticket[] => {
   const groups = Map.groupBy(
     items,
-    (item) => extractKey(item) ?? `${item.source}:${item.externalId}`,
+    (item) => extractKey(item) || `${item.source}:${item.externalId}`,
   )
 
   return groups.entries().map(([key, groupItems]) => ({
     key,
-    title: pickTitle(groupItems),
+    title: pickTitle(groupItems, key),
     status: deriveStatus(groupItems),
     items: groupItems,
     discussion: [],
-    assignees: resolveUnique(
-      directory,
-      groupItems.flatMap((item) => item.assigneeRefs ?? []),
-    ),
-    reviewers: resolveUnique(
-      directory,
-      groupItems.flatMap((item) => item.reviewerRefs ?? []),
-    ),
+    assignees: resolveUnique(directory, groupItems, 'assigneeRefs'),
+    reviewers: resolveUnique(directory, groupItems, 'reviewerRefs'),
   })).toArray()
 }

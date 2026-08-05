@@ -43,9 +43,15 @@ describe('normalizeKey', () => {
     assertEquals(normalizeKey('LH92'), 'LH92')
   })
 
-  it('rejects a value that is not {letters}{digits}', () => {
+  it('rejects a value with no digits', () => {
     assertEquals(normalizeKey('Fix'), undefined)
     assertEquals(normalizeKey(''), undefined)
+  })
+
+  it('extracts the key and ignores trailing dash-joined words', () => {
+    // a real branch/PR-title shape: "TNT-879-do-something" is not just
+    // the key, but the key is still the leading, extractable part of it
+    assertEquals(normalizeKey('TNT-879-do-something'), 'TNT879')
   })
 })
 
@@ -72,6 +78,14 @@ describe('extractKey', () => {
 
   it('returns undefined when jira.key is missing', () => {
     assertEquals(extractKey(jiraItem({ raw: {} })), undefined)
+  })
+
+  it('reads the key from a github title with no space after it', () => {
+    // e.g. a branch name used as-is for the title, not "{KEY} {title}"
+    assertEquals(
+      extractKey(githubItem({ title: 'TNT-879-do-something' })),
+      'TNT879',
+    )
   })
 })
 
@@ -166,6 +180,13 @@ describe('groupIntoTickets', () => {
     assertEquals(tickets.length, 1)
     assertEquals(tickets[0].key, `${unkeyed.source}:${unkeyed.externalId}`)
     assertEquals(tickets[0].items, [unkeyed])
+  })
+
+  it('strips the key prefix from the title regardless of source', () => {
+    // no jira item here, so the title falls back to the discord item's —
+    // the prefix stripping must not be hardcoded to github specifically
+    const tickets = groupIntoTickets([discordItem()], directory)
+    assertEquals(tickets[0].title, 'Fix login bug')
   })
 
   it('dedupes an assignee resolved from more than one item', () => {
