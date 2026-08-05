@@ -50,6 +50,8 @@ export const ProjectDef = OBJ({
   teamId: STR('The ID of the team that owns the project'),
   isPublic: BOOL('Is the project public?'),
   repositoryUrl: optional(STR('The URL of the project repository')),
+  jiraProjectKey: optional(STR('The Jira project key, e.g. "TNT"')),
+  discordChannelId: optional(STR('The ID of the project Discord channel')),
 }, 'The project schema definition')
 export type Project = Asserted<typeof ProjectDef>
 
