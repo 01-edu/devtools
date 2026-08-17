@@ -188,6 +188,8 @@ const projectOutput = OBJ({
   teamId: STR('The ID of the team that owns the project'),
   isPublic: BOOL('Is the project public?'),
   repositoryUrl: optional(STR('The URL of the project repository')),
+  jiraProjectKey: optional(STR('The Jira project key, e.g. "TNT"')),
+  discordChannelId: optional(STR('The ID of the project Discord channel')),
   createdAt: optional(NUM('The creation date of the project')),
   updatedAt: optional(NUM('The last update date of the project')),
 })
@@ -349,6 +351,10 @@ const defs = {
       teamId: STR('The ID of the team that owns the project'),
       isPublic: BOOL('Is the project public?'),
       repositoryUrl: optional(STR('The URL of the project repository')),
+      jiraProjectKey: optional(STR('The Jira project key, e.g. "TNT"')),
+      discordChannelId: optional(
+        STR('The ID of the project Discord channel'),
+      ),
     }, 'Create a new project'),
     output: projectOutput,
     description: 'Create a new project',
@@ -375,6 +381,10 @@ const defs = {
       teamId: STR('The ID of the team that owns the project'),
       isPublic: BOOL('Is the project public?'),
       repositoryUrl: optional(STR('The URL of the project repository')),
+      jiraProjectKey: optional(STR('The Jira project key, e.g. "TNT"')),
+      discordChannelId: optional(
+        STR('The ID of the project Discord channel'),
+      ),
     }),
     output: projectOutput,
     description: 'Update a project by ID',

@@ -12,6 +12,8 @@ const projects: Omit<Project, 'createdAt'>[] = [
     teamId: 'frontend-devs',
     isPublic: true,
     repositoryUrl: 'https://github.com/example/website',
+    discordChannelId: null,
+    jiraProjectKey: null,
   },
   {
     slug: 'api-refactor',
@@ -19,6 +21,8 @@ const projects: Omit<Project, 'createdAt'>[] = [
     teamId: 'backend-devs',
     isPublic: false,
     repositoryUrl: 'https://github.com/example/api',
+    discordChannelId: null,
+    jiraProjectKey: null,
   },
   {
     slug: 'design-system',
@@ -26,6 +30,8 @@ const projects: Omit<Project, 'createdAt'>[] = [
     teamId: 'frontend-devs',
     isPublic: true,
     repositoryUrl: 'https://github.com/example/design-system',
+    discordChannelId: null,
+    jiraProjectKey: null,
   },
 ]
 
