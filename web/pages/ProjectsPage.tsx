@@ -5,6 +5,7 @@ import {
   ArrowRight,
   Calendar,
   Folder,
+  Link2,
   Lock,
   LucideIcon,
   Plus,
@@ -176,18 +177,28 @@ const Toast = () => {
   )
 }
 
-const TeamMembersRow = ({ user }: { user: Team['members'][number] }) => (
+const TeamMembersRow = ({ member }: { member: Team['members'][number] }) => (
   <tr class='border-b border-divider'>
     <td class='py-3'>
-      <div class='font-medium truncate'>{user.name}</div>
-      <div class='text-text2 truncate'>{user.email}</div>
+      <div class='font-medium truncate'>{member.name}</div>
+      <div class='text-text2 truncate'>{member.email}</div>
     </td>
-    <td class='py-3'>{user.isAdmin ? 'Admin' : 'Member'}</td>
+    <td class='py-3'>{member.isAdmin ? 'Admin' : 'Member'}</td>
     <td class='py-3 text-right'>
-      <input
-        type='checkbox'
-        class='toggle toggle-sm toggle-primary'
-      />
+      {user.data?.isAdmin && (
+        <A
+          params={{
+            dialog: 'identifiers',
+            linkid: member.id,
+            linkname: member.name,
+          }}
+          replace
+          class='btn btn-ghost btn-xs btn-circle'
+          title='Linked accounts'
+        >
+          <Link2 class='w-3.5 h-3.5' />
+        </A>
+      )}
     </td>
   </tr>
 )
@@ -329,7 +340,7 @@ function TeamMembersSection({ team }: { team: Team }) {
           </tr>
         </thead>
         <tbody>
-          {team.members.map((u) => <TeamMembersRow key={u.id} user={u} />)}
+          {team.members.map((m) => <TeamMembersRow key={m.id} member={m} />)}
         </tbody>
       </table>
     </div>

@@ -2,6 +2,7 @@ import { render } from 'preact'
 import { LoginPage } from './pages/LoginPage.tsx'
 import { ProjectsPage } from './pages/ProjectsPage.tsx'
 import { BackgroundPattern } from './components/BackgroundPattern.tsx'
+import { IdentifiersDialog } from './components/IdentifiersDialog.tsx'
 import { Header } from './layout.tsx'
 import { user } from './lib/session.ts'
 import { url } from '@01edu/signal-router'
@@ -24,6 +25,7 @@ const App = () => (
     <main class='w-full flex-1 flex flex-col relative min-h-0 overflow-hidden'>
       <Router />
     </main>
+    {user.data && <IdentifiersDialog />}
   </div>
 )
 

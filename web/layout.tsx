@@ -1,6 +1,6 @@
 import { effect, signal } from '@preact/signals'
 import { A, url } from '@01edu/signal-router'
-import { Code, LogOut, Moon, Sun } from 'lucide-preact'
+import { Code, Link2, LogOut, Moon, Sun } from 'lucide-preact'
 import { user } from './lib/session.ts'
 
 const $theme = signal(localStorage.theme || 'dark')
@@ -41,6 +41,17 @@ const UserInfo = () => {
   )
 }
 
+const LinkedAccountsButton = () => (
+  <A
+    params={{ dialog: 'identifiers', linkid: null, linkname: null }}
+    replace
+    class='btn btn-ghost btn-circle btn-sm'
+    title='Linked accounts'
+  >
+    <Link2 class='w-5 h-5' />
+  </A>
+)
+
 export const SwitchTheme = () => (
   <label class='swap swap-rotate'>
     <input
@@ -68,6 +79,7 @@ export const Header = () => (
 
     <div class='flex items-center gap-4'>
       <SwitchTheme />
+      {'/login' !== url.path && user.data && <LinkedAccountsButton />}
       {'/login' !== url.path && <UserInfo />}
     </div>
   </header>
