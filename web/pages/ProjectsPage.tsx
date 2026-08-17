@@ -63,6 +63,8 @@ async function saveProject(
       teamId,
       repositoryUrl,
       isPublic: isPublic ?? false,
+      discordChannelId: null,
+      jiraProjectKey: null,
     })
     projects.fetch()
     navigate({ params: { dialog: null, slug: null }, replace: true })

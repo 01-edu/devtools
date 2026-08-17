@@ -74,6 +74,8 @@ const commands: Record<
           teamId: 'local',
           isPublic: true,
           repositoryUrl: null,
+          discordChannelId: null,
+          jiraProjectKey: null,
         })
       }
 
