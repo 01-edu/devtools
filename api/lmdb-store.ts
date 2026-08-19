@@ -4,6 +4,19 @@ import { log } from '/api/lib/logger.ts'
 import { respond } from '@01edu/api/response'
 
 const headers = { authorization: `Bearer ${STORE_SECRET}` }
+const pending = new Set<Promise<unknown>>()
+
+export const set = (path: string, id: unknown, dt: unknown) => {
+  const body = typeof dt === 'string' ? dt : JSON.stringify(dt)
+  const p = fetch(
+    `${STORE_URL}/${path}/${encodeURIComponent(String(id))}`,
+    { method: 'POST', body, headers },
+  )
+  pending.add(p)
+  p.finally(() => pending.delete(p))
+  return 1
+}
+
 export const getOne = async <T>(
   path: string,
   id: string,
