@@ -187,11 +187,7 @@ const TeamMembersRow = ({ member }: { member: Team['members'][number] }) => (
     <td class='py-3 text-right'>
       {user.data?.isAdmin && (
         <A
-          params={{
-            dialog: 'identifiers',
-            linkid: member.id,
-            linkname: member.name,
-          }}
+          params={{ dialog: 'identifiers', linkid: member.id }}
           replace
           class='btn btn-ghost btn-xs btn-circle'
           title='Linked accounts'
@@ -403,7 +399,7 @@ const TabNav = ({ tab, sections }: { tab: string; sections: string[] }) => (
   </div>
 )
 
-const selectedTeam = api['GET/api/team'].signal()
+export const selectedTeam = api['GET/api/team'].signal()
 effect(() => {
   const { steamid } = url.params
   const selectedTeamId = steamid || (teams.data || [])[0]?.id

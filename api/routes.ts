@@ -11,7 +11,6 @@ import {
   TeamDef,
   TeamDetailDef,
   User,
-  UserDef,
 } from '/api/schema.ts'
 import {
   ARR,
@@ -201,6 +200,17 @@ const identifiersOutput = OBJ({
   jiraAccountId: optional(STR('Jira account id')),
 })
 
+const meOutput = OBJ({
+  id: STR('The user ID'),
+  email: STR('The user email address'),
+  fullName: STR('The user login name'),
+  picture: optional(STR('The user profile picture URL')),
+  isAdmin: BOOL('Is the user an admin?'),
+  githubLogin: optional(STR('Linked GitHub login')),
+  discordId: optional(STR('Linked Discord user id')),
+  jiraAccountId: optional(STR('Linked Jira account id')),
+})
+
 const apiDocOutputDef = ARR(
   OBJ({
     method: LIST(['GET', 'POST', 'PUT', 'DELETE', 'PATCH'], 'HTTP method'),
@@ -241,29 +251,17 @@ const defs = {
   }),
   'GET/api/user/me': route({
     authorize: withUserSession,
-    fn: ({ session }) => session,
-    output: UserDef,
-    description: 'Get current authenticated user information',
-  }),
-  'GET/api/user/identifiers': route({
-    authorize: withUserSession,
-    fn: async ({ session }, input) => {
-      const id = input.id && session.isAdmin ? input.id : session.id
-      const link = await getOne<PersonLink>(PERSON_LINK_PATH, id)
+    fn: async ({ session }) => {
+      const link = await getOne<PersonLink>(PERSON_LINK_PATH, session.id)
       return {
+        ...session,
         githubLogin: link?.githubLogin,
         discordId: link?.discordId,
         jiraAccountId: link?.jiraAccountId,
       }
     },
-    input: OBJ({
-      id: optional(
-        STR('Google user id to read (admin only, defaults to self)'),
-      ),
-    }),
-    output: identifiersOutput,
-    description:
-      "Get the current user's (or, for an admin, any user's) linked GitHub/Discord/Jira identifiers",
+    output: meOutput,
+    description: 'Get current authenticated user information',
   }),
   'PUT/api/user/identifiers': route({
     authorize: withUserSession,
@@ -353,15 +351,25 @@ const defs = {
         { q: '{ id: .id, email: .email }' },
       )
 
+      const links = await get<(PersonLink & { id: string })[]>(
+        PERSON_LINK_PATH,
+        {},
+      )
+      const linksById = new Map(links.map((l) => [l.id, l]))
+
       const enrichedMembers = await Promise.all(
         members.map(async (m) => {
           const name = await getUserName(m.id)
           const admin = AdminsCollection.get(m.id)
+          const link = linksById.get(m.id)
           return {
             email: m.email,
             id: m.id,
             name,
             isAdmin: !!admin,
+            githubLogin: link?.githubLogin,
+            discordId: link?.discordId,
+            jiraAccountId: link?.jiraAccountId,
           }
         }),
       )

@@ -43,7 +43,7 @@ const UserInfo = () => {
 
 const LinkedAccountsButton = () => (
   <A
-    params={{ dialog: 'identifiers', linkid: null, linkname: null }}
+    params={{ dialog: 'identifiers', linkid: null }}
     replace
     class='btn btn-ghost btn-circle btn-sm'
     title='Linked accounts'

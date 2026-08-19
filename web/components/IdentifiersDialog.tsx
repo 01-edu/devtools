@@ -1,24 +1,26 @@
 import { navigate, url } from '@01edu/signal-router'
 import type { TargetedEvent } from 'preact'
-import { effect } from '@preact/signals'
 import { Loader2 } from 'lucide-preact'
 import { DialogModal } from './Dialog.tsx'
 import { api } from '../lib/api.ts'
 import { user } from '../lib/session.ts'
+import { selectedTeam } from '../pages/ProjectsPage.tsx'
 
-const getIdentifiers = api['GET/api/user/identifiers'].signal()
 const updateIdentifiers = api['PUT/api/user/identifiers'].signal()
 
 const targetId = () => (user.data?.isAdmin && url.params.linkid) || undefined
 
-const clearTarget = () => navigate({ params: { linkid: null, linkname: null } })
+const targetMember = () => {
+  const id = targetId()
+  return id ? selectedTeam.data?.members.find((m) => m.id === id) : undefined
+}
 
-effect(() => {
-  if (url.params.dialog === 'identifiers') {
-    const id = targetId()
-    getIdentifiers.fetch(id ? { id } : undefined)
-  }
-})
+// Self: `user.data` already carries the linked ids (GET/api/user/me). An
+// admin-targeted member: looked up from `selectedTeam.data`, already
+// fetched by the Team Management dialog — no extra request needed.
+const current = () => targetMember() ?? user.data
+
+const clearTarget = () => navigate({ params: { linkid: null } })
 
 const fields = [
   ['githubLogin', 'GitHub login'],
@@ -40,47 +42,41 @@ const handleSubmit = async (e: TargetedEvent<HTMLFormElement>) => {
 }
 
 export const IdentifiersDialog = () => {
-  const link = getIdentifiers.data
-  const targetName = user.data?.isAdmin ? url.params.linkname : undefined
+  const target = current()
+  const targetName = targetMember()?.name
   return (
     <DialogModal id='identifiers' onClose={clearTarget}>
       <h3 class='text-lg font-bold mb-4'>
         Linked accounts{targetName ? ` — ${targetName}` : ''}
       </h3>
-      {!link
-        ? <Loader2 class='w-5 h-5 animate-spin' />
-        : (
-          <form onSubmit={handleSubmit} class='space-y-4'>
-            {fields.map(([name, label]) => (
-              <div class='form-control w-full' key={name}>
-                <label class='label'>
-                  <span class='label-text'>{label}</span>
-                </label>
-                <input
-                  name={name}
-                  defaultValue={link[name] || ''}
-                  class='input input-bordered w-full'
-                />
-              </div>
-            ))}
-            {updateIdentifiers.error && (
-              <div class='text-error text-xs px-1'>
-                {updateIdentifiers.error.message}
-              </div>
-            )}
-            <div class='modal-action'>
-              <button
-                type='submit'
-                class='btn btn-primary'
-                disabled={!!updateIdentifiers.pending}
-              >
-                {updateIdentifiers.pending
-                  ? <Loader2 class='w-4 h-4' />
-                  : 'Save'}
-              </button>
-            </div>
-          </form>
+      <form onSubmit={handleSubmit} class='space-y-4'>
+        {fields.map(([field, label]) => (
+          <div class='form-control w-full' key={field}>
+            <label class='label'>
+              <span class='label-text'>{label}</span>
+            </label>
+            <input
+              name={field}
+              defaultValue={target?.[field] || ''}
+              class='input input-bordered w-full'
+            />
+          </div>
+        ))}
+        {updateIdentifiers.error && (
+          <div class='text-error text-xs px-1'>
+            {updateIdentifiers.error.message}
+          </div>
         )}
+        <div class='modal-action'>
+          <button
+            type='submit'
+            class='btn btn-primary'
+            disabled={!!updateIdentifiers.pending}
+          >
+            {updateIdentifiers.pending ? <Loader2 class='w-4 h-4' /> : 'Save'}
+          </button>
+        </div>
+      </form>
     </DialogModal>
   )
 }
