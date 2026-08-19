@@ -5,22 +5,35 @@ import { DialogModal } from './Dialog.tsx'
 import { api } from '../lib/api.ts'
 import { user } from '../lib/session.ts'
 import { selectedTeam } from '../pages/ProjectsPage.tsx'
+import { computed } from '@preact/signals'
 
 const updateIdentifiers = api['PUT/api/user/identifiers'].signal()
 
-const targetId = () => (user.data?.isAdmin && url.params.linkid) || undefined
+const link = computed(() => {
+  const targetId = (user.data?.isAdmin && url.params.linkid) || undefined
+  if (!targetId) {
+    return {
+      id: user.data?.id,
+      name: undefined as string | undefined,
+      githubLogin: user.data?.githubLogin,
+      discordId: user.data?.discordId,
+      jiraAccountId: user.data?.jiraAccountId,
+    }
+  }
+  const member = selectedTeam.data?.members.find((m) => m.id === targetId)
+  return {
+    id: targetId,
+    name: member?.name,
+    githubLogin: member?.githubLogin,
+    discordId: member?.discordId,
+    jiraAccountId: member?.jiraAccountId,
+  }
+})
 
-const targetMember = () => {
-  const id = targetId()
-  return id ? selectedTeam.data?.members.find((m) => m.id === id) : undefined
+const clearTarget = () => {
+  navigate({ params: { linkid: null } })
+  updateIdentifiers.reset()
 }
-
-// Self: `user.data` already carries the linked ids (GET/api/user/me). An
-// admin-targeted member: looked up from `selectedTeam.data`, already
-// fetched by the Team Management dialog — no extra request needed.
-const current = () => targetMember() ?? user.data
-
-const clearTarget = () => navigate({ params: { linkid: null } })
 
 const fields = [
   ['githubLogin', 'GitHub login'],
@@ -32,24 +45,23 @@ const handleSubmit = async (e: TargetedEvent<HTMLFormElement>) => {
   e.preventDefault()
   const fd = new FormData(e.currentTarget)
   await updateIdentifiers.fetch({
-    id: targetId(),
+    id: link.value.id,
     githubLogin: (fd.get('githubLogin') as string) || undefined,
     discordId: (fd.get('discordId') as string) || undefined,
     jiraAccountId: (fd.get('jiraAccountId') as string) || undefined,
   })
-  navigate({ params: { dialog: null } })
-  clearTarget()
+  user.fetch()
+  if (selectedTeam.data) selectedTeam.fetch({ id: selectedTeam.data.id })
 }
 
 export const IdentifiersDialog = () => {
-  const target = current()
-  const targetName = targetMember()?.name
+  const target = link.value
   return (
     <DialogModal id='identifiers' onClose={clearTarget}>
       <h3 class='text-lg font-bold mb-4'>
-        Linked accounts{targetName ? ` — ${targetName}` : ''}
+        Linked accounts{target.name ? ` — ${target.name}` : ''}
       </h3>
-      <form onSubmit={handleSubmit} class='space-y-4'>
+      <form key={target?.id} onSubmit={handleSubmit} class='space-y-4'>
         {fields.map(([field, label]) => (
           <div class='form-control w-full' key={field}>
             <label class='label'>
