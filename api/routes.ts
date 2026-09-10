@@ -8,6 +8,9 @@ import {
   DeploymentDef,
   DeploymentsCollection,
   ProjectsCollection,
+  type Task,
+  TaskCountersCollection,
+  TasksCollection,
   TeamDef,
   TeamDetailDef,
   User,
@@ -143,6 +146,36 @@ const userInTeam = async (teamId: string, userId?: string) => {
   return !!matches
 }
 
+const withProjectAccess = async (
+  ctx: RequestContext & { session: User },
+  slug: string,
+) => {
+  const project = ProjectsCollection.get(slug)
+  if (!project) {
+    throw new respond.NotFoundError({ message: 'Project not found' })
+  }
+  if (!project.isPublic && !ctx.session.isAdmin) {
+    if (!(await userInTeam(project.teamId, ctx.session.id))) {
+      throw new respond.ForbiddenError({
+        message: 'Access to project tasks denied',
+      })
+    }
+  }
+  return project
+}
+
+// Allocates the next incremental task number for a project. The counter Map
+// mutation happens synchronously (before the first await) so concurrent
+// calls cannot observe a stale value.
+const nextTaskNumber = (projectSlug: string) => {
+  const counter = TaskCountersCollection.get(projectSlug)
+  const lastNumber = (counter?.lastNumber ?? 0) + 1
+  const save = counter
+    ? TaskCountersCollection.update(projectSlug, { lastNumber })
+    : TaskCountersCollection.insert({ projectSlug, lastNumber })
+  return save.then(() => lastNumber)
+}
+
 const withDeploymentTableAccess = async (
   ctx: RequestContext & { session: User },
   deployment: string,
@@ -192,6 +225,21 @@ const projectOutput = OBJ({
   discordChannelId: optional(STR('The ID of the project Discord channel')),
   createdAt: optional(NUM('The creation date of the project')),
   updatedAt: optional(NUM('The last update date of the project')),
+})
+
+const taskOutput = OBJ({
+  id: STR('The unique identifier for the task'),
+  projectSlug: STR('The slug of the project this task belongs to'),
+  number: NUM('The incremental number of the task within its project'),
+  title: STR('The title of the task'),
+  status: LIST(['todo', 'in_progress', 'done'], 'The status of the task'),
+  priority: LIST(['low', 'medium', 'high'], 'The priority of the task'),
+  description: optional(STR('Markdown description of the task')),
+  authorId: STR('The ID of the user who created the task'),
+  assigneeIds: ARR(STR('The ID of an assigned user'), 'Assigned users'),
+  position: NUM('Ordering position of the task within its status column'),
+  createdAt: optional(NUM('The creation date of the task')),
+  updatedAt: optional(NUM('The last update date of the task')),
 })
 
 const apiDocOutputDef = ARR(
@@ -864,6 +912,98 @@ const defs = {
     }),
     output: apiDocOutputDef,
     description: 'Get API documentation from the deployment',
+  }),
+  'GET/api/project/tasks': route({
+    authorize: withUserSession,
+    fn: async (ctx, { project }) => {
+      await withProjectAccess(ctx, project)
+      return TasksCollection.filter((t) => t.projectSlug === project)
+        .sort((a, b) => a.position - b.position)
+    },
+    input: OBJ({ project: STR('The slug of the project') }),
+    output: ARR(taskOutput, 'List of tasks for the project'),
+    description: 'Get all tasks for a project',
+  }),
+  'POST/api/task': route({
+    authorize: withUserSession,
+    fn: async (ctx, input) => {
+      await withProjectAccess(ctx, input.projectSlug)
+      const number = await nextTaskNumber(input.projectSlug)
+      const task = await TasksCollection.insert({
+        id: `${input.projectSlug}-${number}`,
+        projectSlug: input.projectSlug,
+        number,
+        title: input.title,
+        status: 'todo',
+        priority: input.priority || 'medium',
+        description: input.description,
+        authorId: ctx.session.id,
+        assigneeIds: input.assigneeIds || [],
+        position: Date.now(),
+      })
+      log.info('task-created', { id: task.id, projectSlug: input.projectSlug })
+      return task
+    },
+    input: OBJ({
+      projectSlug: STR('The slug of the project'),
+      title: STR('The title of the task'),
+      description: optional(STR('Markdown description of the task')),
+      priority: optional(
+        LIST(['low', 'medium', 'high'], 'Priority of the task'),
+      ),
+      assigneeIds: optional(
+        ARR(STR('The ID of an assigned user'), 'Assigned users'),
+      ),
+    }, 'Create a new task'),
+    output: taskOutput,
+    description: 'Create a new task in a project',
+  }),
+  'PUT/api/task': route({
+    authorize: withUserSession,
+    fn: async (ctx, { id, ...changes }) => {
+      const task = TasksCollection.get(id)
+      if (!task) throw new respond.NotFoundError({ message: 'Task not found' })
+      await withProjectAccess(ctx, task.projectSlug)
+      const patch = Object.fromEntries(
+        Object.entries(changes).filter(([, v]) => v != null),
+      ) as Partial<Omit<Task, 'id'>>
+      const updated = await TasksCollection.update(id, patch)
+      log.info('task-updated', { id })
+      return updated
+    },
+    input: OBJ({
+      id: STR('The ID of the task'),
+      title: optional(STR('The title of the task')),
+      status: optional(
+        LIST(['todo', 'in_progress', 'done'], 'Status of the task'),
+      ),
+      priority: optional(
+        LIST(['low', 'medium', 'high'], 'Priority of the task'),
+      ),
+      description: optional(STR('Markdown description of the task')),
+      assigneeIds: optional(
+        ARR(STR('The ID of an assigned user'), 'Assigned users'),
+      ),
+      position: optional(
+        NUM('Ordering position of the task within its status column'),
+      ),
+    }),
+    output: taskOutput,
+    description: 'Update a task',
+  }),
+  'DELETE/api/task': route({
+    authorize: withUserSession,
+    fn: async (ctx, { id }) => {
+      const task = TasksCollection.get(id)
+      if (!task) throw new respond.NotFoundError({ message: 'Task not found' })
+      await withProjectAccess(ctx, task.projectSlug)
+      await TasksCollection.delete(id)
+      log.info('task-deleted', { id })
+      return true
+    },
+    input: OBJ({ id: STR('The ID of the task') }),
+    output: BOOL('Indicates if the task was deleted'),
+    description: 'Delete a task',
   }),
   'POST/api/deployment/fix-query': route({
     authorize: withUserSession,

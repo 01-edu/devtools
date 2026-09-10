@@ -1,7 +1,6 @@
-import { effect, signal, useSignal } from '@preact/signals'
+import { effect, useSignal } from '@preact/signals'
 import { A, navigate } from '@01edu/signal-router'
 import {
-  AlertTriangle,
   ArrowRight,
   Calendar,
   Folder,
@@ -13,6 +12,7 @@ import {
   Users,
 } from 'lucide-preact'
 import { Dialog, DialogModal } from '../components/Dialog.tsx'
+import { Toast, toast } from '../components/Toast.tsx'
 import { url } from '@01edu/signal-router'
 import { JSX } from 'preact'
 import { user } from '../lib/session.ts'
@@ -26,10 +26,6 @@ const teams = api['GET/api/teams'].signal()
 teams.fetch()
 const projects = api['GET/api/projects'].signal()
 projects.fetch()
-
-const toastSignal = signal<{ message: string; type: 'info' | 'error' } | null>(
-  null,
-)
 
 const slugify = (str: string) =>
   str.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '')
@@ -71,11 +67,6 @@ async function saveProject(
   } catch (err) {
     toast(err instanceof Error ? err.message : String(err), 'error')
   }
-}
-
-function toast(message: string, type: 'info' | 'error' = 'info') {
-  toastSignal.value = { message, type }
-  setTimeout(() => (toastSignal.value = null), 3000)
 }
 
 async function deleteProject(slug: string) {
@@ -161,18 +152,6 @@ const ProjectCard = (
         </div>
       </article>
     </A>
-  )
-}
-
-const Toast = () => {
-  if (!toastSignal.value) return null
-  return (
-    <div class='fixed bottom-4 right-4 bg-surface shadow-lg rounded-lg p-4 text-sm flex items-center gap-3 z-50'>
-      {toastSignal.value.type === 'error' && (
-        <AlertTriangle class='w-5 h-5 text-danger' />
-      )}
-      <span class='text-text'>{toastSignal.value.message}</span>
-    </div>
   )
 }
 

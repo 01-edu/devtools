@@ -2,7 +2,13 @@ import { effect } from '@preact/signals'
 import { navigate, url } from '@01edu/signal-router'
 import { user } from '../lib/session.ts'
 import { SettingsPage } from './SettingsPage.tsx'
-import { deployments, project, sidebarItems } from '../lib/shared.tsx'
+import {
+  deployments,
+  project,
+  projectTeam,
+  sidebarItems,
+  tasks,
+} from '../lib/shared.tsx'
 import { Sidebar } from '../components/SideBar.tsx'
 
 effect(() => {
@@ -11,6 +17,13 @@ effect(() => {
   if (!slug) return
   project.fetch({ slug })
   deployments.fetch({ project: slug })
+  tasks.fetch({ project: slug })
+})
+
+effect(() => {
+  const teamId = project.data?.teamId
+  if (!teamId) return
+  projectTeam.fetch({ id: teamId })
 })
 
 export function ProjectPage() {

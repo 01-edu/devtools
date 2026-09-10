@@ -44,6 +44,7 @@ import { api, type ApiOutput } from '../lib/api.ts'
 import { highlightSQL } from '../lib/highlight-sql.ts'
 import { QueryHistory } from '../components/QueryHistory.tsx'
 import { DeploymentHeader } from '../components/DeploymentHeader.tsx'
+import { Toast, toast } from '../components/Toast.tsx'
 import type { ComponentChildren } from 'preact'
 import { querier, queriesHistory, runQuery } from '../lib/shared.tsx'
 import { apiDocs, TypeDefinition } from './project/ApiDocPage.tsx'
@@ -58,27 +59,6 @@ export const rowDetailsData = api['POST/api/deployment/table/data'].signal()
 export const logDetailsData = api['POST/api/deployment/logs'].signal()
 export const metricsData = api['GET/api/deployment/metrics-sql'].signal()
 const routerMetricsData = api['GET/api/deployment/metrics-router'].signal()
-
-const toastSignal = new Signal<
-  { message: string; type: 'info' | 'error' } | null
->(null)
-
-function toast(message: string, type: 'info' | 'error' = 'info') {
-  toastSignal.value = { message, type }
-  setTimeout(() => (toastSignal.value = null), 3000)
-}
-
-const Toast = () => {
-  if (!toastSignal.value) return null
-  return (
-    <div class='fixed bottom-4 right-4 bg-base-200 shadow-lg rounded-lg p-4 text-sm flex items-center gap-3 z-[100] border border-base-300'>
-      {toastSignal.value.type === 'error' && (
-        <AlertTriangle class='w-5 h-5 text-error' />
-      )}
-      <span class='text-base-content'>{toastSignal.value.message}</span>
-    </div>
-  )
-}
 
 type ColumnDef = NonNullable<
   ApiOutput['GET/api/deployment/schema']['tables']

@@ -111,6 +111,35 @@ export const DatabaseSchemasCollection = await createCollection<
   'deploymentUrl'
 >({ name: 'db_schemas', primaryKey: 'deploymentUrl' })
 
+export const TaskDef = OBJ({
+  id: STR('Composite task ID, e.g. my-project-42'),
+  projectSlug: STR('Slug of the project this task belongs to'),
+  number: NUM('Incremental number of the task within its project'),
+  title: STR('Title of the task'),
+  status: LIST(['todo', 'in_progress', 'done'], 'Status of the task'),
+  priority: LIST(['low', 'medium', 'high'], 'Priority of the task'),
+  description: optional(STR('Markdown description of the task')),
+  authorId: STR('ID of the user who created the task'),
+  assigneeIds: ARR(STR('ID of an assigned user'), 'Assigned users'),
+  position: NUM('Ordering position of the task within its status column'),
+}, 'A task belonging to a project')
+export type Task = Asserted<typeof TaskDef>
+
+export const TaskCounterDef = OBJ({
+  projectSlug: STR('Slug of the project'),
+  lastNumber: NUM('Last task number issued for this project'),
+}, 'Per-project incremental task number counter')
+export type TaskCounter = Asserted<typeof TaskCounterDef>
+
+export const TasksCollection = await createCollection<Task, 'id'>(
+  { name: 'tasks', primaryKey: 'id' },
+)
+
+export const TaskCountersCollection = await createCollection<
+  TaskCounter,
+  'projectSlug'
+>({ name: 'task_counters', primaryKey: 'projectSlug' })
+
 export const AIAnalysisCacheDef = OBJ({
   cacheKey: STR('SHA-1 hash of deployment + query + explain + status'),
   analysis: STR('HTML-rendered AI analysis (high-quality, from forceRefresh)'),
