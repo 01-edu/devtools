@@ -486,16 +486,18 @@ const defs = {
     description: 'Get deployments by project ID',
   }),
   'GET/api/deployment': route({
-    authorize: withAdminSession,
-    fn: async (_ctx, { url }) => {
+    authorize: withUserSession,
+    fn: async ({ session }, { url }) => {
       const dep = DeploymentsCollection.get(url)
       if (!dep) {
         throw new respond.NotFoundError({ message: 'Deployment not found' })
       }
       const { tokenSalt, ...deployment } = dep
-      const token = await encryptMessage(
-        JSON.stringify({ url: deployment.url, tokenSalt }),
-      )
+      const token = session.isAdmin
+        ? await encryptMessage(
+          JSON.stringify({ url: deployment.url, tokenSalt }),
+        )
+        : undefined
       return { ...deployment, token }
     },
     input: OBJ({ url: STR('Deployment URL') }),
