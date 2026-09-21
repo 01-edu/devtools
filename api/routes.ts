@@ -649,7 +649,7 @@ const defs = {
         throw new respond.NotFoundError({ message: 'Project not found' })
       }
       if (!project.isPublic && !ctx.session.isAdmin) {
-        if (!(await userInTeam(project.teamId, ctx.session.email))) {
+        if (!(await userInTeam(project.teamId, ctx.session.id))) {
           throw new respond.ForbiddenError({
             message: 'Access to project logs denied',
           })
