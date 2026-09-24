@@ -1671,6 +1671,12 @@ function formatDuration(ms: number): { value: string; unit: string } {
   return { value: ms.toFixed(2), unit: 'ms' }
 }
 
+function formatRouterDuration(
+  seconds: number,
+): { value: string; unit: string } {
+  return formatDuration(seconds * 1000)
+}
+
 function formatBytes(bytes: number): { value: string; unit: string } {
   if (bytes < 1024) return { value: bytes.toFixed(2), unit: 'B' }
   if (bytes < 1024 ** 2) {
@@ -2137,8 +2143,9 @@ const MetricRow = ({ type, metric }: MetricRowProps) => {
     : (metric as RouterMetric).key
   const isExpanded = url.params.expanded === id
 
-  const avg = formatDuration(metric.count ? metric.duration / metric.count : 0)
-  const totalFmt = formatDuration(metric.duration)
+  const format = isSql ? formatDuration : formatRouterDuration
+  const avg = format(metric.count ? metric.duration / metric.count : 0)
+  const totalFmt = format(metric.duration)
 
   const totalDuration = isSql
     ? stats.value.totalDuration
@@ -2326,7 +2333,7 @@ const routerStats = computed(() => {
 function RouterMetricsViewer() {
   const isPending = routerMetricsData.pending
   const sorted = sortedRouterMetrics.value
-  const totalDuration = formatDuration(routerStats.value.totalDuration)
+  const totalDuration = formatRouterDuration(routerStats.value.totalDuration)
   const errorRate = routerStats.value.totalCalls
     ? ((routerStats.value.totalErrors / routerStats.value.totalCalls) * 100)
       .toFixed(1)

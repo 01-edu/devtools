@@ -47,7 +47,9 @@ describe('jiraProvider', () => {
 
     const items = await provider.list({ jiraProjectKey: 'TNT' })
 
-    assertEquals(receivedParams.q, `select(.Project.key == "TNT") | {
+    assertEquals(
+      receivedParams.q,
+      `select(.Project.key == "TNT") | {
         id,
         key,
         Summary,
@@ -60,7 +62,8 @@ describe('jiraProvider', () => {
           accountId: .Assignee.accountId,
           emailAddress: .Assignee.emailAddress
         }
-      }`)
+      }`,
+    )
     assertEquals(items.length, 1)
     assertEquals(items[0].externalId, '10001')
     assertEquals(items[0].title, issue.Summary)

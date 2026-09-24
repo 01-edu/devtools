@@ -885,7 +885,7 @@ const defs = {
       OBJ({
         key: STR('Route key (method:path) allow to identify which route'),
         duration: NUM(
-          'Total time the route handler take to respond, in milliseconds',
+          'Total time the route handler takes to respond, in seconds',
         ),
         count: NUM('How many times the route was called'),
         error: NUM('Number of time it responded with a status 400 or above'),

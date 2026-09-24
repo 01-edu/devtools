@@ -144,7 +144,7 @@ export const createJiraProvider = (
         }
       }`,
     })
-    
+
     if (issues.length === 0 || !issues[0]) return []
     const issue = issues[0]
 
