@@ -1,16 +1,5 @@
 import { get } from './lmdb-store.ts'
-
-// Matches the `Person` shape from tickets.ts (issue 1, a separate branch as
-// of this issue) — duplicated rather than imported since this issue has no
-// dependency on it.
-export type Person = {
-  id: string
-  name: string
-  emails: string[]
-  githubLogin?: string
-  discordId?: string
-  jiraAccountId?: string
-}
+import type { Person } from './tickets.ts'
 
 export type PersonLink = {
   githubLogin?: string
