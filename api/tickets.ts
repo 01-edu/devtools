@@ -101,10 +101,19 @@ const JIRA_STATUS_MAP: Record<string, TicketStatus> = {
 const mapJiraStatus = (status?: string): TicketStatus | undefined =>
   status ? JIRA_STATUS_MAP[status.toLowerCase()] : undefined
 
+// a github issue is only a placeholder, a PR is the evidence of real work
+const isPullRequest = (item: WorkItem): boolean =>
+  item.source === 'github' && item.externalUrl.includes('/pull/')
+
+const isOpen = (item: WorkItem): boolean => item.status === 'open'
+const isMerged = (item: WorkItem): boolean => item.status === 'merged'
+
 export const deriveStatus = (items: WorkItem[]): TicketStatus => {
-  const pr = items.find((item) => item.source === 'github')
-  if (pr?.status === 'merged') return 'done'
-  if (pr?.status === 'open') return 'in_progress'
+  // one key can carry several PRs (a follow-up, an abandoned first try):
+  // any still open means work is ongoing, otherwise any merged one is done
+  const prs = items.filter(isPullRequest)
+  if (prs.some(isOpen)) return 'in_progress'
+  if (prs.some(isMerged)) return 'done'
   const jira = items.find((item) => item.source === 'jira')
   return mapJiraStatus(jira?.status) ?? 'todo'
 }

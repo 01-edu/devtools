@@ -117,6 +117,41 @@ describe('deriveStatus', () => {
   it('defaults to todo with no recognizable signal', () => {
     assertEquals(deriveStatus([]), 'todo')
   })
+
+  it('is in_progress while any PR is open, even next to a merged one', () => {
+    assertEquals(
+      deriveStatus([
+        jiraItem({ status: 'Done' }),
+        githubItem({ status: 'merged' }),
+        githubItem({ externalId: 'gh-2', status: 'open' }),
+      ]),
+      'in_progress',
+    )
+  })
+
+  it('is done when a PR is merged after another was closed unmerged', () => {
+    assertEquals(
+      deriveStatus([
+        jiraItem({ status: 'In Progress' }),
+        githubItem({ status: 'closed' }),
+        githubItem({ externalId: 'gh-2', status: 'merged' }),
+      ]),
+      'done',
+    )
+  })
+
+  it('does not count an open github issue as work in progress', () => {
+    assertEquals(
+      deriveStatus([
+        jiraItem({ status: 'To Do' }),
+        githubItem({
+          externalUrl: 'https://github.com/01edu/license-hub/issues/2',
+          status: 'open',
+        }),
+      ]),
+      'todo',
+    )
+  })
 })
 
 describe('resolvePerson', () => {
@@ -171,6 +206,47 @@ describe('groupIntoTickets', () => {
     assertEquals(tickets[0].items.length, 2)
     assertEquals(tickets[0].status, 'in_progress')
     assertEquals(tickets[0].assignees.map((p) => p.id), ['p1'])
+  })
+
+  it('merges the items of all three providers sharing a key', () => {
+    const tickets = groupIntoTickets(
+      [jiraItem(), githubItem({ status: 'open' }), discordItem()],
+      directory,
+    )
+
+    assertEquals(tickets.length, 1)
+    assertEquals(tickets[0].items.map((item) => item.source), [
+      'jira',
+      'github',
+      'discord',
+    ])
+  })
+
+  const statusCases: [string, string, string][] = [
+    ['To Do', 'open', 'in_progress'],
+    ['In Progress', 'open', 'in_progress'],
+    ['In Progress', 'merged', 'done'],
+  ]
+  for (const [jiraStatus, prStatus, expected] of statusCases) {
+    it(`deduces ${expected} from jira ${jiraStatus} + PR ${prStatus}`, () => {
+      const [ticket] = groupIntoTickets(
+        [jiraItem({ status: jiraStatus }), githubItem({ status: prStatus })],
+        directory,
+      )
+      assertEquals(ticket.status, expected)
+    })
+  }
+
+  it('resolves reviewers to deduped people and drops unknown refs', () => {
+    const tickets = groupIntoTickets(
+      [
+        githubItem({ reviewerRefs: [{ login: 'ada' }, { login: 'stranger' }] }),
+        githubItem({ externalId: 'gh-2', reviewerRefs: [{ login: 'ada' }] }),
+      ],
+      directory,
+    )
+
+    assertEquals(tickets[0].reviewers, [directory[0]])
   })
 
   it('keeps an unkeyed item as its own single-item ticket', () => {
