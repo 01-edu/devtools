@@ -46,7 +46,9 @@ import { analyzeQueryWithAI } from '/api/fix-query.ts'
 import { PERSON_LINK_PATH, type PersonLink } from './team-directory.ts'
 import {
   filterTickets,
+  getProjectTicket,
   listProjectTickets,
+  toTicketDetailRow,
   toTicketRow,
 } from './project-tickets.ts'
 
@@ -148,6 +150,25 @@ const userInTeam = async (teamId: string, userId?: string) => {
   return !!matches
 }
 
+const withProjectAccess = async (
+  ctx: RequestContext & { session: User },
+  projectId: string,
+  resource: string,
+) => {
+  const project = ProjectsCollection.get(projectId)
+  if (!project) {
+    throw new respond.NotFoundError({ message: 'Project not found' })
+  }
+  if (!project.isPublic && !ctx.session.isAdmin) {
+    if (!(await userInTeam(project.teamId, ctx.session.id))) {
+      throw new respond.ForbiddenError({
+        message: `Access to project ${resource} denied`,
+      })
+    }
+  }
+  return project
+}
+
 const withDeploymentTableAccess = async (
   ctx: RequestContext & { session: User },
   deployment: string,
@@ -161,17 +182,7 @@ const withDeploymentTableAccess = async (
     })
   }
 
-  const project = ProjectsCollection.get(dep.projectId)
-  if (!project) {
-    throw new respond.NotFoundError({ message: 'Project not found' })
-  }
-  if (!project.isPublic && !ctx.session.isAdmin) {
-    if (!(await userInTeam(project.teamId, ctx.session.id))) {
-      throw new respond.ForbiddenError({
-        message: 'Access to project tables denied',
-      })
-    }
-  }
+  await withProjectAccess(ctx, dep.projectId, 'tables')
   return dep
 }
 
@@ -227,6 +238,29 @@ const ticketOutput = OBJ({
   ),
   assignees: ARR(ticketPersonOutput, 'The resolved assignees'),
   reviewers: ARR(ticketPersonOutput, 'The resolved reviewers'),
+})
+
+const ticketOutputFields = ticketOutput.properties
+const ticketDetailOutput = OBJ({
+  ...ticketOutputFields,
+  discussion: ARR(
+    OBJ({
+      source: LIST(TICKET_SOURCES, 'The source system of the comment'),
+      author: optional(ticketPersonOutput),
+      body: STR('The comment text'),
+      url: optional(STR('The link to the comment in the source system')),
+      createdAt: optional(NUM('The comment creation date, in ms')),
+    }),
+    'Every comment of every linked source, oldest first',
+  ),
+})
+
+const toTicketScope = (
+  project: NonNullable<ReturnType<typeof ProjectsCollection.get>>,
+) => ({
+  repositoryUrl: project.repositoryUrl ?? undefined,
+  jiraProjectKey: project.jiraProjectKey ?? undefined,
+  discordChannelId: project.discordChannelId ?? undefined,
 })
 
 // GET params always arrive as strings, NUM would reject them
@@ -535,29 +569,14 @@ const defs = {
   'GET/api/project/tickets': route({
     authorize: withUserSession,
     fn: async (ctx, { project: slug, limit, offset, ...filters }) => {
-      const project = ProjectsCollection.get(slug)
-      if (!project) {
-        throw new respond.NotFoundError({ message: 'Project not found' })
-      }
-      if (!project.isPublic && !ctx.session.isAdmin) {
-        if (!(await userInTeam(project.teamId, ctx.session.id))) {
-          throw new respond.ForbiddenError({
-            message: 'Access to project tickets denied',
-          })
-        }
-      }
-
+      const project = await withProjectAccess(ctx, slug, 'tickets')
       const start = toCount(offset, 0)
       const size = Math.min(
         toCount(limit, DEFAULT_TICKET_LIMIT),
         MAX_TICKET_LIMIT,
       )
       const tickets = filterTickets(
-        await listProjectTickets({
-          repositoryUrl: project.repositoryUrl ?? undefined,
-          jiraProjectKey: project.jiraProjectKey ?? undefined,
-          discordChannelId: project.discordChannelId ?? undefined,
-        }),
+        await listProjectTickets(toTicketScope(project)),
         filters,
       )
       return {
@@ -589,6 +608,24 @@ const defs = {
     }),
     description:
       'List the tickets of a project, aggregated from Jira, GitHub and Discord, latest activity first',
+  }),
+  'GET/api/project/ticket': route({
+    authorize: withUserSession,
+    fn: async (ctx, { project: slug, key }) => {
+      const project = await withProjectAccess(ctx, slug, 'tickets')
+      const ticket = await getProjectTicket(toTicketScope(project), key)
+      if (!ticket) {
+        throw new respond.NotFoundError({ message: 'Ticket not found' })
+      }
+      return toTicketDetailRow(ticket)
+    },
+    input: OBJ({
+      project: STR('The slug of the project'),
+      key: STR('The ticket key, as returned by GET /api/project/tickets'),
+    }),
+    output: ticketDetailOutput,
+    description:
+      'Get one ticket of a project with its discussion merged from all of its linked sources',
   }),
   'GET/api/deployment': route({
     authorize: withUserSession,
@@ -749,17 +786,7 @@ const defs = {
           message: 'Logging not enabled for deployment',
         })
       }
-      const project = ProjectsCollection.get(deployment.projectId)
-      if (!project) {
-        throw new respond.NotFoundError({ message: 'Project not found' })
-      }
-      if (!project.isPublic && !ctx.session.isAdmin) {
-        if (!(await userInTeam(project.teamId, ctx.session.id))) {
-          throw new respond.ForbiddenError({
-            message: 'Access to project logs denied',
-          })
-        }
-      }
+      await withProjectAccess(ctx, deployment.projectId, 'logs')
 
       return getLogs(deployment.url, params)
     },

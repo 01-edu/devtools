@@ -5,10 +5,13 @@ import { createGithubProvider } from './github-provider.ts'
 import { createJiraProvider } from './jira-provider.ts'
 import {
   filterTickets,
+  getProjectTicket,
   listProjectTickets,
+  toTicketDetailRow,
   toTicketRow,
 } from './project-tickets.ts'
 import {
+  type Comment,
   groupIntoTickets,
   type Person,
   type ProjectScope,
@@ -212,5 +215,132 @@ describe('toTicketRow', () => {
       true,
     )
     assertEquals('discussion' in row, false)
+  })
+})
+
+const threadProvider = (
+  id: Provider['id'],
+  items: WorkItem[],
+  thread: (item: WorkItem) => Comment[],
+) => {
+  const asked: string[] = []
+  const provider: Provider = {
+    id,
+    list: () => Promise.resolve(items),
+    comments: (item) => {
+      asked.push(item.externalId)
+      return Promise.resolve(thread(item))
+    },
+  }
+  return { provider, asked }
+}
+
+describe('getProjectTicket', () => {
+  const jiraSide = threadProvider(
+    'jira',
+    [jira('TNT-1'), jira('TNT-2')],
+    (item) => [
+      {
+        source: 'jira',
+        author: 'ada@example.com',
+        body: `description of ${item.externalId}`,
+        createdAt: 100,
+      },
+      {
+        source: 'jira',
+        author: 'ada@example.com',
+        body: 'jira comment',
+        createdAt: 400,
+      },
+    ],
+  )
+  const githubSide = threadProvider(
+    'github',
+    [pr('TNT-1 Fix it'), pr('TNT-1 Follow-up', { externalId: 'gh-2' })],
+    (item) => [
+      {
+        source: 'github',
+        author: 'grace',
+        body: `review on ${item.externalId}`,
+        createdAt: item.externalId === 'gh-2' ? 300 : 200,
+      },
+      { source: 'github', author: 'stranger', body: 'undated' },
+    ],
+  )
+  const load = (key: string) =>
+    getProjectTicket(
+      { jiraProjectKey: 'TNT' },
+      key,
+      [jiraSide.provider, githubSide.provider],
+      () => Promise.resolve(directory),
+    )
+
+  it('merges the comments of every linked item, oldest first', async () => {
+    jiraSide.asked.length = 0
+    githubSide.asked.length = 0
+    const ticket = await load('TNT1')
+
+    assertEquals(ticket?.key, 'TNT1')
+    assertEquals(jiraSide.asked, ['jira-TNT-1'])
+    assertEquals(githubSide.asked.sort(), ['gh-2', 'gh-TNT-1 Fix it'])
+    assertEquals(ticket?.discussion.map((comment) => comment.body), [
+      'description of jira-TNT-1',
+      'review on gh-TNT-1 Fix it',
+      'review on gh-2',
+      'jira comment',
+      'undated',
+      'undated',
+    ])
+  })
+
+  it('resolves comment authors against the team directory', async () => {
+    const ticket = await load('TNT1')
+    const authors = ticket?.discussion.map((comment) => comment.author?.id)
+    assertEquals(authors, ['p1', 'p2', 'p2', 'p1', undefined, undefined])
+  })
+
+  it('finds a ticket from any key notation', async () => {
+    assertEquals((await load('tnt-2'))?.key, 'TNT2')
+  })
+
+  it('finds an unkeyed ticket by its exact key', async () => {
+    const side = threadProvider('github', [pr('Bump deps')], () => [])
+    const ticket = await getProjectTicket(
+      {},
+      'github:gh-Bump deps',
+      [side.provider],
+      () => Promise.resolve([]),
+    )
+    assertEquals(ticket?.title, 'Bump deps')
+    assertEquals(ticket?.discussion, [])
+  })
+
+  it('returns undefined for an unknown key', async () => {
+    assertEquals(await load('TNT-999'), undefined)
+    assertEquals(await load('nonsense'), undefined)
+  })
+})
+
+describe('toTicketDetailRow', () => {
+  it('only exposes resolved authors, never the raw source identity', async () => {
+    const side = threadProvider('jira', [jira('TNT-1')], () => [
+      { source: 'jira', author: 'ada@example.com', body: 'hi', createdAt: 1 },
+      { source: 'jira', author: 'nobody@example.com', body: 'yo' },
+    ])
+    const ticket = await getProjectTicket(
+      {},
+      'TNT-1',
+      [side.provider],
+      () => Promise.resolve(directory),
+    )
+
+    const row = toTicketDetailRow(ticket!)
+
+    assertEquals(row.discussion.map((comment) => comment.author), [
+      { id: 'p1', name: 'Ada Lovelace' },
+      undefined,
+    ])
+    assertEquals(JSON.stringify(row).includes('@example.com'), false)
+    assertEquals(row.items.every((item) => !('raw' in item)), true)
   })
 })
