@@ -1,6 +1,7 @@
 import { discordProvider } from './discord-provider.ts'
 import { githubProvider } from './github-provider.ts'
 import { jiraProvider } from './jira-provider.ts'
+import { withListCache } from './provider-cache.ts'
 import { buildTeamDirectory } from './team-directory.ts'
 import {
   type Comment,
@@ -25,11 +26,13 @@ export type TicketFilters = {
   search?: string | null
 }
 
+// list() goes through the cache, so neither the list nor the detail endpoint
+// hits the STORE on every request; comments() are only fetched on open
 const ticketProviders: Provider[] = [
   jiraProvider,
   githubProvider,
   discordProvider,
-]
+].map((provider) => withListCache(provider))
 
 const ticketUpdatedAt = (ticket: Ticket): number =>
   Math.max(0, ...ticket.items.map((item) => item.updatedAt ?? 0))
