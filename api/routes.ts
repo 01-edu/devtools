@@ -44,6 +44,11 @@ import { get, getOne, set } from './lmdb-store.ts'
 import { log } from '/api/lib/logger.ts'
 import { analyzeQueryWithAI } from '/api/fix-query.ts'
 import { PERSON_LINK_PATH, type PersonLink } from './team-directory.ts'
+import {
+  filterTickets,
+  listProjectTickets,
+  toTicketRow,
+} from './project-tickets.ts'
 
 const MetricSchema = OBJ({
   query: STR('The SQL query text'),
@@ -193,6 +198,48 @@ const projectOutput = OBJ({
   createdAt: optional(NUM('The creation date of the project')),
   updatedAt: optional(NUM('The last update date of the project')),
 })
+
+const TICKET_STATUSES = ['todo', 'in_progress', 'done'] as const
+const TICKET_SOURCES = ['jira', 'github', 'discord'] as const
+const DEFAULT_TICKET_LIMIT = 50
+const MAX_TICKET_LIMIT = 200
+
+const ticketPersonOutput = OBJ({
+  id: STR('The person id (Google user id)'),
+  name: STR('The person full name'),
+})
+
+const ticketOutput = OBJ({
+  key: STR('The ticket key, or `{source}:{externalId}` when unkeyed'),
+  title: STR('The ticket title, without its key prefix'),
+  status: LIST(TICKET_STATUSES, 'The status deduced across sources'),
+  updatedAt: optional(NUM('The latest update across its items, in ms')),
+  items: ARR(
+    OBJ({
+      source: LIST(TICKET_SOURCES, 'The source system'),
+      externalId: STR('The id in the source system'),
+      externalUrl: STR('The link to the item in the source system'),
+      title: STR('The title in the source system'),
+      status: optional(STR('The status, in the source vocabulary')),
+      updatedAt: optional(NUM('The last update in the source, in ms')),
+    }),
+    'One item per linked source record',
+  ),
+  assignees: ARR(ticketPersonOutput, 'The resolved assignees'),
+  reviewers: ARR(ticketPersonOutput, 'The resolved reviewers'),
+})
+
+// GET params always arrive as strings, NUM would reject them
+const toCount = (value: string | null | undefined, fallback: number) => {
+  if (value == null) return fallback
+  const count = Number(value)
+  if (!Number.isInteger(count) || count < 0) {
+    throw new respond.BadRequestError({
+      message: `Expected a non-negative integer, got "${value}"`,
+    })
+  }
+  return count
+}
 
 const identifiersOutput = OBJ({
   githubLogin: optional(STR('GitHub login')),
@@ -484,6 +531,64 @@ const defs = {
     input: OBJ({ project: STR('The ID of the project') }),
     output: ARR(deploymentOutput, 'List of deployments'),
     description: 'Get deployments by project ID',
+  }),
+  'GET/api/project/tickets': route({
+    authorize: withUserSession,
+    fn: async (ctx, { project: slug, limit, offset, ...filters }) => {
+      const project = ProjectsCollection.get(slug)
+      if (!project) {
+        throw new respond.NotFoundError({ message: 'Project not found' })
+      }
+      if (!project.isPublic && !ctx.session.isAdmin) {
+        if (!(await userInTeam(project.teamId, ctx.session.id))) {
+          throw new respond.ForbiddenError({
+            message: 'Access to project tickets denied',
+          })
+        }
+      }
+
+      const start = toCount(offset, 0)
+      const size = Math.min(
+        toCount(limit, DEFAULT_TICKET_LIMIT),
+        MAX_TICKET_LIMIT,
+      )
+      const tickets = filterTickets(
+        await listProjectTickets({
+          repositoryUrl: project.repositoryUrl ?? undefined,
+          jiraProjectKey: project.jiraProjectKey ?? undefined,
+          discordChannelId: project.discordChannelId ?? undefined,
+        }),
+        filters,
+      )
+      return {
+        totalRows: tickets.length,
+        rows: tickets.slice(start, start + size).map(toTicketRow),
+      }
+    },
+    input: OBJ({
+      project: STR('The slug of the project'),
+      status: optional(
+        LIST(TICKET_STATUSES, 'Only tickets with this deduced status'),
+      ),
+      source: optional(
+        LIST(TICKET_SOURCES, 'Only tickets with an item from this source'),
+      ),
+      assignee: optional(STR('Only tickets assigned to this person id')),
+      reviewer: optional(STR('Only tickets reviewed by this person id')),
+      search: optional(STR('Match on the ticket key or title')),
+      limit: optional(
+        STR(
+          `The maximum number of tickets to return (default ${DEFAULT_TICKET_LIMIT}, max ${MAX_TICKET_LIMIT})`,
+        ),
+      ),
+      offset: optional(STR('The number of tickets to skip (default 0)')),
+    }),
+    output: OBJ({
+      totalRows: NUM('The total number of tickets matching the filters'),
+      rows: ARR(ticketOutput, 'The requested page of tickets'),
+    }),
+    description:
+      'List the tickets of a project, aggregated from Jira, GitHub and Discord, latest activity first',
   }),
   'GET/api/deployment': route({
     authorize: withUserSession,
